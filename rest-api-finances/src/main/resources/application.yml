@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: rest-api-finances
+  datasource:
+    url: jdbc:mysql://localhost:3306/finances_db?createDatabaseIfNotExist=true&serverTimezone=UTC
+    username: root
+    password: VtiDba_96285654
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # 'update' cria ou altera as tabelas automaticamente conforme suas classes Java
+      ddl-auto: update
+    show-sql: true # Mostra no console os comandos SQL que o Spring está executando
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+server:
+  port: 8080 # Porta onde sua API vai rodar
