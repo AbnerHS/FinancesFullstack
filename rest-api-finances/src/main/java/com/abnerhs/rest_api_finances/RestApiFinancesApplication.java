@@ -1,4 +1,4 @@
-package com.abnerhs.github.rest_api_finances;
+package com.abnerhs.rest_api_finances;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

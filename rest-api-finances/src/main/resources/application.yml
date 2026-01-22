@@ -1,21 +1,62 @@
 spring:
   application:
     name: rest-api-finances
+
   datasource:
-    url: jdbc:mysql://localhost:3306/finances_db?createDatabaseIfNotExist=true&serverTimezone=UTC
-    username: root
-    password: VtiDba_96285654
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # URL para o Oracle rodando no Docker (localhost)
+    # 'FREE' é o Service Name padrão da imagem Oracle Free/XE
+    url: jdbc:oracle:thin:@//oracle-db:1521/FREE
+    username: dev_user
+    password: db314159 # A senha que você definiu no 'docker run'
+    driver-class-name: oracle.jdbc.OracleDriver
+
+    # Configuração do Pool de Conexões (Hikari)
+  hikari:
+    maximum-pool-size: 10
+    minimum-idle: 5
+    idle-timeout: 30000
+    pool-name: MyOraclePool
 
   jpa:
+    database-platform: org.hibernate.dialect.OracleDialect
+
     hibernate:
-      # 'update' cria ou altera as tabelas automaticamente conforme suas classes Java
-      ddl-auto: update
-    show-sql: true # Mostra no console os comandos SQL que o Spring est� executando
+      ddl-auto: validate # Deixamos o Flyway gerenciar, o Hibernate apenas valida
+
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
+        show_sql: true
+#      javax:
+#        persistence:
+#          schema-generation:
+#            scripts:
+#              action: create
+#              create-target: target/schema_inicial.sql
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    fail-on-missing-locations: true
+
+logging:
+  level:
+    com.abner: DEBUG
+
+  #  datasource:
+  #    url: jdbc:mysql://localhost:3306/finances_db?createDatabaseIfNotExist=true&serverTimezone=UTC
+  #    username: root
+  #    password: VtiDba_96285654
+  #    driver-class-name: com.mysql.cj.jdbc.Driver
+
+#  jpa:
+#    hibernate:
+#      ddl-auto: update
+#    show-sql: true
+#    properties:
+#      hibernate:
+#        dialect: org.hibernate.dialect.MySQLDialect
+#        format_sql: true
 
 server:
   port: 8080 # Porta onde sua API vai rodar
