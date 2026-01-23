@@ -47,4 +47,20 @@ public class FinancialPeriodService {
                 .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Período não encontrado!"));
     }
+
+    @Transactional
+    public FinancialPeriodResponseDTO update(UUID id, FinancialPeriodRequestDTO dto) {
+        FinancialPeriod entity = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Período não encontrado!"));
+        mapper.updateEntityFromDto(dto, entity);
+        return mapper.toDto(repository.save(entity));
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        if (!repository.existsById(id)) {
+            throw new ResourceNotFoundException("Período não encontrado para exclusão");
+        }
+        repository.deleteById(id);
+    }
 }

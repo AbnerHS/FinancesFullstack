@@ -26,7 +26,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        show_sql: true
+#        show_sql: true
 #      javax:
 #        persistence:
 #          schema-generation:

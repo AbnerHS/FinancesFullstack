@@ -22,7 +22,7 @@ public class FinancialPlan {
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "partner_id")
     private User partner; // Opcional, para compartilhar com outra pessoa
 
