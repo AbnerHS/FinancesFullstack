@@ -11,20 +11,20 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 public record TransactionRequestDTO(
-        @NotBlank(message = "A descrição é obrigatória", groups = {onCreate.class})
+        @NotBlank(message = "A descrição é obrigatória", groups = {onCreate.class, onUpdate.class})
         String description,
 
-        @NotNull(message = "O valor é obrigatório")
+        @NotNull(message = "O valor é obrigatório", groups = {onCreate.class, onUpdate.class})
         @Positive(message = "O valor deve ser maior que zero")
         BigDecimal amount,
 
-        @NotNull(message = "O tipo de transação (REVENUE/EXPENSE) é obrigatório")
+        @NotNull(message = "O tipo de transação (REVENUE/EXPENSE) é obrigatório", groups = {onCreate.class, onUpdate.class})
         TransactionType type,
 
-        @NotNull(message = "O ID do período é obrigatório")
+        @NotNull(message = "O ID do período é obrigatório", groups = {onCreate.class})
         UUID periodId,
 
-        @NotNull(message = "O ID do usuário responsável é obrigatório")
+        @NotNull(message = "O ID do usuário responsável é obrigatório", groups = {onCreate.class})
         UUID responsibleUserId,
 
         String responsibilityTag,

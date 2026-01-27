@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 
@@ -46,6 +47,15 @@ public class TransactionController {
     public ResponseEntity<EntityModel<TransactionResponseDTO>> update(@PathVariable UUID id, @RequestBody @Validated(onUpdate.class) TransactionRequestDTO dto) {
         TransactionResponseDTO updated = service.update(id, dto);
         return ResponseEntity.ok(assembler.toModel(updated));
+    }
+
+    @PatchMapping("/{id}")
+    public EntityModel<TransactionResponseDTO> partialUpdate(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> updates) {
+
+        TransactionResponseDTO updated = service.updatePartial(id, updates);
+        return assembler.toModel(updated);
     }
 
     @DeleteMapping("/{id}")
