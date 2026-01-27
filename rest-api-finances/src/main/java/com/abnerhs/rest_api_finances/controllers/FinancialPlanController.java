@@ -1,18 +1,18 @@
 package com.abnerhs.rest_api_finances.controllers;
 
+import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
+import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
-import com.abnerhs.rest_api_finances.projection.FinancialPlanDetailed;
-import com.abnerhs.rest_api_finances.projection.FinancialPlanSummary;
+import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.IanaLinkRelations;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -24,14 +24,19 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
-@RequestMapping("/api/financial-plans")
+@RequestMapping("/api/plans")
 public class FinancialPlanController {
 
     @Autowired
     private FinancialPlanService service;
-
     @Autowired
     private FinancialPlanAssembler assembler;
+
+    @Autowired
+    private FinancialPeriodService financialPeriodService;
+
+    @Autowired
+    private FinancialPeriodAssembler financialPeriodAssembler;
 
     @PostMapping
     public ResponseEntity<EntityModel<FinancialPlanResponseDTO>> create(@RequestBody @Valid FinancialPlanRequestDTO dto) {
@@ -43,17 +48,18 @@ public class FinancialPlanController {
                 .body(model);
     }
 
-    @GetMapping("/user/{userId}")
-    public CollectionModel<EntityModel<FinancialPlanResponseDTO>> getByUser(@PathVariable UUID userId) {
-        List<FinancialPlanResponseDTO> dtoList = service.findAllByUser(userId);
-        return assembler.toCollectionModel(dtoList)
-                .add(linkTo(methodOn(FinancialPlanController.class).getByUser(userId)).withSelfRel());
-    }
-
     @GetMapping("/{id}")
     public EntityModel<FinancialPlanResponseDTO> getById(@PathVariable UUID id) {
         FinancialPlanResponseDTO dto = service.findById(id);
         return assembler.toModel(dto);
+    }
+
+    @GetMapping("/{id}/periods")
+    public CollectionModel<EntityModel<FinancialPeriodResponseDTO>> getPeriodsByPlan(@PathVariable UUID id) {
+        List<FinancialPeriodResponseDTO> dtoList = financialPeriodService.findAllByPlan(id);
+
+        return financialPeriodAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(FinancialPlanController.class).getPeriodsByPlan(id)).withSelfRel());
     }
 
     @PutMapping("/{id}")

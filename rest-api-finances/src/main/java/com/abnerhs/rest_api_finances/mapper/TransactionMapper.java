@@ -8,7 +8,10 @@ import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.List;
 
 @Mapper(componentModel = "spring", imports = { ResourceNotFoundException.class })
 public abstract class TransactionMapper {
@@ -29,4 +32,8 @@ public abstract class TransactionMapper {
     @Mapping(source = "period.id", target = "periodId")
     @Mapping(source = "responsibleUser.id", target = "responsibleUserId")
     public abstract TransactionResponseDTO toDto(Transaction entity);
+
+    public abstract List<TransactionResponseDTO> toDtoList(List<Transaction> entityList);
+
+    public abstract void updateEntityFromDto(TransactionRequestDTO dto, @MappingTarget Transaction entity);
 }

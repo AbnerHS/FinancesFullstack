@@ -25,7 +25,7 @@ public abstract class FinancialPeriodMapper {
     @Mapping(source = "financialPlan.id", target = "financialPlanId")
     public abstract FinancialPeriodResponseDTO toDto(FinancialPeriod entity);
 
-    public abstract List<FinancialPeriodResponseDTO> toDtoList(List<FinancialPeriod> entities);
+    public abstract List<FinancialPeriodResponseDTO> toDtoList(List<FinancialPeriod> entityList);
 
     public abstract void updateEntityFromDto(FinancialPeriodRequestDTO dto, @MappingTarget FinancialPeriod entity);
 }

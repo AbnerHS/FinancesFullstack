@@ -26,7 +26,7 @@ public abstract class FinancialPlanMapper {
     @Mapping(source = "partner.id", target = "partnerId")
     public abstract FinancialPlanResponseDTO toDto(FinancialPlan entity);
 
-    public abstract List<FinancialPlanResponseDTO> toDtoList(List<FinancialPlan> entities);
+    public abstract List<FinancialPlanResponseDTO> toDtoList(List<FinancialPlan> entityList);
 
     public abstract void updateEntityFromDto(FinancialPlanRequestDTO dto, @MappingTarget FinancialPlan entity);
 }

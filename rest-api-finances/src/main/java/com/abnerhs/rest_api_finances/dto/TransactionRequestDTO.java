@@ -1,5 +1,7 @@
 package com.abnerhs.rest_api_finances.dto;
 
+import com.abnerhs.rest_api_finances.dto.groups.onCreate;
+import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -9,7 +11,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 public record TransactionRequestDTO(
-        @NotBlank(message = "A descrição é obrigatória")
+        @NotBlank(message = "A descrição é obrigatória", groups = {onCreate.class})
         String description,
 
         @NotNull(message = "O valor é obrigatório")

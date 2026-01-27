@@ -4,6 +4,7 @@ import com.abnerhs.rest_api_finances.controllers.FinancialPeriodController;
 import com.abnerhs.rest_api_finances.controllers.FinancialPlanController;
 import com.abnerhs.rest_api_finances.controllers.UserController;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
+import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.SimpleRepresentationModelAssembler;
@@ -20,12 +21,12 @@ public class FinancialPlanAssembler implements SimpleRepresentationModelAssemble
         FinancialPlanResponseDTO dto = resource.getContent();
 
         resource.add(linkTo(methodOn(FinancialPlanController.class)
-                .getById(dto.getId())).withSelfRel());
+                .getById(dto.id())).withSelfRel());
 
-        resource.add(linkTo(methodOn(FinancialPeriodController.class)
-                .getAllByPlanId(dto.getId())).withRel("periods"));
+        resource.add(linkTo(methodOn(FinancialPlanController.class)
+                .getPeriodsByPlan(dto.id())).withRel("periods"));
 
-        resource.add(linkTo(methodOn(UserController.class).getById(dto.getOwnerId()))
+        resource.add(linkTo(methodOn(UserController.class).getById(dto.ownerId()))
                 .withRel("owner"));
     }
 

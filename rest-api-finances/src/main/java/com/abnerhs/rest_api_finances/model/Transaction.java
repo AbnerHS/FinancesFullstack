@@ -4,7 +4,7 @@ import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -18,12 +18,12 @@ public class Transaction {
     private BigDecimal amount;
 
     @Column(name = "datetime", updatable = false)
-    private LocalDate date;
+    private LocalDateTime dateTime;
 
     @PrePersist
     protected void onCreate() {
-        if(this.date == null){
-            this.date = LocalDate.now();
+        if(this.dateTime == null){
+            this.dateTime = LocalDateTime.now();
         }
     }
 
@@ -68,12 +68,12 @@ public class Transaction {
         this.amount = amount;
     }
 
-    public LocalDate getDate() {
-        return date;
+    public LocalDateTime getDateTime() {
+        return dateTime;
     }
 
-    public void setDate(LocalDate date) {
-        this.date = date;
+    public void setDateTime(LocalDateTime dateTime) {
+        this.dateTime = dateTime;
     }
 
     public TransactionType getType() {
