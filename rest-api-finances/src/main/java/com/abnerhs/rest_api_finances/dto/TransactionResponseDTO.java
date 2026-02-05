@@ -23,5 +23,7 @@ public record TransactionResponseDTO(
         String responsibilityTag,
         UUID periodId,
         UUID responsibleUserId,
-        UUID recurringGroupId
+        UUID recurringGroupId,
+        UUID creditCardInvoiceId,
+        boolean isClearedByInvoice
 ) {}

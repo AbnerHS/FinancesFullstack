@@ -28,7 +28,8 @@ public record TransactionRequestDTO(
         UUID responsibleUserId,
 
         String responsibilityTag,
-
-        UUID recurringGroupId
+        UUID recurringGroupId,
+        UUID creditCardInvoiceId,
+        boolean isClearedByInvoice
 ) {
 }

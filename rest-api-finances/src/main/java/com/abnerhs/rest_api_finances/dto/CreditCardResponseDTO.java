@@ -4,11 +4,10 @@ import org.springframework.hateoas.server.core.Relation;
 
 import java.util.UUID;
 
-@Relation(collectionRelation = "plans", itemRelation = "plan")
-public record FinancialPlanResponseDTO(
+@Relation(collectionRelation = "creditCards", itemRelation = "creditCard")
+public record CreditCardResponseDTO(
         UUID id,
         String name,
-        UUID ownerId,
-        UUID partnerId
+        UUID userId
 ) {
 }

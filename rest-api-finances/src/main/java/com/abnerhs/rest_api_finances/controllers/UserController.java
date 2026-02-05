@@ -1,9 +1,12 @@
 package com.abnerhs.rest_api_finances.controllers;
 
+import com.abnerhs.rest_api_finances.assembler.CreditCardAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
 import com.abnerhs.rest_api_finances.assembler.UserAssembler;
+import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.UserDTO;
+import com.abnerhs.rest_api_finances.service.CreditCardService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
 import com.abnerhs.rest_api_finances.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,11 @@ public class UserController {
     @Autowired
     private FinancialPlanAssembler financialPlanAssembler;
 
+    @Autowired
+    private CreditCardService creditCardService;
+    @Autowired
+    private CreditCardAssembler creditCardAssembler;
+
     @PostMapping
     public ResponseEntity<UserDTO> create(@RequestBody UserDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
@@ -56,6 +64,13 @@ public class UserController {
         List<FinancialPlanResponseDTO> dtoList = financialPlanService.findAllByUser(id);
         return financialPlanAssembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(UserController.class).getPlansByUser(id)).withSelfRel());
+    }
+
+    @GetMapping("/{id}/credit-cards")
+    public CollectionModel<EntityModel<CreditCardResponseDTO>> getCreditCardsByUser(@PathVariable UUID id) {
+        List<CreditCardResponseDTO> dtoList = creditCardService.findAllByUser(id);
+        return creditCardAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(UserController.class).getCreditCardsByUser(id)).withSelfRel());
     }
 
 }

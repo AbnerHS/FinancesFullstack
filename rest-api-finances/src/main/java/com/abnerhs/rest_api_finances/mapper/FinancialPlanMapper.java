@@ -5,6 +5,7 @@ import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
+import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -28,6 +29,16 @@ public abstract class FinancialPlanMapper {
 
     public abstract List<FinancialPlanResponseDTO> toDtoList(List<FinancialPlan> entityList);
 
-    @Mapping(target = "partner", expression = "java(userRepository.findById(dto.partnerId()).orElse(null))")
+    @Mapping(target = "partner", ignore = true)
     public abstract void updateEntityFromDto(FinancialPlanRequestDTO dto, @MappingTarget FinancialPlan entity);
+
+    @AfterMapping
+    protected void linkRelationShips(FinancialPlanRequestDTO dto, @MappingTarget FinancialPlan entity){
+        if(dto.partnerId() != null){
+            userRepository.findById(dto.partnerId())
+                    .ifPresent(entity::setPartner);
+        } else {
+            entity.setPartner(null);
+        }
+    }
 }

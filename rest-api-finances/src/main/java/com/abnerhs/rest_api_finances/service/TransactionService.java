@@ -4,8 +4,10 @@ import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.mapper.TransactionMapper;
+import com.abnerhs.rest_api_finances.model.CreditCardInvoice;
 import com.abnerhs.rest_api_finances.model.Transaction;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
+import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.TransactionRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,29 +23,31 @@ public class TransactionService {
 
     @Autowired
     private TransactionRepository repository;
-
     @Autowired
     private TransactionMapper mapper;
 
+    @Autowired
+    private CreditCardInvoiceRepository invoiceRepository;
+
     @Transactional
-    public TransactionResponseDTO create(TransactionRequestDTO dto){
+    public TransactionResponseDTO create(TransactionRequestDTO dto) {
         Transaction transaction = mapper.toEntity(dto);
         return mapper.toDto(repository.save(transaction));
     }
 
-    public List<TransactionResponseDTO> findAllByPeriod(UUID periodId){
+    public List<TransactionResponseDTO> findAllByPeriod(UUID periodId) {
         List<Transaction> transactionList = repository.findByPeriodId(periodId);
         return mapper.toDtoList(transactionList);
     }
 
-    public TransactionResponseDTO findById(UUID id){
+    public TransactionResponseDTO findById(UUID id) {
         return repository.findById(id)
                 .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
     }
 
     @Transactional
-    public TransactionResponseDTO update(UUID id, TransactionRequestDTO dto){
+    public TransactionResponseDTO update(UUID id, TransactionRequestDTO dto) {
         Transaction entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         mapper.updateEntityFromDto(dto, entity);
@@ -61,6 +65,15 @@ public class TransactionService {
                 case "description" -> transaction.setDescription((String) value);
                 case "type" -> transaction.setType(TransactionType.valueOf((String) value));
                 case "responsibilityTag" -> transaction.setResponsibilityTag((String) value);
+                case "creditCardInvoiceId" -> {
+                    CreditCardInvoice invoice = invoiceRepository.findById(UUID.fromString(value.toString()))
+                            .orElseThrow(() -> new ResourceNotFoundException("Fatura de cartão não encontrada!"));
+                    transaction.setCreditCardInvoice(invoice);
+                }
+                case "isClearedByInvoice" -> {
+                    System.out.println("isClearedByInvoice: " + value);
+                    transaction.setClearedByInvoice((Boolean) value);
+                }
             }
         });
 
@@ -68,7 +81,7 @@ public class TransactionService {
     }
 
     @Transactional
-    public void delete(UUID id){
+    public void delete(UUID id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Transação não encontrada para exclusão");
         }

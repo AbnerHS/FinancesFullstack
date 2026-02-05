@@ -24,7 +24,7 @@ public class Transaction {
 
     @PrePersist
     protected void onCreate() {
-        if(this.dateTime == null){
+        if (this.dateTime == null) {
             this.dateTime = LocalDateTime.now();
         }
     }
@@ -34,17 +34,25 @@ public class Transaction {
 
     private String responsibilityTag;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "period_id")
     private FinancialPeriod period;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "responsible_user_id")
     private User responsibleUser;
 
     private UUID recurringGroupId;
 
-    public Transaction() {}
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credit_card_invoice_id")
+    private CreditCardInvoice creditCardInvoice;
+
+    @Column(name = "is_cleared_by_invoice", nullable = false)
+    private boolean isClearedByInvoice;
+
+    public Transaction() {
+    }
 
     public UUID getId() {
         return id;
@@ -116,5 +124,21 @@ public class Transaction {
 
     public void setRecurringGroupId(UUID recurringGroupId) {
         this.recurringGroupId = recurringGroupId;
+    }
+
+    public CreditCardInvoice getCreditCardInvoice() {
+        return creditCardInvoice;
+    }
+
+    public void setCreditCardInvoice(CreditCardInvoice creditCardInvoice) {
+        this.creditCardInvoice = creditCardInvoice;
+    }
+
+    public boolean getClearedByInvoice() {
+        return isClearedByInvoice;
+    }
+
+    public void setClearedByInvoice(boolean clearedByInvoice) {
+        this.isClearedByInvoice = clearedByInvoice;
     }
 }

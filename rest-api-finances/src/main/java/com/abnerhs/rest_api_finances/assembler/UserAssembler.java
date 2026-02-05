@@ -1,6 +1,5 @@
 package com.abnerhs.rest_api_finances.assembler;
 
-import com.abnerhs.rest_api_finances.controllers.FinancialPlanController;
 import com.abnerhs.rest_api_finances.controllers.UserController;
 import com.abnerhs.rest_api_finances.dto.UserDTO;
 import org.springframework.hateoas.CollectionModel;
@@ -23,6 +22,9 @@ public class UserAssembler implements SimpleRepresentationModelAssembler<UserDTO
 
         resource.add(linkTo(methodOn(UserController.class)
                 .getPlansByUser(dto.id())).withRel("plans"));
+
+        resource.add(linkTo(methodOn(UserController.class)
+                .getCreditCardsByUser(dto.id())).withRel("credit-cards"));
     }
 
     @Override
