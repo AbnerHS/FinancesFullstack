@@ -4,24 +4,19 @@ import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.TransactionAssembler;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
-import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
-import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
-import com.abnerhs.rest_api_finances.model.FinancialPeriod;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.TransactionService;
 import jakarta.validation.Valid;
-import org.apache.coyote.Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.IanaLinkRelations;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
@@ -67,6 +62,12 @@ public class FinancialPeriodController {
     @PutMapping("/{id}")
     public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> update(@PathVariable UUID id, @RequestBody FinancialPeriodRequestDTO dto){
         FinancialPeriodResponseDTO updated = service.update(id, dto);
+        return ResponseEntity.ok(assembler.toModel(updated));
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> updatePartial(@PathVariable UUID id, @RequestBody Map<String, Object> updates){
+        FinancialPeriodResponseDTO updated = service.updatePartial(id, updates);
         return ResponseEntity.ok(assembler.toModel(updated));
     }
 

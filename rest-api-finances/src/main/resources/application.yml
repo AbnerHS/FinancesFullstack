@@ -3,9 +3,9 @@ spring:
     name: rest-api-finances
 
   datasource:
-    url: jdbc:oracle:thin:@//oracle-db:1521/FREE
-    username: dev_user
-    password: db314159
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: oracle.jdbc.OracleDriver
 
   hikari:
@@ -16,12 +16,11 @@ spring:
 
   jpa:
     database-platform: org.hibernate.dialect.OracleDialect
-
     hibernate:
-      ddl-auto: validate
-
+      ddl-auto: none
     properties:
       hibernate:
+        default_schema: ${DB_USERNAME}
         format_sql: true
   #        show_sql: true
   #      javax:
@@ -33,8 +32,12 @@ spring:
 
   flyway:
     enabled: true
-    baseline-on-migrate: true
-    repair-on-migrate: true
+    user: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL}
+#    schemas: ${FLYWAY_SCHEMAS}
+#    baseline-on-migrate: true
+#    repair-on-migrate: true
 
 
 logging:
@@ -42,4 +45,4 @@ logging:
     com.abner: DEBUG
 
 server:
-  port: 8080 # Porta onde sua API vai rodar
+  port: ${SERVER_PORT}

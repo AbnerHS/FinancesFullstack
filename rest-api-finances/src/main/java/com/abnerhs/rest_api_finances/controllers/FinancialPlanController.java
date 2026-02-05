@@ -18,6 +18,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
@@ -63,10 +64,17 @@ public class FinancialPlanController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<EntityModel<FinancialPlanResponseDTO>> update(@PathVariable UUID id, @RequestBody @Validated(onUpdate.class) FinancialPlanRequestDTO dto){
+    public ResponseEntity<EntityModel<FinancialPlanResponseDTO>> update(@PathVariable UUID id, @RequestBody @Validated(onUpdate.class) FinancialPlanRequestDTO dto) {
         FinancialPlanResponseDTO updated = service.update(id, dto);
         return ResponseEntity.ok(assembler.toModel(updated));
     }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<EntityModel<FinancialPlanResponseDTO>> partialUpdate(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
+        FinancialPlanResponseDTO updated = service.updatePartial(id, updates);
+        return ResponseEntity.ok(assembler.toModel(updated));
+    }
+
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {

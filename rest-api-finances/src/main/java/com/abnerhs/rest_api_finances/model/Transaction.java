@@ -15,6 +15,8 @@ public class Transaction {
     private UUID id;
 
     private String description;
+
+    @Column(precision = 19, scale = 5)
     private BigDecimal amount;
 
     @Column(name = "datetime", updatable = false)

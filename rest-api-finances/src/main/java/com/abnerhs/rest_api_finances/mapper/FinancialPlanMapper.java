@@ -28,5 +28,6 @@ public abstract class FinancialPlanMapper {
 
     public abstract List<FinancialPlanResponseDTO> toDtoList(List<FinancialPlan> entityList);
 
+    @Mapping(target = "partner", expression = "java(userRepository.findById(dto.partnerId()).orElse(null))")
     public abstract void updateEntityFromDto(FinancialPlanRequestDTO dto, @MappingTarget FinancialPlan entity);
 }

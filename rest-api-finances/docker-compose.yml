@@ -5,11 +5,12 @@ services:
     image: container-registry.oracle.com/database/free:latest
     volumes:
       - ./init-db:/opt/oracle/scripts/startup
+      - oracle_data:/opt/oracle/oradata
     container_name: oracle-db
     ports:
       - "1521:1521"
     healthcheck:
-      test: ["CMD-SHELL", "echo 'exit' | sqlplus -L dev_user/db314159@FREE"]
+      test: ["CMD-SHELL", "echo 'exit' | sqlplus -L dev_user/db314159@FREEPDB1"]
       interval: 20s
       timeout: 10s
       retries: 10
@@ -17,6 +18,7 @@ services:
 
   spring-app:
     build: .
+    env_file: .env
     container_name: spring-app
     volumes:
       - .:/app
@@ -24,10 +26,9 @@ services:
     ports:
       - "8080:8080"
       - "5005:5005"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@//oracle-db:1521/FREE
-      - SPRING_DATASOURCE_USERNAME=dev_user
-      - SPRING_DATASOURCE_PASSWORD=db314159
     depends_on:
       oracle-db:
         condition: service_healthy # Espera o banco estar pronto para subir o Spring
+
+volumes:
+  oracle_data:

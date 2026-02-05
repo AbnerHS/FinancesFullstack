@@ -57,6 +57,20 @@ public class FinancialPeriodService {
     }
 
     @Transactional
+    public FinancialPeriodResponseDTO updatePartial(UUID id, java.util.Map<String, Object> updates) {
+        FinancialPeriod entity = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Período não encontrado!"));
+        updates.forEach((key, value) -> {
+            switch (key) {
+                case "month" -> entity.setMonth((Integer) value);
+                case "year" -> entity.setYear((Integer) value);
+                case "monthlyBalance" -> entity.setMonthlyBalance(new BigDecimal(value.toString()));
+            }
+        });
+        return mapper.toDto(repository.save(entity));
+    }
+
+    @Transactional
     public void delete(UUID id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Período não encontrado para exclusão");

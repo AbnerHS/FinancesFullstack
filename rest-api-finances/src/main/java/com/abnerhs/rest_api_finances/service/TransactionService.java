@@ -52,7 +52,8 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponseDTO updatePartial(UUID id, Map<String, Object> updates) {
-        Transaction transaction = repository.findById(id).orElseThrow();
+        Transaction transaction = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(("Transação não encontrada")));
 
         updates.forEach((key, value) -> {
             switch (key) {

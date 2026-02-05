@@ -50,12 +50,9 @@ public class TransactionController {
     }
 
     @PatchMapping("/{id}")
-    public EntityModel<TransactionResponseDTO> partialUpdate(
-            @PathVariable UUID id,
-            @RequestBody Map<String, Object> updates) {
-
+    public ResponseEntity<EntityModel<TransactionResponseDTO>> partialUpdate(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
         TransactionResponseDTO updated = service.updatePartial(id, updates);
-        return assembler.toModel(updated);
+        return ResponseEntity.ok(assembler.toModel(updated));
     }
 
     @DeleteMapping("/{id}")
