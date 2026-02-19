@@ -19,6 +19,9 @@ public class CreditCardAssembler implements SimpleRepresentationModelAssembler<C
 
         resource.add(linkTo(methodOn(CreditCardController.class)
                 .getById(dto.id())).withSelfRel());
+
+        resource.add(linkTo(methodOn(CreditCardController.class)
+                .getInvoicesByCreditCard(dto.id())).withRel("invoices"));
     }
 
     @Override
