@@ -1,14 +1,17 @@
 package com.abnerhs.rest_api_finances.controllers;
 
+import com.abnerhs.rest_api_finances.assembler.CreditCardInvoiceAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.TransactionAssembler;
 import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
 import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
+import com.abnerhs.rest_api_finances.dto.CreditCardInvoiceResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
+import com.abnerhs.rest_api_finances.service.CreditCardInvoiceService;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +46,11 @@ public class FinancialPeriodController {
     @Autowired
     private TransactionAssembler transactionAssembler;
 
+    @Autowired
+    private CreditCardInvoiceService invoiceService;
+    @Autowired
+    private CreditCardInvoiceAssembler invoiceAssembler;
+
     @PostMapping
     @ApiPostResponses
     @Operation(summary = "Create a new Financial Period", tags = {"Period"})
@@ -66,16 +74,25 @@ public class FinancialPeriodController {
     @GetMapping("/{id}/transactions")
     @ApiGetResponses
     @Operation(summary = "Find Transactions by Financial Period", tags = {"Period", "Transaction"})
-    public CollectionModel<EntityModel<TransactionResponseDTO>> getByPeriod(@PathVariable UUID id) {
+    public CollectionModel<EntityModel<TransactionResponseDTO>> getTransactionsByPeriod(@PathVariable UUID id) {
         List<TransactionResponseDTO> dtoList = transactionService.findAllByPeriod(id);
         return transactionAssembler.toCollectionModel(dtoList)
-                .add(linkTo(methodOn(FinancialPeriodController.class).getByPeriod(id)).withSelfRel());
+                .add(linkTo(methodOn(FinancialPeriodController.class).getTransactionsByPeriod(id)).withSelfRel());
+    }
+
+    @GetMapping("/{id}/invoices")
+    @ApiGetResponses
+    @Operation(summary = "Find Invoices by Financial Period", tags = {"Period", "Invoice"})
+    public CollectionModel<EntityModel<CreditCardInvoiceResponseDTO>> getInvoicesByPeriod(@PathVariable UUID id) {
+        List<CreditCardInvoiceResponseDTO> dtoList = invoiceService.findAllByPeriod(id);
+        return invoiceAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(FinancialPeriodController.class).getTransactionsByPeriod(id)).withSelfRel());
     }
 
     @PutMapping("/{id}")
     @ApiPutResponses
     @Operation(summary = "Update a Financial Period By ID", tags = {"Period"})
-    public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> update(@PathVariable UUID id, @RequestBody FinancialPeriodRequestDTO dto){
+    public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> update(@PathVariable UUID id, @RequestBody FinancialPeriodRequestDTO dto) {
         FinancialPeriodResponseDTO updated = service.update(id, dto);
         return ResponseEntity.ok(assembler.toModel(updated));
     }
@@ -83,7 +100,7 @@ public class FinancialPeriodController {
     @PatchMapping("/{id}")
     @ApiPutResponses
     @Operation(summary = "Update partial a Financial Period By ID", tags = {"Period"})
-    public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> updatePartial(@PathVariable UUID id, @RequestBody Map<String, Object> updates){
+    public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> updatePartial(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
         FinancialPeriodResponseDTO updated = service.updatePartial(id, updates);
         return ResponseEntity.ok(assembler.toModel(updated));
     }
@@ -91,7 +108,7 @@ public class FinancialPeriodController {
     @DeleteMapping("/{id}")
     @ApiDeleteResponses
     @Operation(summary = "Delete a Financial Period by ID", tags = {"Period"})
-    public ResponseEntity<Void> delete(@PathVariable UUID id){
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
     }

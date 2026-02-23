@@ -10,4 +10,6 @@ public interface CreditCardInvoiceRepository extends JpaRepository<CreditCardInv
 
     List<CreditCardInvoice> findByCreditCardId(UUID creditCardId);
 
+    List <CreditCardInvoice> findByPeriodId(UUID periodId);
+
 }

@@ -33,6 +33,11 @@ public class CreditCardInvoiceService {
         return mapper.toDtoList(invoices);
     }
 
+    public List<CreditCardInvoiceResponseDTO> findAllByPeriod(UUID periodId) {
+        List<CreditCardInvoice> invoices = repository.findByPeriodId(periodId);
+        return mapper.toDtoList(invoices);
+    }
+
     public CreditCardInvoiceResponseDTO findById(UUID id) {
         return repository.findById(id)
                 .map(mapper::toDto)

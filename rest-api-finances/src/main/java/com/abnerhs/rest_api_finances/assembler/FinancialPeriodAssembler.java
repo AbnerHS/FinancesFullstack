@@ -2,7 +2,6 @@ package com.abnerhs.rest_api_finances.assembler;
 
 import com.abnerhs.rest_api_finances.controllers.FinancialPeriodController;
 import com.abnerhs.rest_api_finances.controllers.FinancialPlanController;
-import com.abnerhs.rest_api_finances.controllers.TransactionController;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
@@ -26,7 +25,10 @@ public class FinancialPeriodAssembler implements SimpleRepresentationModelAssemb
                 .getById(dto.financialPlanId())).withRel("plan"));
 
         resource.add(linkTo(methodOn(FinancialPeriodController.class)
-                .getByPeriod(dto.id())).withRel("transactions"));
+                .getTransactionsByPeriod(dto.id())).withRel("transactions"));
+
+        resource.add(linkTo(methodOn(FinancialPeriodController.class)
+                .getInvoicesByPeriod(dto.id())).withRel("invoices"));
     }
 
     @Override
