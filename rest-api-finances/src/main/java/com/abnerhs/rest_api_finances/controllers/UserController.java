@@ -8,6 +8,7 @@ import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
 import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.UserDTO;
+import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.service.CreditCardService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
 import com.abnerhs.rest_api_finances.service.UserService;
@@ -18,6 +19,8 @@ import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -60,6 +63,19 @@ public class UserController {
         List<UserDTO> dtoList = service.findAll();
         return assembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(UserController.class).getAll()).withSelfRel());
+    }
+
+    @GetMapping("/me/plans")
+    @ApiGetResponses
+    @Operation(summary = "Find Financial Plans for the current User", tags = {"User", "Plan"})
+    public CollectionModel<EntityModel<FinancialPlanResponseDTO>> getPlansForCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        assert authentication != null;
+        User currentUser = (User) authentication.getPrincipal();
+        assert currentUser != null;
+        List<FinancialPlanResponseDTO> dtoList = financialPlanService.findAllByUser(currentUser.getId());
+        return financialPlanAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(UserController.class).getPlansForCurrentUser()).withSelfRel());
     }
 
     @GetMapping("/{id}")
