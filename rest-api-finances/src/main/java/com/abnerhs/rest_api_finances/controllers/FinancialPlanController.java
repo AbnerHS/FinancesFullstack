@@ -9,6 +9,7 @@ import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
 import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
@@ -64,6 +65,14 @@ public class FinancialPlanController {
     public EntityModel<FinancialPlanResponseDTO> getById(@PathVariable UUID id) {
         FinancialPlanResponseDTO dto = service.findById(id);
         return assembler.toModel(dto);
+    }
+
+    @GetMapping("/{id}/summary")
+    @ApiGetResponses
+    @Operation(summary = "Get Financial Summary for a Plan", tags = {"Plan"})
+    public ResponseEntity<FinancialSummaryDTO> getSummary(@PathVariable UUID id) {
+        FinancialSummaryDTO summary = service.getSummary(id);
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("/{id}/periods")

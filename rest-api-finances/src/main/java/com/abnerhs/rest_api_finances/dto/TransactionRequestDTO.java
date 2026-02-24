@@ -30,6 +30,5 @@ public record TransactionRequestDTO(
         String responsibilityTag,
         UUID recurringGroupId,
         UUID creditCardInvoiceId,
-        boolean isClearedByInvoice
-) {
-}
+        Boolean isClearedByInvoice
+) {}

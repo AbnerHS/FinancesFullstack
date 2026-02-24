@@ -4,12 +4,15 @@ import com.abnerhs.rest_api_finances.model.FinancialPeriod;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface FinancialPeriodRepository extends JpaRepository<FinancialPeriod, UUID> {
 
-    List<FinancialPeriod> findByFinancialPlanId(UUID planId);
+    List<FinancialPeriod> findByFinancialPlanIdOrderByYearAscMonthAsc(UUID planId);
 
     // Verifica se já existe o mês/ano para o plano específico
     boolean existsByMonthAndYearAndFinancialPlanId(Integer month, Integer year, UUID planId);
+
+    Optional<FinancialPeriod> findByMonthAndYearAndFinancialPlanId(Integer month, Integer year, UUID planId);
 }

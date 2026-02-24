@@ -7,10 +7,7 @@ import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
 import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
-import com.abnerhs.rest_api_finances.dto.CreditCardInvoiceResponseDTO;
-import com.abnerhs.rest_api_finances.dto.FinancialPeriodRequestDTO;
-import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
-import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
+import com.abnerhs.rest_api_finances.dto.*;
 import com.abnerhs.rest_api_finances.service.CreditCardInvoiceService;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.TransactionService;
@@ -69,6 +66,14 @@ public class FinancialPeriodController {
     public EntityModel<FinancialPeriodResponseDTO> getById(@PathVariable UUID id) {
         FinancialPeriodResponseDTO dto = service.findById(id);
         return assembler.toModel(dto);
+    }
+
+    @GetMapping("/{id}/summary")
+    @ApiGetResponses
+    @Operation(summary = "Get Financial Summary for a Period", tags = {"Period"})
+    public ResponseEntity<FinancialSummaryDTO> getSummary(@PathVariable UUID id) {
+        FinancialSummaryDTO summary = service.getSummary(id);
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("/{id}/transactions")

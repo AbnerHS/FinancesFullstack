@@ -1,19 +1,25 @@
 package com.abnerhs.rest_api_finances.service;
 
+import com.abnerhs.rest_api_finances.dto.RecurringTransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.mapper.TransactionMapper;
 import com.abnerhs.rest_api_finances.model.CreditCardInvoice;
+import com.abnerhs.rest_api_finances.model.FinancialPeriod;
+import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.model.Transaction;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
+import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
 import com.abnerhs.rest_api_finances.repository.TransactionRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,10 +35,67 @@ public class TransactionService {
     @Autowired
     private CreditCardInvoiceRepository invoiceRepository;
 
+    @Autowired
+    private FinancialPeriodRepository periodRepository;
+
     @Transactional
     public TransactionResponseDTO create(TransactionRequestDTO dto) {
         Transaction transaction = mapper.toEntity(dto);
         return mapper.toDto(repository.save(transaction));
+    }
+
+    @Transactional
+    public List<TransactionResponseDTO> createRecurring(RecurringTransactionRequestDTO recurringDto) {
+        TransactionRequestDTO dto = recurringDto.transaction();
+        int numberOfPeriods = recurringDto.numberOfPeriods();
+        UUID recurringGroupId = UUID.randomUUID();
+        List<TransactionResponseDTO> createdTransactions = new ArrayList<>();
+
+        FinancialPeriod initialPeriod = periodRepository.findById(dto.periodId())
+                .orElseThrow(() -> new ResourceNotFoundException("Período financeiro não encontrado"));
+
+        FinancialPlan plan = initialPeriod.getFinancialPlan();
+        int startMonth = initialPeriod.getMonth();
+        int startYear = initialPeriod.getYear();
+
+        for (int i = 0; i < numberOfPeriods; i++) {
+            // Calcular mês e ano para a iteração atual
+            int totalMonths = startMonth - 1 + i;
+            int year = startYear + totalMonths / 12;
+            int month = totalMonths % 12 + 1;
+
+            // Buscar ou criar o período
+            FinancialPeriod period = findOrCreatePeriod(month, year, plan);
+
+            // Criar a transação
+            Transaction transaction = mapper.toEntity(dto);
+            transaction.setPeriod(period);
+            transaction.setRecurringGroupId(recurringGroupId);
+            
+            // Ajustar a data para o mês correto
+            LocalDateTime now = LocalDateTime.now();
+            int day = now.getDayOfMonth();
+            int maxDay = java.time.YearMonth.of(year, month).lengthOfMonth();
+            if (day > maxDay) {
+                day = maxDay;
+            }
+            transaction.setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
+
+            createdTransactions.add(mapper.toDto(repository.save(transaction)));
+        }
+        return createdTransactions;
+    }
+
+    private FinancialPeriod findOrCreatePeriod(int month, int year, FinancialPlan plan) {
+        return periodRepository.findByMonthAndYearAndFinancialPlanId(month, year, plan.getId())
+                .orElseGet(() -> {
+                    FinancialPeriod newPeriod = new FinancialPeriod();
+                    newPeriod.setMonth(month);
+                    newPeriod.setYear(year);
+                    newPeriod.setFinancialPlan(plan);
+                    newPeriod.setMonthlyBalance(BigDecimal.ZERO); // Inicializar saldo
+                    return periodRepository.save(newPeriod);
+                });
     }
 
     public List<TransactionResponseDTO> findAllByPeriod(UUID periodId) {
@@ -71,7 +134,6 @@ public class TransactionService {
                     transaction.setCreditCardInvoice(invoice);
                 }
                 case "isClearedByInvoice" -> {
-                    System.out.println("isClearedByInvoice: " + value);
                     transaction.setClearedByInvoice((Boolean) value);
                 }
             }

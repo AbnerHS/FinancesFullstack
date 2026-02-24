@@ -4,6 +4,7 @@ import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.model.Transaction;
+import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
 import org.mapstruct.Mapper;
@@ -22,15 +23,22 @@ public abstract class TransactionMapper {
     @Autowired
     protected UserRepository userRepository;
 
-    @Mapping(target = "period", expression = "java(periodRepository.findById(dto.periodId())" +
-            ".orElseThrow(() -> new ResourceNotFoundException(\"Período não encontrado\")))")
-    @Mapping(target = "responsibleUser", expression = "java(userRepository.findById(dto.responsibleUserId())" +
-            ".orElseThrow(() -> new ResourceNotFoundException(\"Usuário não encontrado\")))")
+    @Autowired
+    protected CreditCardInvoiceRepository invoiceRepository;
+
+    @Mapping(target = "period", expression = "java(dto.periodId() != null ? periodRepository.findById(dto.periodId())" +
+            ".orElseThrow(() -> new ResourceNotFoundException(\"Período não encontrado\")) : null)")
+    @Mapping(target = "responsibleUser", expression = "java(dto.responsibleUserId() != null ? userRepository.findById(dto.responsibleUserId())" +
+            ".orElseThrow(() -> new ResourceNotFoundException(\"Usuário não encontrado\")) : null)")
+    @Mapping(target = "creditCardInvoice", expression = "java(dto.creditCardInvoiceId() != null ? invoiceRepository.findById(dto.creditCardInvoiceId())" +
+            ".orElseThrow(() -> new ResourceNotFoundException(\"Fatura não encontrada\")) : null)")
+    @Mapping(target = "clearedByInvoice", source = "isClearedByInvoice", defaultValue = "false")
     public abstract Transaction toEntity(TransactionRequestDTO dto);
 
-    // Mapeamento de volta para quando precisar retornar o ID no DTO de resposta
     @Mapping(source = "period.id", target = "periodId")
     @Mapping(source = "responsibleUser.id", target = "responsibleUserId")
+    @Mapping(source = "clearedByInvoice", target = "isClearedByInvoice")
+    @Mapping(source = "creditCardInvoice.id", target = "creditCardInvoiceId")
     public abstract TransactionResponseDTO toDto(Transaction entity);
 
     public abstract List<TransactionResponseDTO> toDtoList(List<Transaction> entityList);

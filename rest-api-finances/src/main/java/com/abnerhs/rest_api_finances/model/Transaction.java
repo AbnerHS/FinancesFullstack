@@ -49,7 +49,7 @@ public class Transaction {
     private CreditCardInvoice creditCardInvoice;
 
     @Column(name = "is_cleared_by_invoice", nullable = false)
-    private boolean isClearedByInvoice;
+    private boolean clearedByInvoice;
 
     public Transaction() {
     }
@@ -134,11 +134,11 @@ public class Transaction {
         this.creditCardInvoice = creditCardInvoice;
     }
 
-    public boolean getClearedByInvoice() {
-        return isClearedByInvoice;
+    public boolean isClearedByInvoice() {
+        return clearedByInvoice;
     }
 
-    public void setClearedByInvoice(boolean clearedByInvoice) {
-        this.isClearedByInvoice = clearedByInvoice;
+    public void setClearedByInvoice(Boolean clearedByInvoice) {
+        this.clearedByInvoice = clearedByInvoice;
     }
 }

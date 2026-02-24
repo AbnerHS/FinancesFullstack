@@ -5,6 +5,7 @@ import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
 import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
+import com.abnerhs.rest_api_finances.dto.RecurringTransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
 import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
@@ -19,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -44,6 +46,18 @@ public class TransactionController {
         return ResponseEntity
                 .created(model.getRequiredLink(IanaLinkRelations.SELF).toUri())
                 .body(model);
+    }
+
+    @PostMapping("/recurring")
+    @ApiPostResponses
+    @Operation(summary = "Create recurring Transactions", tags = {"Transaction"})
+    public ResponseEntity<List<EntityModel<TransactionResponseDTO>>> createRecurring(@RequestBody @Valid RecurringTransactionRequestDTO dto) {
+        List<TransactionResponseDTO> created = service.createRecurring(dto);
+        List<EntityModel<TransactionResponseDTO>> models = created.stream()
+                .map(assembler::toModel)
+                .toList();
+
+        return ResponseEntity.ok(models);
     }
 
     @GetMapping("/{id}")

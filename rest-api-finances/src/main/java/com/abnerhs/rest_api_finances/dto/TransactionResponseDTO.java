@@ -2,6 +2,7 @@ package com.abnerhs.rest_api_finances.dto;
 
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.hateoas.server.core.Relation;
 
 import java.math.BigDecimal;
@@ -25,5 +26,6 @@ public record TransactionResponseDTO(
         UUID responsibleUserId,
         UUID recurringGroupId,
         UUID creditCardInvoiceId,
-        boolean isClearedByInvoice
+        @JsonProperty("isClearedByInvoice")
+        Boolean isClearedByInvoice
 ) {}

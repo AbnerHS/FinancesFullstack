@@ -2,11 +2,13 @@ package com.abnerhs.rest_api_finances.service;
 
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.mapper.FinancialPlanMapper;
 import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.repository.FinancialPlanRepository;
+import com.abnerhs.rest_api_finances.repository.TransactionRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,9 @@ public class FinancialPlanService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private TransactionRepository transactionRepository;
+
     @Transactional
     public FinancialPlanResponseDTO create(FinancialPlanRequestDTO dto) {
         FinancialPlan entity = mapper.toEntity(dto);
@@ -42,6 +47,13 @@ public class FinancialPlanService {
         return repository.findById(id)
                 .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Plano Financeiro não encontrado"));
+    }
+
+    public FinancialSummaryDTO getSummary(UUID planId) {
+        if (!repository.existsById(planId)) {
+            throw new ResourceNotFoundException("Plano Financeiro não encontrado!");
+        }
+        return transactionRepository.getSummaryByPlanId(planId);
     }
 
     @Transactional

@@ -2,10 +2,12 @@ package com.abnerhs.rest_api_finances.service;
 
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.mapper.FinancialPeriodMapper;
 import com.abnerhs.rest_api_finances.model.FinancialPeriod;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
+import com.abnerhs.rest_api_finances.repository.TransactionRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,9 @@ public class FinancialPeriodService {
     @Autowired
     private FinancialPeriodMapper mapper;
 
+    @Autowired
+    private TransactionRepository transactionRepository;
+
     @Transactional
     public FinancialPeriodResponseDTO create(FinancialPeriodRequestDTO dto) {
         if (repository.existsByMonthAndYearAndFinancialPlanId(dto.month(), dto.year(), dto.financialPlanId())) {
@@ -39,13 +44,20 @@ public class FinancialPeriodService {
     }
 
     public List<FinancialPeriodResponseDTO> findAllByPlan(UUID planId) {
-        return mapper.toDtoList(repository.findByFinancialPlanId(planId));
+        return mapper.toDtoList(repository.findByFinancialPlanIdOrderByYearAscMonthAsc(planId));
     }
 
     public FinancialPeriodResponseDTO findById(UUID id){
         return repository.findById(id)
                 .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Período não encontrado!"));
+    }
+
+    public FinancialSummaryDTO getSummary(UUID periodId) {
+        if (!repository.existsById(periodId)) {
+            throw new ResourceNotFoundException("Período não encontrado!");
+        }
+        return transactionRepository.getSummaryByPeriodId(periodId);
     }
 
     @Transactional
