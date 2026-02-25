@@ -2,6 +2,7 @@ package com.abnerhs.rest_api_finances.exception.handler;
 
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import org.springframework.http.*;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,6 +31,14 @@ public class CustomEntityResponseHandler extends ResponseEntityExceptionHandler 
         problemDetail.setTitle("Recurso não encontrado");
         problemDetail.setProperty("timestamp", LocalDateTime.now());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problemDetail);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public final ResponseEntity<Object> handleBadCredentialsException(BadCredentialsException ex, WebRequest request) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problemDetail.setTitle("Credenciais inválidas");
+        problemDetail.setProperty("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problemDetail);
     }
 
     @Override

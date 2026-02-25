@@ -1,10 +1,8 @@
 package com.abnerhs.rest_api_finances.assembler;
 
-import com.abnerhs.rest_api_finances.controllers.FinancialPeriodController;
 import com.abnerhs.rest_api_finances.controllers.FinancialPlanController;
 import com.abnerhs.rest_api_finances.controllers.UserController;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
-import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.SimpleRepresentationModelAssembler;

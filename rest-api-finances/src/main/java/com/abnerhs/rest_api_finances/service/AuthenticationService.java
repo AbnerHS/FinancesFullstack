@@ -3,6 +3,7 @@ package com.abnerhs.rest_api_finances.service;
 import com.abnerhs.rest_api_finances.dto.AuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.AuthenticationResponseDTO;
 import com.abnerhs.rest_api_finances.dto.RegisterRequestDTO;
+import com.abnerhs.rest_api_finances.dto.UserResponseDTO;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +32,8 @@ public class AuthenticationService {
         );
         repository.save(user);
         var jwtToken = jwtService.generateToken(user);
-        return new AuthenticationResponseDTO(jwtToken);
+        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+        return new AuthenticationResponseDTO(jwtToken, userDto);
     }
 
     public AuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) {
@@ -44,6 +46,7 @@ public class AuthenticationService {
         var user = repository.findByEmail(request.email())
                 .orElseThrow();
         var jwtToken = jwtService.generateToken(user);
-        return new AuthenticationResponseDTO(jwtToken);
+        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+        return new AuthenticationResponseDTO(jwtToken, userDto);
     }
 }
