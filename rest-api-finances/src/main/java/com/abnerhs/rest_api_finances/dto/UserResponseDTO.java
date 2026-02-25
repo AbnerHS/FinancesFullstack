@@ -5,9 +5,8 @@ import org.springframework.hateoas.server.core.Relation;
 import java.util.UUID;
 
 @Relation(collectionRelation = "users", itemRelation = "user")
-public record UserDTO(
+public record UserResponseDTO(
         UUID id,
         String name,
-        String email,
-        String password)
-{}
+        String email
+) {}

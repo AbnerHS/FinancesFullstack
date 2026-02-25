@@ -2,10 +2,7 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
-import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
-import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
+import com.abnerhs.rest_api_finances.docs.*;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
@@ -94,7 +91,7 @@ public class FinancialPlanController {
     }
 
     @PatchMapping("/{id}")
-    @ApiPutResponses
+    @ApiPatchResponses
     @Operation(summary = "Update partial a Financial Plan by ID")
     public ResponseEntity<EntityModel<FinancialPlanResponseDTO>> partialUpdate(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
         FinancialPlanResponseDTO updated = service.updatePartial(id, updates);

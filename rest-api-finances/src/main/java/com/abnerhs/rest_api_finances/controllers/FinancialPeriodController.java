@@ -3,10 +3,7 @@ package com.abnerhs.rest_api_finances.controllers;
 import com.abnerhs.rest_api_finances.assembler.CreditCardInvoiceAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.TransactionAssembler;
-import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
-import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
+import com.abnerhs.rest_api_finances.docs.*;
 import com.abnerhs.rest_api_finances.dto.*;
 import com.abnerhs.rest_api_finances.service.CreditCardInvoiceService;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
@@ -103,7 +100,7 @@ public class FinancialPeriodController {
     }
 
     @PatchMapping("/{id}")
-    @ApiPutResponses
+    @ApiPatchResponses
     @Operation(summary = "Update partial a Financial Period By ID", tags = {"Period"})
     public ResponseEntity<EntityModel<FinancialPeriodResponseDTO>> updatePartial(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
         FinancialPeriodResponseDTO updated = service.updatePartial(id, updates);

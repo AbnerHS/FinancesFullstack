@@ -4,16 +4,16 @@ import com.abnerhs.rest_api_finances.assembler.CreditCardAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
 import com.abnerhs.rest_api_finances.assembler.UserAssembler;
 import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
+import com.abnerhs.rest_api_finances.docs.ApiPatchResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
-import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
-import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
-import com.abnerhs.rest_api_finances.dto.UserDTO;
+import com.abnerhs.rest_api_finances.dto.*;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.service.CreditCardService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
 import com.abnerhs.rest_api_finances.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
@@ -52,27 +52,51 @@ public class UserController {
     @PostMapping
     @ApiPostResponses
     @Operation(summary = "Create a new User", tags = {"User"})
-    public ResponseEntity<UserDTO> create(@RequestBody UserDTO dto) {
+    public ResponseEntity<UserResponseDTO> create(@RequestBody @Valid UserRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
     @GetMapping
     @ApiGetResponses
     @Operation(summary = "Find all Users", tags = {"User"})
-    public CollectionModel<EntityModel<UserDTO>> getAll() {
-        List<UserDTO> dtoList = service.findAll();
+    public CollectionModel<EntityModel<UserResponseDTO>> getAll() {
+        List<UserResponseDTO> dtoList = service.findAll();
         return assembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(UserController.class).getAll()).withSelfRel());
+    }
+
+    @GetMapping("/me")
+    @ApiGetResponses
+    @Operation(summary = "Find the current User", tags = {"User"})
+    public EntityModel<UserResponseDTO> getMe() {
+        User currentUser = getCurrentUser();
+        UserResponseDTO dto = service.findById(currentUser.getId());
+        return assembler.toModel(dto);
+    }
+
+    @PatchMapping("/me")
+    @ApiPatchResponses
+    @Operation(summary = "Update the current User", tags = {"User"})
+    public ResponseEntity<EntityModel<UserResponseDTO>> updateMe(@RequestBody @Valid UserUpdateDTO dto) {
+        User currentUser = getCurrentUser();
+        UserResponseDTO updated = service.update(currentUser.getId(), dto);
+        return ResponseEntity.ok(assembler.toModel(updated));
+    }
+
+    @PutMapping("/me/password")
+    @ApiPatchResponses
+    @Operation(summary = "Update the current User's password", tags = {"User"})
+    public ResponseEntity<Void> updatePassword(@RequestBody @Valid UserPasswordUpdateDTO dto) {
+        User currentUser = getCurrentUser();
+        service.updatePassword(currentUser.getId(), dto);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me/plans")
     @ApiGetResponses
     @Operation(summary = "Find Financial Plans for the current User", tags = {"User", "Plan"})
     public CollectionModel<EntityModel<FinancialPlanResponseDTO>> getPlansForCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        assert authentication != null;
-        User currentUser = (User) authentication.getPrincipal();
-        assert currentUser != null;
+        User currentUser = getCurrentUser();
         List<FinancialPlanResponseDTO> dtoList = financialPlanService.findAllByUser(currentUser.getId());
         return financialPlanAssembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(UserController.class).getPlansForCurrentUser()).withSelfRel());
@@ -81,8 +105,8 @@ public class UserController {
     @GetMapping("/{id}")
     @ApiGetResponses
     @Operation(summary = "Find User by ID", tags = {"User"})
-    public EntityModel<UserDTO> getById(@PathVariable UUID id) {
-        UserDTO dto = service.findById(id);
+    public EntityModel<UserResponseDTO> getById(@PathVariable UUID id) {
+        UserResponseDTO dto = service.findById(id);
         return assembler.toModel(dto);
     }
 
@@ -102,6 +126,24 @@ public class UserController {
         List<CreditCardResponseDTO> dtoList = creditCardService.findAllByUser(id);
         return creditCardAssembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(UserController.class).getCreditCardsByUser(id)).withSelfRel());
+    }
+
+    @GetMapping("/me/credit-cards")
+    @ApiGetResponses
+    @Operation(summary = "Find Credit Cards for the current user", tags = {"User", "Card"})
+    public CollectionModel<EntityModel<CreditCardResponseDTO>> getCreditCardsForCurrentUser() {
+        User currentUser = getCurrentUser();
+        List<CreditCardResponseDTO> dtoList = creditCardService.findAllByUser(currentUser.getId());
+        return creditCardAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(UserController.class).getCreditCardsForCurrentUser()).withSelfRel());
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("Usuário não autenticado");
+        }
+        return (User) authentication.getPrincipal();
     }
 
 }

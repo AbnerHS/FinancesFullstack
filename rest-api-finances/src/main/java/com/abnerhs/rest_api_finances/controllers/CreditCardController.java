@@ -2,10 +2,7 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.assembler.CreditCardAssembler;
 import com.abnerhs.rest_api_finances.assembler.CreditCardInvoiceAssembler;
-import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
-import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
+import com.abnerhs.rest_api_finances.docs.*;
 import com.abnerhs.rest_api_finances.dto.CreditCardInvoiceResponseDTO;
 import com.abnerhs.rest_api_finances.dto.CreditCardRequestDTO;
 import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
@@ -84,7 +81,7 @@ public class CreditCardController {
     }
 
     @PatchMapping("/{id}")
-    @ApiPutResponses
+    @ApiPatchResponses
     @Operation(summary = "Update partial a Credit Card by ID", tags = {"Card"})
     public ResponseEntity<EntityModel<CreditCardResponseDTO>> partialUpdate(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
         CreditCardResponseDTO updated = service.updatePartial(id, updates);

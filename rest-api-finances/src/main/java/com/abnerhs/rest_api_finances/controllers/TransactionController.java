@@ -1,10 +1,7 @@
 package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.assembler.TransactionAssembler;
-import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
-import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
-import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
+import com.abnerhs.rest_api_finances.docs.*;
 import com.abnerhs.rest_api_finances.dto.RecurringTransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
@@ -77,7 +74,7 @@ public class TransactionController {
     }
 
     @PatchMapping("/{id}")
-    @ApiPutResponses
+    @ApiPatchResponses
     @Operation(summary = "Update partial a Transaction by ID", tags = {"Transaction"})
     public ResponseEntity<EntityModel<TransactionResponseDTO>> partialUpdate(@PathVariable UUID id, @RequestBody Map<String, Object> updates) {
         TransactionResponseDTO updated = service.updatePartial(id, updates);

@@ -1,7 +1,7 @@
 package com.abnerhs.rest_api_finances.assembler;
 
 import com.abnerhs.rest_api_finances.controllers.UserController;
-import com.abnerhs.rest_api_finances.dto.UserDTO;
+import com.abnerhs.rest_api_finances.dto.UserResponseDTO;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.server.SimpleRepresentationModelAssembler;
@@ -11,11 +11,11 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @Component
-public class UserAssembler implements SimpleRepresentationModelAssembler<UserDTO> {
+public class UserAssembler implements SimpleRepresentationModelAssembler<UserResponseDTO> {
 
     @Override
-    public void addLinks(EntityModel<UserDTO> resource) {
-        UserDTO dto = resource.getContent();
+    public void addLinks(EntityModel<UserResponseDTO> resource) {
+        UserResponseDTO dto = resource.getContent();
 
         resource.add(linkTo(methodOn(UserController.class)
                 .getById(dto.id())).withSelfRel());
@@ -28,7 +28,7 @@ public class UserAssembler implements SimpleRepresentationModelAssembler<UserDTO
     }
 
     @Override
-    public void addLinks(CollectionModel<EntityModel<UserDTO>> resources) {
-
+    public void addLinks(CollectionModel<EntityModel<UserResponseDTO>> resources) {
+        // Links para a coleção, se necessário
     }
 }
