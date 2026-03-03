@@ -9,6 +9,7 @@
 * **Banco de Dados:** Oracle Database 21c (via Docker)
 * **Persistência:** Spring Data JPA / Hibernate
 * **Mapeamento:** MapStruct (Entity <-> DTO)
+* **Segurança:** Implementação de autenticação e autorização via **Spring Security & JWT**.
 * **Navegabilidade:** Spring HATEOAS (Nível 3 de Maturidade REST)
 * **Containerização:** Docker & Docker Compose
 
@@ -24,7 +25,6 @@
 
 ## 🚀 Próximos Passos
 
-- [ ] **Segurança:** Implementação de autenticação e autorização via **Spring Security & JWT**.
 - [ ] **Front-end Web:** Dashboard para controle de gastos e receitas mensais.
 - [ ] **Mobile:** Aplicativo para registro rápido de despesas no dia a dia.
 - [ ] **Relatórios:** Geração de gráficos de evolução patrimonial e gastos por categoria.
