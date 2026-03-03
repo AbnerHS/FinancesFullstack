@@ -9,7 +9,7 @@ const Navbar = ({ name, onLogout }) => {
                     <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-3">
                             <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                                <span className="text-sm font-medium text-indigo-700">{name.substr(0, 1)}</span>
+                                <span className="text-sm font-medium text-indigo-700">{name?.substr(0, 1)}</span>
                             </div>
                             <span className="text-sm font-medium text-gray-700">{name}</span>
                         </div>

@@ -1,19 +1,16 @@
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
 
 import App from '../App';
-import LoginPage from '../pages/LoginPage';
-import RegisterPage from '../pages/RegisterPage';
+import Login from '../pages/Login';
+import Register from '../pages/Register';
 
-import { AuthProvider } from '../contexts/AuthContext';
 import AuthLayout from '../layouts/AuthLayout';
 
 // Componente raiz que fornece o contexto de autenticação para todas as rotas filhas.
 // Como ele é renderizado PELO roteador, AuthProvider pode usar o hook useNavigate.
 const AuthRoot = () => {
   return (
-    <AuthProvider>
-      <Outlet />
-    </AuthProvider>
+    <Outlet />
   );
 };
 
@@ -29,11 +26,11 @@ const router = createBrowserRouter([
         children: [
           {
             path: '/login',
-            element: <LoginPage />,
+            element: <Login />,
           },
           {
             path: '/register',
-            element: <RegisterPage />,
+            element: <Register />,
           },
         ],
       },
