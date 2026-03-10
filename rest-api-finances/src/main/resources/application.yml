@@ -46,3 +46,11 @@ logging:
 
 server:
   port: ${SERVER_PORT}
+
+jwt:
+  access:
+    secret: ${JWT_ACCESS_TOKEN_SECRET}
+    expiration-ms: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:900000}
+  refresh:
+    secret: ${JWT_REFRESH_TOKEN_SECRET}
+    expiration-ms: ${JWT_REFRESH_TOKEN_EXPIRATION_MS:604800000}

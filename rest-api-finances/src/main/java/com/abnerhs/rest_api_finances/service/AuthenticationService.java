@@ -2,13 +2,17 @@ package com.abnerhs.rest_api_finances.service;
 
 import com.abnerhs.rest_api_finances.dto.AuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.AuthenticationResponseDTO;
+import com.abnerhs.rest_api_finances.dto.RefreshTokenRequestDTO;
 import com.abnerhs.rest_api_finances.dto.RegisterRequestDTO;
 import com.abnerhs.rest_api_finances.dto.UserResponseDTO;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
+import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -31,9 +35,8 @@ public class AuthenticationService {
                 request.name()
         );
         repository.save(user);
-        var jwtToken = jwtService.generateToken(user);
         UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
-        return new AuthenticationResponseDTO(jwtToken, userDto);
+        return buildAuthResponse(user, userDto);
     }
 
     public AuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) {
@@ -45,8 +48,31 @@ public class AuthenticationService {
         );
         var user = repository.findByEmail(request.email())
                 .orElseThrow();
-        var jwtToken = jwtService.generateToken(user);
         UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
-        return new AuthenticationResponseDTO(jwtToken, userDto);
+        return buildAuthResponse(user, userDto);
+    }
+
+    public AuthenticationResponseDTO refreshToken(RefreshTokenRequestDTO request) {
+        String refreshToken = request.refreshToken();
+
+        try {
+            String userEmail = jwtService.extractUsername(refreshToken);
+            User user = repository.findByEmail(userEmail).orElseThrow();
+
+            if (!jwtService.isRefreshTokenValid(refreshToken, user)) {
+                throw new BadCredentialsException("Refresh token invalido");
+            }
+
+            UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+            return buildAuthResponse(user, userDto);
+        } catch (JwtException | IllegalArgumentException exception) {
+            throw new BadCredentialsException("Refresh token invalido");
+        }
+    }
+
+    private AuthenticationResponseDTO buildAuthResponse(UserDetails user, UserResponseDTO userDto) {
+        var jwtToken = jwtService.generateToken(user);
+        var refreshToken = jwtService.generateRefreshToken(user);
+        return new AuthenticationResponseDTO(jwtToken, refreshToken, userDto);
     }
 }

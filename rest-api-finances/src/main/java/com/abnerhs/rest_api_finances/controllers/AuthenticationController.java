@@ -2,6 +2,7 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.dto.AuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.AuthenticationResponseDTO;
+import com.abnerhs.rest_api_finances.dto.RefreshTokenRequestDTO;
 import com.abnerhs.rest_api_finances.dto.RegisterRequestDTO;
 import com.abnerhs.rest_api_finances.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,11 +30,19 @@ public class AuthenticationController {
         return ResponseEntity.ok(service.register(request));
     }
 
-    @PostMapping("/authenticate")
+    @PostMapping("/login")
     @Operation(summary = "Authenticate a user", tags = {"Authentication"})
     public ResponseEntity<AuthenticationResponseDTO> authenticate(
             @RequestBody AuthenticationRequestDTO request
     ) {
         return ResponseEntity.ok(service.authenticate(request));
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Refresh access token", tags = {"Authentication"})
+    public ResponseEntity<AuthenticationResponseDTO> refresh(
+            @RequestBody RefreshTokenRequestDTO request
+    ) {
+        return ResponseEntity.ok(service.refreshToken(request));
     }
 }
