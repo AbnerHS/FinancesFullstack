@@ -71,7 +71,7 @@ public class TransactionService {
             Transaction transaction = mapper.toEntity(dto);
             transaction.setPeriod(period);
             transaction.setRecurringGroupId(recurringGroupId);
-            
+
             // Ajustar a data para o mês correto
             LocalDateTime now = LocalDateTime.now();
             int day = now.getDayOfMonth();
@@ -79,7 +79,8 @@ public class TransactionService {
             if (day > maxDay) {
                 day = maxDay;
             }
-            transaction.setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
+            transaction
+                    .setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
 
             createdTransactions.add(mapper.toDto(repository.save(transaction)));
         }
@@ -129,6 +130,10 @@ public class TransactionService {
                 case "type" -> transaction.setType(TransactionType.valueOf((String) value));
                 case "responsibilityTag" -> transaction.setResponsibilityTag((String) value);
                 case "creditCardInvoiceId" -> {
+                    if (value == null) {
+                        transaction.setCreditCardInvoice(null);
+                        break;
+                    }
                     CreditCardInvoice invoice = invoiceRepository.findById(UUID.fromString(value.toString()))
                             .orElseThrow(() -> new ResourceNotFoundException("Fatura de cartão não encontrada!"));
                     transaction.setCreditCardInvoice(invoice);
