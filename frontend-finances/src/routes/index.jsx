@@ -1,53 +1,50 @@
-import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom';
 
-import App from '../App';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
 
 import AuthLayout from '../layouts/AuthLayout';
-
-// Componente raiz que fornece o contexto de autenticação para todas as rotas filhas.
-// Como ele é renderizado PELO roteador, AuthProvider pode usar o hook useNavigate.
-const AuthRoot = () => {
-  return (
-    <Outlet />
-  );
-};
-
-// Layout para páginas que não devem ter o menu principal, como login e registro
+import Dashboard from '../pages/Dashboard';
+import Layout from '../layouts/Layout';
+import ProtetectedRoute from '../components/auth/ProtectedRoute';
+import PublicRoute from '../components/auth/PublicRoute';
 
 const router = createBrowserRouter([
   {
-    element: <AuthRoot />,
-    // TODO: Adicionar página de erro (errorElement)
+    element: <AuthLayout />,
     children: [
       {
-        element: <AuthLayout />,
-        children: [
-          {
-            path: '/login',
-            element: <Login />,
-          },
-          {
-            path: '/register',
-            element: <Register />,
-          },
-        ],
+        path: '/login',
+        element:
+          <PublicRoute>
+            <Login />
+          </PublicRoute>,
+      },
+      {
+        path: '/register',
+        element:
+          <PublicRoute>
+            <Register />
+          </PublicRoute>,
       },
       {
         path: '/',
-        element: <App />,
-        children: [
-          {
-            index: true,
-            // TODO: Redirecionar para /dashboard ou para /login se não estiver logado
-            element: <h1>Dashboard (Página Principal)</h1>,
-          },
-          // Adicionar outras rotas principais aqui (ex: /dashboard, /profile, etc.)
-        ],
-      },
+        element: <Navigate to="/dashboard" replace />,
+      }
     ],
   },
+  {
+    element:
+      <ProtetectedRoute>
+        <Layout />
+      </ProtetectedRoute>,
+    children: [
+      {
+        path: '/dashboard',
+        element: <Dashboard />,
+      },
+    ]
+  }
 ]);
 
 export function AppRoutes() {

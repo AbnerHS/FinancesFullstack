@@ -1,5 +1,5 @@
 import { useForm } from "react-hook-form";
-import { useRegister } from "../services/auth";
+import { useRegister } from "../hooks/useAuth";
 
 const Register = () => {
 

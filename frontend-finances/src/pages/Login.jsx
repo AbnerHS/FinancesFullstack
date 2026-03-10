@@ -1,12 +1,11 @@
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
-import { useLogin } from '../services/auth';
 import { useAuthStore } from '../store/authStore';
-
+import { useLogin } from '../hooks/useAuth';
 
 const LoginPage = () => {
 
-  const { setTokens } = useAuthStore();
+  const { accessToken } = useAuthStore();
   const { mutateAsync: loginUser } = useLogin();
 
   const {
@@ -23,15 +22,15 @@ const LoginPage = () => {
 
   const onSubmit = async (formData) => {
     try {
-      const response = await loginUser(formData);
-      const { token } = response;
-      console.log(response);
-      setTokens({ accessToken: token });
-      alert("Login realizado com sucesso!");
+      await loginUser(formData);
     } catch (error) {
       console.error('Erro ao realizar login:', error);
     }
   };
+
+  if (accessToken) {
+    return null;
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
