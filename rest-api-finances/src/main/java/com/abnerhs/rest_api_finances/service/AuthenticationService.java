@@ -68,8 +68,8 @@ public class AuthenticationService {
     }
 
     private AuthenticationResponseDTO buildAuthResponse(UserDetails user, UserResponseDTO userDto) {
-        var jwtToken = jwtService.generateToken(user);
+        var accessToken = jwtService.generateToken(user);
         var refreshToken = jwtService.generateRefreshToken(user);
-        return new AuthenticationResponseDTO(jwtToken, refreshToken, userDto);
+        return new AuthenticationResponseDTO(accessToken, refreshToken, userDto);
     }
 }
