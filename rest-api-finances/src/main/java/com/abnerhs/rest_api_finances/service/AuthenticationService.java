@@ -2,7 +2,6 @@ package com.abnerhs.rest_api_finances.service;
 
 import com.abnerhs.rest_api_finances.dto.AuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.AuthenticationResponseDTO;
-import com.abnerhs.rest_api_finances.dto.RefreshTokenRequestDTO;
 import com.abnerhs.rest_api_finances.dto.RegisterRequestDTO;
 import com.abnerhs.rest_api_finances.dto.UserResponseDTO;
 import com.abnerhs.rest_api_finances.model.User;
@@ -52,9 +51,7 @@ public class AuthenticationService {
         return buildAuthResponse(user, userDto);
     }
 
-    public AuthenticationResponseDTO refreshToken(RefreshTokenRequestDTO request) {
-        String refreshToken = request.refreshToken();
-
+    public AuthenticationResponseDTO refreshToken(String refreshToken) {
         try {
             String userEmail = jwtService.extractUsername(refreshToken);
             User user = repository.findByEmail(userEmail).orElseThrow();
