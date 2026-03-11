@@ -100,7 +100,7 @@ public class TransactionService {
     }
 
     public List<TransactionResponseDTO> findAllByPeriod(UUID periodId) {
-        List<Transaction> transactionList = repository.findByPeriodId(periodId);
+        List<Transaction> transactionList = repository.findByPeriodIdOrderByOrderAsc(periodId);
         return mapper.toDtoList(transactionList);
     }
 
@@ -129,6 +129,7 @@ public class TransactionService {
                 case "description" -> transaction.setDescription((String) value);
                 case "type" -> transaction.setType(TransactionType.valueOf((String) value));
                 case "responsibilityTag" -> transaction.setResponsibilityTag((String) value);
+                case "order" -> transaction.setOrder(value != null ? Integer.valueOf(value.toString()) : null);
                 case "creditCardInvoiceId" -> {
                     if (value == null) {
                         transaction.setCreditCardInvoice(null);

@@ -13,7 +13,7 @@ import java.util.UUID;
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
 
-    List<Transaction> findByPeriodId(UUID periodId);
+    List<Transaction> findByPeriodIdOrderByOrderAsc(UUID periodId);
 
     @Query("SELECT new com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO(" +
            "COALESCE(SUM(CASE WHEN t.type = 'REVENUE' THEN t.amount ELSE 0 END), 0), " +

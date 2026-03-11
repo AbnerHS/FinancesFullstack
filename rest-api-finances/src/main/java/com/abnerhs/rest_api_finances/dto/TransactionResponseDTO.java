@@ -24,6 +24,7 @@ public record TransactionResponseDTO(
         String responsibilityTag,
         UUID periodId,
         UUID responsibleUserId,
+        Integer order,
         UUID recurringGroupId,
         UUID creditCardInvoiceId,
         @JsonProperty("isClearedByInvoice")

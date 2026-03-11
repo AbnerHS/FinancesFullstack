@@ -44,6 +44,9 @@ public class Transaction {
 
     private UUID recurringGroupId;
 
+    @Column(name = "\"ORDER\"")
+    private Integer order;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "credit_card_invoice_id")
     private CreditCardInvoice creditCardInvoice;
@@ -124,6 +127,14 @@ public class Transaction {
 
     public void setRecurringGroupId(UUID recurringGroupId) {
         this.recurringGroupId = recurringGroupId;
+    }
+
+    public Integer getOrder() {
+        return order;
+    }
+
+    public void setOrder(Integer order) {
+        this.order = order;
     }
 
     public CreditCardInvoice getCreditCardInvoice() {
