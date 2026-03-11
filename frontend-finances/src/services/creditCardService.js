@@ -1,4 +1,4 @@
-import { AxiosInstance } from "./AxiosInstance";
+import { AxiosInstance } from '../api/AxiosInstance';
 
 export const creditCardService = {
     getMyCreditCards: async () => {
