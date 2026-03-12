@@ -13,12 +13,14 @@ const Dashboard = () => {
     periods,
     periodsLoading,
     selectedPlanId,
+    activePlan,
     selectedPeriodIds,
     setSelectedPlanId,
     togglePeriodId,
     periodPanels,
     combinedStats,
     creditCards,
+    responsibleOptions,
     userId,
   } = useDashboard();
 
@@ -56,6 +58,9 @@ const Dashboard = () => {
           periodsLoading={periodsLoading}
           selectedPeriodIds={selectedPeriodIds}
           onTogglePeriodId={togglePeriodId}
+          creditCards={creditCards}
+          userId={userId}
+          activePlan={activePlan}
         />
 
         <div className="lg:col-span-10">
@@ -75,6 +80,8 @@ const Dashboard = () => {
                     userId={userId}
                     entries={panel.entries}
                     creditCards={creditCards}
+                    periods={periods}
+                    responsibleOptions={responsibleOptions}
                     transactionsLoading={panel.transactionsLoading}
                     invoicesLoading={panel.invoicesLoading}
                   />

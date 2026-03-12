@@ -13,6 +13,7 @@ import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
 import com.abnerhs.rest_api_finances.repository.TransactionRepository;
+import com.abnerhs.rest_api_finances.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,9 @@ public class TransactionService {
 
     @Autowired
     private FinancialPeriodRepository periodRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Transactional
     public TransactionResponseDTO create(TransactionRequestDTO dto) {
@@ -129,6 +133,16 @@ public class TransactionService {
                 case "description" -> transaction.setDescription((String) value);
                 case "type" -> transaction.setType(TransactionType.valueOf((String) value));
                 case "responsibilityTag" -> transaction.setResponsibilityTag((String) value);
+                case "responsibleUserId" -> {
+                    if (value == null) {
+                        transaction.setResponsibleUser(null);
+                    } else {
+                        transaction.setResponsibleUser(
+                                userRepository.findById(UUID.fromString(value.toString()))
+                                        .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Usuário responsável não encontrado!")));
+                    }
+                }
                 case "order" -> transaction.setOrder(value != null ? Integer.valueOf(value.toString()) : null);
                 case "creditCardInvoiceId" -> {
                     if (value == null) {

@@ -1,5 +1,8 @@
 import { memo } from "react";
 import { Calendar } from "lucide-react";
+import { CreditCardsManager } from "./CreditCardsManager";
+import { InvoiceManager } from "./InvoiceManager";
+import { PlanPartnerManager } from "./PlanPartnerManager";
 
 export const DashboardSidebar = memo(function DashboardSidebar({
   plans,
@@ -9,6 +12,9 @@ export const DashboardSidebar = memo(function DashboardSidebar({
   periodsLoading,
   selectedPeriodIds,
   onTogglePeriodId,
+  creditCards,
+  userId,
+  activePlan,
 }) {
   const formatPeriodLabel = (period) => {
     const monthName = new Date(period.year, period.month - 1, 1).toLocaleString(
@@ -32,11 +38,10 @@ export const DashboardSidebar = memo(function DashboardSidebar({
               key={plan.id}
               type="button"
               onClick={() => onSelectPlanId(plan.id)}
-              className={`w-full px-4 py-2 rounded-lg text-left text-sm font-medium transition ${
-                plan.id === selectedPlanId
+              className={`w-full px-4 py-2 rounded-lg text-left text-sm font-medium transition ${plan.id === selectedPlanId
                   ? "bg-indigo-600 text-white shadow-md"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
+                }`}
             >
               {plan.name}
             </button>
@@ -57,11 +62,10 @@ export const DashboardSidebar = memo(function DashboardSidebar({
                 key={period.id}
                 type="button"
                 onClick={() => onTogglePeriodId(period.id)}
-                className={`w-full flex flex-col p-3 rounded-lg border text-left transition ${
-                  selectedPeriodIds.includes(period.id)
+                className={`w-full flex flex-col p-3 rounded-lg border text-left transition ${selectedPeriodIds.includes(period.id)
                     ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500"
                     : "border-gray-100 bg-white hover:border-emerald-200"
-                }`}
+                  }`}
               >
                 <span className="text-sm font-bold text-gray-700">
                   {formatPeriodLabel(period)}
@@ -71,6 +75,14 @@ export const DashboardSidebar = memo(function DashboardSidebar({
           </div>
         )}
       </div>
+
+      <PlanPartnerManager activePlan={activePlan} />
+      <CreditCardsManager creditCards={creditCards} userId={userId} />
+      <InvoiceManager
+        creditCards={creditCards}
+        periods={periods}
+        selectedPeriodIds={selectedPeriodIds}
+      />
     </aside>
   );
 });

@@ -5,6 +5,7 @@ import { usePlans } from "./usePlans";
 import { usePeriods } from "./usePeriods";
 import { useCreditCards } from "./useCreditCards";
 import { periodService } from "../services/periodService";
+import { userService } from "../services/userService";
 import { useAuthStore } from "../store/authStore";
 import { useDashboardStore } from "../store/dashboardStore";
 
@@ -113,6 +114,51 @@ export const useDashboard = () => {
     })),
   });
 
+  const peopleQueries = useQueries({
+    queries: [
+      {
+        queryKey: ["user", activePlan?.ownerId],
+        queryFn: () => userService.getById(activePlan?.ownerId),
+        enabled: Boolean(activePlan?.ownerId),
+        staleTime: 1000 * 60 * 10,
+      },
+      {
+        queryKey: ["user", activePlan?.partnerId],
+        queryFn: () => userService.getById(activePlan?.partnerId),
+        enabled: Boolean(activePlan?.partnerId),
+        staleTime: 1000 * 60 * 10,
+      },
+    ],
+  });
+
+  const ownerUser = peopleQueries[0]?.data ?? null;
+  const partnerUser = peopleQueries[1]?.data ?? null;
+
+  const responsibleOptions = useMemo(() => {
+    if (!activePlan) return [];
+
+    const ownerId = activePlan.ownerId;
+    const partnerId = activePlan.partnerId;
+
+    const options = [];
+
+    if (ownerId) {
+      options.push({
+        id: ownerId,
+        label: ownerUser?.name ? `${ownerUser.name}` : "Dono",
+      });
+    }
+
+    if (partnerId) {
+      options.push({
+        id: partnerId,
+        label: partnerUser?.name ? `${partnerUser.name}` : "Parceiro",
+      });
+    }
+
+    return options;
+  }, [activePlan, ownerUser, partnerUser]);
+
   const invoiceQueries = useQueries({
     queries: selectedPeriods.map((period) => ({
       queryKey: ["period-invoices", period.id],
@@ -134,7 +180,7 @@ export const useDashboard = () => {
           ...invoices.map((invoice) => ({
             id: `invoice-${invoice.id}`,
             kind: "INVOICE",
-            description: "Fatura cartao",
+            description: "Fatura cartão",
             amount: invoice.amount,
             type: "EXPENSE",
             dateTime: "-",
@@ -198,12 +244,14 @@ export const useDashboard = () => {
     periods,
     periodsLoading,
     selectedPlanId,
+    activePlan,
     selectedPeriodIds,
     setSelectedPlanId,
     selectedPeriods,
     periodPanels,
     combinedStats,
     creditCards,
+    responsibleOptions,
     userId: user?.id ?? null,
     togglePeriodId,
   };

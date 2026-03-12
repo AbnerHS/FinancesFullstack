@@ -21,7 +21,7 @@ export const DashboardStats = ({ balance, incomes, expenses }) => (
       title="Saldo do Periodo"
       value={balance}
       icon={<Wallet className="text-indigo-600" />}
-      color="indigo"
+      color={balance > 0 ? "green" : "red"}
       size={"text-2xl"}
     />
   </div>
