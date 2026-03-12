@@ -24,9 +24,7 @@ public record TransactionRequestDTO(
         @NotNull(message = "O ID do período é obrigatório", groups = {onCreate.class})
         UUID periodId,
 
-        @NotNull(message = "O ID do usuário responsável é obrigatório", groups = {onCreate.class})
         UUID responsibleUserId,
-
         String responsibilityTag,
         Integer order,
         UUID recurringGroupId,

@@ -175,6 +175,13 @@ export const resolveLink = (linkObj?: { href?: string } | null) => {
 };
 ```
 
+### React Hooks (useEffect e estado derivado)
+
+- Evitar `setState` sincronamente dentro de `useEffect` quando o valor puder ser derivado de props/estado atual.
+- Preferir estado derivado com `useMemo`/cálculo em render para defaults de formulário (ex.: `resolvedForm`), mantendo o estado bruto apenas para inputs editáveis.
+- Usar `useEffect` para efeitos colaterais reais (I/O, subscriptions, timers), não para sincronização de estado derivável.
+- Quando houver warning de cascata de render (`Calling setState synchronously within an effect...`), refatorar removendo o efeito e centralizando a derivação em memo/render.
+
 ## Checklist Rápido (antes de finalizar uma mudança)
 
 - Backend:
@@ -185,3 +192,4 @@ export const resolveLink = (linkObj?: { href?: string } | null) => {
 - Frontend:
   - Requisições via `services/` + hooks do React Query.
   - Refresh token só por cookie (`HttpOnly`) — não armazenar em `localStorage`.
+  - Conferir se não há `setState` em `useEffect` para sincronização derivável.

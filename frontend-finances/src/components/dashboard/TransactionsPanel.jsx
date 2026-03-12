@@ -2,6 +2,25 @@ import { TransactionsTable } from "./TransactionsTable";
 import { useTransactionsPanel } from "../../hooks/useTransactionsPanel";
 import { ArrowDownCircle, ArrowUpCircle, Info, Plus, Tag, Wallet } from "lucide-react";
 
+const getProblemDetailMessage = (error, fallbackMessage) =>
+  error?.response?.data?.detail ||
+  error?.response?.data?.message ||
+  error?.message ||
+  fallbackMessage;
+
+const getProblemDetailErrors = (error) => {
+  const fieldErrors = error?.response?.data?.errors;
+  if (!fieldErrors || typeof fieldErrors !== "object") {
+    return [];
+  }
+
+  return Object.entries(fieldErrors).flatMap(([, value]) => {
+    const messages = Array.isArray(value) ? value : [value];
+    return messages
+      .filter(Boolean)
+  });
+};
+
 const formatPeriodLabel = (period) => {
   if (!period) return "";
   const monthName = new Date(period.year, period.month - 1, 1).toLocaleString(
@@ -47,7 +66,7 @@ export const TransactionsPanel = ({
     setSelectedInvoiceId,
     editingScope,
     setEditingScope,
-    resolvedResponsibleUserId,
+    deleteTransactionErrorId,
     setEditingId,
     setEditingInvoiceId,
   } = useTransactionsPanel({
@@ -64,9 +83,30 @@ export const TransactionsPanel = ({
     acc[card.id] = card;
     return acc;
   }, {});
+  const createTransactionError = getProblemDetailMessage(
+    createTransaction.error,
+    "Nao foi possivel cadastrar a transacao."
+  );
+  const updateTransactionError = getProblemDetailMessage(
+    updateTransaction.error,
+    "Nao foi possivel atualizar a transacao."
+  );
+  const updateInvoiceError = getProblemDetailMessage(
+    updateInvoice.error,
+    "Nao foi possivel atualizar a fatura."
+  );
+  const deleteTransactionError = getProblemDetailMessage(
+    deleteTransaction.error,
+    "Nao foi possivel excluir a transacao."
+  );
+  const linkTransactionError = getProblemDetailMessage(
+    linkTransactionToInvoice.error,
+    "Nao foi possivel vincular a transacao."
+  );
+  const createTransactionErrors = getProblemDetailErrors(createTransaction.error);
 
   return (
-    <main className="lg:col-span-10"> 
+    <main className="lg:col-span-10">
       <div className="flex flex-col gap-6">
         {/* 1. Header & Summary Section */}
         <div className="flex flex-row items-center justify-between gap-4">
@@ -143,7 +183,7 @@ export const TransactionsPanel = ({
               <div className="md:col-span-2">
                 <select
                   className="w-full rounded-lg border-gray-200 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  value={resolvedResponsibleUserId}
+                  value={newTransaction.responsibleUserId}
                   onChange={(e) =>
                     setNewTransaction((p) => ({
                       ...p,
@@ -151,24 +191,13 @@ export const TransactionsPanel = ({
                     }))
                   }
                 >
-                  <option value="">Responsavel</option>
+                  <option value="">Geral</option>
                   {responsibleOptions.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.label}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <button
-                  onClick={() => createTransaction.mutate()}
-                  disabled={createTransaction.isPending || !canCreate}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50 shadow-sm shadow-indigo-200"
-                >
-                  <Plus size={18} />
-                  {createTransaction.isPending ? '...' : 'Lançar'}
-                </button>
               </div>
 
               <div className="md:col-span-12 flex items-center gap-2">
@@ -208,9 +237,28 @@ export const TransactionsPanel = ({
                   </div>
                 )}
               </div>
+              <div className="md:col-span-2">
+                <button
+                  onClick={() => createTransaction.mutate()}
+                  disabled={createTransaction.isPending || !canCreate}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50 shadow-sm shadow-indigo-200"
+                >
+                  <Plus size={18} />
+                  {createTransaction.isPending ? '...' : 'Lançar'}
+                </button>
+              </div>
             </div>
             {createTransaction.isError && (
-              <p className="mt-2 text-xs text-rose-600 font-medium">⚠️ {createTransaction.error.message}</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium text-rose-600">{createTransactionError}</p>
+                {createTransactionErrors.length > 0 && (
+                  <ul className="list-disc pl-4 text-xs text-rose-600">
+                    {createTransactionErrors.map((errorItem) => (
+                      <li key={errorItem}>{errorItem}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -241,11 +289,14 @@ export const TransactionsPanel = ({
             onOpenPaymentModal={openPaymentModal}
             onDeleteTransaction={(entry) => deleteTransaction.mutate(entry)}
             updateTransactionPending={updateTransaction.isPending}
-            updateTransactionError={updateTransaction.error?.message}
+            updateTransactionError={updateTransactionError}
             updateInvoicePending={updateInvoice.isPending}
-            updateInvoiceError={updateInvoice.error?.message}
+            updateInvoiceError={updateInvoiceError}
             deleteTransactionPending={deleteTransaction.isPending}
-            deleteTransactionError={deleteTransaction.error?.message}
+            deleteTransactionError={
+              deleteTransaction.isError ? deleteTransactionError : null
+            }
+            deleteTransactionErrorId={deleteTransactionErrorId}
             creditCards={creditCards}
             onReorderTransactions={(ordered) => reorderTransactions.mutate(ordered)}
             reorderPending={reorderTransactions.isPending}
@@ -280,11 +331,11 @@ export const TransactionsPanel = ({
                   const card = creditCardById[invoice.creditCardId];
                   const invoiceLabel = card?.name
                     ? `${card.name} - R$ ${Number(invoice.amount || 0).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}`
+                      minimumFractionDigits: 2,
+                    })}`
                     : `Fatura - R$ ${Number(invoice.amount || 0).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}`;
+                      minimumFractionDigits: 2,
+                    })}`;
 
                   return (
                     <option key={invoice.invoiceId} value={invoice.invoiceId}>
@@ -297,7 +348,7 @@ export const TransactionsPanel = ({
 
             {linkTransactionToInvoice.isError && (
               <p className="mt-2 text-xs text-rose-600">
-                {linkTransactionToInvoice.error?.message || "Erro ao vincular transacao."}
+                {linkTransactionError}
               </p>
             )}
 

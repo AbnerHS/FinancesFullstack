@@ -19,7 +19,6 @@ export const useTransactionsPanel = ({
   userId,
   entries,
   periods,
-  responsibleOptions,
 }) => {
   const queryClient = useQueryClient();
 
@@ -35,9 +34,7 @@ export const useTransactionsPanel = ({
   const [paymentModalEntry, setPaymentModalEntry] = useState(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
   const [editingScope, setEditingScope] = useState("SINGLE");
-
-  const resolvedResponsibleUserId =
-    newTransaction.responsibleUserId || responsibleOptions?.[0]?.id || "";
+  const [deleteTransactionErrorId, setDeleteTransactionErrorId] = useState(null);
 
   const createTransaction = useMutation({
     mutationFn: async () => {
@@ -53,7 +50,7 @@ export const useTransactionsPanel = ({
         amount: amountNumber,
         type: newTransaction.type,
         periodId: activePeriodId,
-        responsibleUserId: resolvedResponsibleUserId || null,
+        responsibleUserId: newTransaction.responsibleUserId || null,
         responsibilityTag: newTransaction.responsibilityTag || null,
       };
 
@@ -217,6 +214,9 @@ export const useTransactionsPanel = ({
   });
 
   const deleteTransaction = useMutation({
+    onMutate: (entry) => {
+      setDeleteTransactionErrorId(entry?.id || null);
+    },
     mutationFn: async (entry) => {
       if (!entry?.id) {
         throw new Error("Transacao invalida.");
@@ -235,6 +235,7 @@ export const useTransactionsPanel = ({
     },
     onSuccess: async (deletedId) => {
       if (!deletedId) {
+        setDeleteTransactionErrorId(null);
         return;
       }
 
@@ -246,6 +247,10 @@ export const useTransactionsPanel = ({
       await queryClient.invalidateQueries({
         queryKey: ["period-transactions", activePeriodId],
       });
+      setDeleteTransactionErrorId(null);
+    },
+    onError: (_error, entry) => {
+      setDeleteTransactionErrorId(entry?.id || null);
     },
   });
 
@@ -317,7 +322,7 @@ export const useTransactionsPanel = ({
     setSelectedInvoiceId,
     editingScope,
     setEditingScope,
-    resolvedResponsibleUserId,
+    deleteTransactionErrorId,
     deleteTransaction,
     setEditingId,
     setEditingInvoiceId,

@@ -34,6 +34,7 @@ export const TransactionsTable = memo(function TransactionsTable({
   updateInvoiceError,
   deleteTransactionPending,
   deleteTransactionError,
+  deleteTransactionErrorId,
   creditCards,
   onReorderTransactions,
   reorderPending,
@@ -76,12 +77,58 @@ export const TransactionsTable = memo(function TransactionsTable({
     [groupByResponsible, localEntries, responsibleLabelById, responsibleOptions]
   );
 
+  const getResponsibleGroupId = (transaction) =>
+    transaction?.responsibleUserId || "__unassigned__";
+
   const reorderTransactions = (fromIndex, toIndex) => {
     if (fromIndex === toIndex) return transactionEntries;
     const next = [...transactionEntries];
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
     return next;
+  };
+
+  const reorderGroupedTransactions = (draggedId, targetId) => {
+    const draggedEntry = transactionEntries.find((t) => t.id === draggedId);
+    const targetEntry = transactionEntries.find((t) => t.id === targetId);
+
+    if (!draggedEntry || !targetEntry) {
+      return null;
+    }
+
+    const draggedGroupId = getResponsibleGroupId(draggedEntry);
+    const targetGroupId = getResponsibleGroupId(targetEntry);
+
+    if (draggedGroupId !== targetGroupId) {
+      return null;
+    }
+
+    const groupTransactions = transactionEntries.filter(
+      (entry) => getResponsibleGroupId(entry) === draggedGroupId
+    );
+
+    const fromIndex = groupTransactions.findIndex((t) => t.id === draggedId);
+    const toIndex = groupTransactions.findIndex((t) => t.id === targetId);
+
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+      return null;
+    }
+
+    const reorderedGroup = [...groupTransactions];
+    const [moved] = reorderedGroup.splice(fromIndex, 1);
+    reorderedGroup.splice(toIndex, 0, moved);
+
+    let replacementIndex = 0;
+
+    return transactionEntries.map((entry) => {
+      if (getResponsibleGroupId(entry) !== draggedGroupId) {
+        return entry;
+      }
+
+      const nextEntry = reorderedGroup[replacementIndex];
+      replacementIndex += 1;
+      return nextEntry;
+    });
   };
 
   const handleDragStart = (entry) => (event) => {
@@ -112,14 +159,26 @@ export const TransactionsTable = memo(function TransactionsTable({
       return;
     }
 
-    const fromIndex = transactionEntries.findIndex((t) => t.id === draggedId);
-    const toIndex = transactionEntries.findIndex((t) => t.id === entry.id);
-    if (fromIndex < 0 || toIndex < 0) {
+    const nextTransactions = (() => {
+      if (groupByResponsible) {
+        return reorderGroupedTransactions(draggedId, entry.id);
+      }
+
+      const fromIndex = transactionEntries.findIndex((t) => t.id === draggedId);
+      const toIndex = transactionEntries.findIndex((t) => t.id === entry.id);
+      if (fromIndex < 0 || toIndex < 0) {
+        return null;
+      }
+
+      return reorderTransactions(fromIndex, toIndex);
+    })();
+
+    if (!nextTransactions) {
       setDragOverId(null);
+      setDraggingId(null);
       return;
     }
 
-    const nextTransactions = reorderTransactions(fromIndex, toIndex);
     const nextEntries = [...nextTransactions, ...invoiceEntries];
     setLocalEntries(nextEntries);
     setDragOverId(null);
@@ -160,7 +219,6 @@ export const TransactionsTable = memo(function TransactionsTable({
             const isTransaction = entry.kind === "TRANSACTION";
             const isDraggable =
               isTransaction &&
-              !groupByResponsible &&
               !reorderPending &&
               editingId !== entry.id &&
               editingInvoiceId !== entry.invoiceId;
@@ -192,6 +250,7 @@ export const TransactionsTable = memo(function TransactionsTable({
                 updateInvoiceError={updateInvoiceError}
                 deleteTransactionPending={deleteTransactionPending}
                 deleteTransactionError={deleteTransactionError}
+                deleteTransactionErrorId={deleteTransactionErrorId}
                 creditCards={creditCards}
                 draggable={isDraggable}
                 isDragOver={isTransaction && dragOverId === entry.id}

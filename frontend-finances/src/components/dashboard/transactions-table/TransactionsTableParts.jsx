@@ -232,7 +232,7 @@ const LineActionsEditing = memo(function LineActionsEditing({
   onSave,
   onCancel,
   pending,
-  hasError,
+  errorMessage,
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -253,8 +253,8 @@ const LineActionsEditing = memo(function LineActionsEditing({
           <X size={16} />
         </button>
       </div>
-      {hasError && (
-        <span className="text-[10px] text-rose-600 font-medium">Erro ao salvar</span>
+      {errorMessage && (
+        <span className="text-[10px] text-rose-600 font-medium">{errorMessage}</span>
       )}
     </div>
   );
@@ -335,6 +335,7 @@ export const TransactionsTableRow = memo(function TransactionsTableRow({
   updateInvoiceError,
   deleteTransactionPending,
   deleteTransactionError,
+  deleteTransactionErrorId,
   creditCards,
   draggable,
   isDragOver,
@@ -414,7 +415,7 @@ export const TransactionsTableRow = memo(function TransactionsTableRow({
               onSave={isEditing ? onSaveEdit : onSaveInvoice}
               onCancel={isEditing ? onCancelEdit : onCancelInvoice}
               pending={updateTransactionPending || updateInvoicePending}
-              hasError={Boolean(updateTransactionError || updateInvoiceError)}
+              errorMessage={updateTransactionError || updateInvoiceError}
             />
           ) : (
             <LineActionsValues
@@ -426,8 +427,10 @@ export const TransactionsTableRow = memo(function TransactionsTableRow({
             />
           )}
         </div>
-        {!isEditingAny && deleteTransactionError && (
-          <p className="mt-1 text-[10px] text-center text-rose-600">Erro ao excluir</p>
+        {!isEditingAny &&
+          deleteTransactionError &&
+          entry.id === deleteTransactionErrorId && (
+          <p className="mt-1 text-[10px] text-center text-rose-600">{deleteTransactionError}</p>
         )}
       </td>
     </tr>
