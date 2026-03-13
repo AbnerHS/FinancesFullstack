@@ -63,9 +63,10 @@ public class JwtService {
             String tokenType,
             SecretKey signInKey
     ) {
-        extraClaims.put(TOKEN_TYPE_CLAIM, tokenType);
+        Map<String, Object> claims = new HashMap<>(extraClaims);
+        claims.put(TOKEN_TYPE_CLAIM, tokenType);
         return Jwts.builder()
-                .claims(extraClaims)
+                .claims(claims)
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration))
