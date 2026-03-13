@@ -4,6 +4,7 @@ import { useQueries } from "@tanstack/react-query";
 import { usePlans } from "./usePlans";
 import { usePeriods } from "./usePeriods";
 import { useCreditCards } from "./useCreditCards";
+import { useTransactionCategories } from "./useTransactionCategories";
 import { periodService } from "../services/periodService";
 import { userService } from "../services/userService";
 import { useAuthStore } from "../store/authStore";
@@ -237,6 +238,7 @@ export const useDashboard = () => {
   );
 
   const { data: creditCards = [] } = useCreditCards();
+  const { data: transactionCategories = [] } = useTransactionCategories();
 
   return {
     plans,
@@ -251,6 +253,7 @@ export const useDashboard = () => {
     periodPanels,
     combinedStats,
     creditCards,
+    transactionCategories,
     responsibleOptions,
     userId: user?.id ?? null,
     togglePeriodId,

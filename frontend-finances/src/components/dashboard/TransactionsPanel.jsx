@@ -36,6 +36,7 @@ export const TransactionsPanel = ({
   userId,
   entries,
   creditCards,
+  transactionCategories,
   periods,
   responsibleOptions,
   transactionsLoading,
@@ -74,7 +75,7 @@ export const TransactionsPanel = ({
     userId,
     entries,
     periods,
-    responsibleOptions,
+    transactionCategories,
   });
 
   const availableInvoices = entries.filter((entry) => entry.kind === "INVOICE");
@@ -173,11 +174,17 @@ export const TransactionsPanel = ({
               <div className="md:col-span-2 relative">
                 <Tag className="absolute left-3 top-2.5 text-gray-400" size={14} />
                 <input
+                  list={`transaction-categories-${activePeriodId}`}
                   className="w-full rounded-lg border-gray-200 pl-9 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Tag"
-                  value={newTransaction.responsibilityTag}
-                  onChange={(e) => setNewTransaction(p => ({ ...p, responsibilityTag: e.target.value }))}
+                  placeholder="Categoria"
+                  value={newTransaction.categoryName}
+                  onChange={(e) => setNewTransaction(p => ({ ...p, categoryId: "", categoryName: e.target.value }))}
                 />
+                <datalist id={`transaction-categories-${activePeriodId}`}>
+                  {transactionCategories.map((category) => (
+                    <option key={category.id} value={category.name} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="md:col-span-2">
@@ -274,6 +281,7 @@ export const TransactionsPanel = ({
             editingScope={editingScope}
             onEditingScopeChange={setEditingScope}
             responsibleOptions={responsibleOptions}
+            transactionCategories={transactionCategories}
             groupByResponsible
             editingInvoiceId={editingInvoiceId}
             editingInvoiceForm={editingInvoiceForm}

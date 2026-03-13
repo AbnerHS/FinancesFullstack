@@ -47,6 +47,8 @@ const LineEditingDescription = memo(function LineEditingDescription({
   editingScope,
   onEditingScopeChange,
   responsibleOptions,
+  transactionCategories,
+  categoryListId,
 }) {
   const isRecurring = Boolean(editingForm.recurringGroupId);
 
@@ -78,16 +80,23 @@ const LineEditingDescription = memo(function LineEditingDescription({
           <option value="EXPENSE">Saída</option>
         </select>
         <input
+          list={categoryListId}
           className="flex-1 rounded-md border-gray-200 bg-white px-2 py-1 text-xs shadow-sm"
-          value={editingForm.responsibilityTag || ""}
+          value={editingForm.categoryName || ""}
           onChange={(e) =>
             onEditingFormChange((prev) => ({
               ...prev,
-              responsibilityTag: e.target.value,
+              categoryId: "",
+              categoryName: e.target.value,
             }))
           }
-          placeholder="Tag"
+          placeholder="Categoria"
         />
+        <datalist id={categoryListId}>
+          {transactionCategories.map((category) => (
+            <option key={category.id} value={category.name} />
+          ))}
+        </datalist>
       </div>
       <select
         className="rounded-md border-gray-200 bg-white px-2 py-1 text-xs shadow-sm"
@@ -184,9 +193,9 @@ const LineValuesDescription = memo(function LineValuesDescription({
       <div>
         <div className="flex items-center gap-2">
           <p className="font-semibold text-gray-900">{description}</p>
-          {entry.responsibilityTag && (
+          {entry.category?.name && (
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 uppercase">
-              {entry.responsibilityTag}
+              {entry.category.name}
             </span>
           )}
         </div>
@@ -318,6 +327,7 @@ export const TransactionsTableRow = memo(function TransactionsTableRow({
   editingScope,
   onEditingScopeChange,
   responsibleOptions,
+  transactionCategories,
   invoiceCardName,
   editingInvoiceId,
   editingInvoiceForm,
@@ -366,6 +376,8 @@ export const TransactionsTableRow = memo(function TransactionsTableRow({
             editingScope={editingScope}
             onEditingScopeChange={onEditingScopeChange}
             responsibleOptions={responsibleOptions}
+            transactionCategories={transactionCategories}
+            categoryListId={`transaction-category-options-${entry.id}`}
           />
         ) : isEditingInvoice ? (
           <LineEditingInvoice

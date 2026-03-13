@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { transactionService } from "../services/transactionService";
+import { transactionCategoryService } from "../services/transactionCategoryService";
 import { invoiceService } from "../services/invoiceService";
 import { periodService } from "../services/periodService";
 
@@ -8,7 +9,8 @@ const DEFAULT_TRANSACTION_FORM = {
   description: "",
   amount: "",
   type: "EXPENSE",
-  responsibilityTag: "",
+  categoryId: "",
+  categoryName: "",
   responsibleUserId: "",
   isRecurring: false,
   numberOfPeriods: 2,
@@ -19,6 +21,7 @@ export const useTransactionsPanel = ({
   userId,
   entries,
   periods,
+  transactionCategories,
 }) => {
   const queryClient = useQueryClient();
 
@@ -36,6 +39,33 @@ export const useTransactionsPanel = ({
   const [editingScope, setEditingScope] = useState("SINGLE");
   const [deleteTransactionErrorId, setDeleteTransactionErrorId] = useState(null);
 
+  const ensureCategory = async ({ categoryId, categoryName }) => {
+    const normalizedName = categoryName?.trim() || "";
+
+    if (!categoryId && !normalizedName) {
+      return null;
+    }
+
+    const existingById = transactionCategories.find((category) => category.id === categoryId);
+    if (existingById) {
+      return { id: existingById.id, name: existingById.name };
+    }
+
+    const existingByName = transactionCategories.find(
+      (category) => category.name?.trim().toLowerCase() === normalizedName.toLowerCase()
+    );
+    if (existingByName) {
+      return { id: existingByName.id, name: existingByName.name };
+    }
+
+    const createdCategory = await transactionCategoryService.create({ name: normalizedName });
+    await queryClient.invalidateQueries({ queryKey: ["transaction-categories"] });
+    return {
+      id: createdCategory.id,
+      name: createdCategory.name,
+    };
+  };
+
   const createTransaction = useMutation({
     mutationFn: async () => {
       if (!activePeriodId || !userId) {
@@ -45,13 +75,14 @@ export const useTransactionsPanel = ({
       if (Number.isNaN(amountNumber) || amountNumber <= 0) {
         throw new Error("Informe um valor valido.");
       }
+      const category = await ensureCategory(newTransaction);
       const basePayload = {
         description: newTransaction.description,
         amount: amountNumber,
         type: newTransaction.type,
         periodId: activePeriodId,
         responsibleUserId: newTransaction.responsibleUserId || null,
-        responsibilityTag: newTransaction.responsibilityTag || null,
+        category,
       };
 
       if (!newTransaction.isRecurring) {
@@ -79,10 +110,11 @@ export const useTransactionsPanel = ({
       if (!editingId) {
         throw new Error("Transacao invalida.");
       }
+      const category = await ensureCategory(editingForm);
       const payload = {
         description: editingForm.description,
         type: editingForm.type,
-        responsibilityTag: editingForm.responsibilityTag || null,
+        category,
         responsibleUserId: editingForm.responsibleUserId || null,
       };
 
@@ -281,7 +313,8 @@ export const useTransactionsPanel = ({
       description: entry.description || "",
       amount: entry.amount || "",
       type: entry.type || "EXPENSE",
-      responsibilityTag: entry.responsibilityTag || "",
+      categoryId: entry.category?.id || "",
+      categoryName: entry.category?.name || "",
       responsibleUserId: entry.responsibleUserId || "",
       recurringGroupId: entry.recurringGroupId || null,
     });

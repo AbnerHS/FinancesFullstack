@@ -20,6 +20,7 @@ const Dashboard = () => {
     periodPanels,
     combinedStats,
     creditCards,
+    transactionCategories,
     responsibleOptions,
     userId,
   } = useDashboard();
@@ -80,6 +81,7 @@ const Dashboard = () => {
                     userId={userId}
                     entries={panel.entries}
                     creditCards={creditCards}
+                    transactionCategories={transactionCategories}
                     periods={periods}
                     responsibleOptions={responsibleOptions}
                     transactionsLoading={panel.transactionsLoading}

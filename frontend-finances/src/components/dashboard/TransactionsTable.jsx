@@ -17,6 +17,7 @@ export const TransactionsTable = memo(function TransactionsTable({
   editingScope,
   onEditingScopeChange,
   responsibleOptions = [],
+  transactionCategories = [],
   groupByResponsible = false,
   editingInvoiceId,
   editingInvoiceForm,
@@ -233,6 +234,7 @@ export const TransactionsTable = memo(function TransactionsTable({
                 editingScope={editingScope}
                 onEditingScopeChange={onEditingScopeChange}
                 responsibleOptions={responsibleOptions}
+                transactionCategories={transactionCategories}
                 invoiceCardName={creditCardNameById.get(entry.creditCardId)}
                 editingInvoiceId={editingInvoiceId}
                 editingInvoiceForm={editingInvoiceForm}
