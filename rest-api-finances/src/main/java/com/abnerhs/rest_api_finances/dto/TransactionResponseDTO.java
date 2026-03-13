@@ -21,7 +21,7 @@ public record TransactionResponseDTO(
         LocalDateTime dateTime,
 
         TransactionType type,
-        String responsibilityTag,
+        TransactionCategoryDTO category,
         UUID periodId,
         UUID responsibleUserId,
         Integer order,

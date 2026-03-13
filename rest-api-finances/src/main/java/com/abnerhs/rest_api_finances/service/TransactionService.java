@@ -1,6 +1,7 @@
 package com.abnerhs.rest_api_finances.service;
 
 import com.abnerhs.rest_api_finances.dto.RecurringTransactionRequestDTO;
+import com.abnerhs.rest_api_finances.dto.TransactionCategoryDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
@@ -9,9 +10,11 @@ import com.abnerhs.rest_api_finances.model.CreditCardInvoice;
 import com.abnerhs.rest_api_finances.model.FinancialPeriod;
 import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.model.Transaction;
+import com.abnerhs.rest_api_finances.model.TransactionCategory;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
+import com.abnerhs.rest_api_finances.repository.TransactionCategoryRepository;
 import com.abnerhs.rest_api_finances.repository.TransactionRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -23,6 +26,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -30,6 +34,7 @@ public class TransactionService {
 
     @Autowired
     private TransactionRepository repository;
+
     @Autowired
     private TransactionMapper mapper;
 
@@ -42,9 +47,14 @@ public class TransactionService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private TransactionCategoryRepository transactionCategoryRepository;
+
     @Transactional
     public TransactionResponseDTO create(TransactionRequestDTO dto) {
         Transaction transaction = mapper.toEntity(dto);
+        transaction.setTransactionCategory(resolveCategory(dto.category()));
+        transaction.setOrder(getNextOrder(transaction.getPeriod().getId()));
         return mapper.toDto(repository.save(transaction));
     }
 
@@ -63,28 +73,25 @@ public class TransactionService {
         int startYear = initialPeriod.getYear();
 
         for (int i = 0; i < numberOfPeriods; i++) {
-            // Calcular mês e ano para a iteração atual
             int totalMonths = startMonth - 1 + i;
             int year = startYear + totalMonths / 12;
             int month = totalMonths % 12 + 1;
 
-            // Buscar ou criar o período
             FinancialPeriod period = findOrCreatePeriod(month, year, plan);
 
-            // Criar a transação
             Transaction transaction = mapper.toEntity(dto);
             transaction.setPeriod(period);
             transaction.setRecurringGroupId(recurringGroupId);
+            transaction.setTransactionCategory(resolveCategory(dto.category()));
+            transaction.setOrder(getNextOrder(period.getId()));
 
-            // Ajustar a data para o mês correto
             LocalDateTime now = LocalDateTime.now();
             int day = now.getDayOfMonth();
             int maxDay = java.time.YearMonth.of(year, month).lengthOfMonth();
             if (day > maxDay) {
                 day = maxDay;
             }
-            transaction
-                    .setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
+            transaction.setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
 
             createdTransactions.add(mapper.toDto(repository.save(transaction)));
         }
@@ -98,7 +105,7 @@ public class TransactionService {
                     newPeriod.setMonth(month);
                     newPeriod.setYear(year);
                     newPeriod.setFinancialPlan(plan);
-                    newPeriod.setMonthlyBalance(BigDecimal.ZERO); // Inicializar saldo
+                    newPeriod.setMonthlyBalance(BigDecimal.ZERO);
                     return periodRepository.save(newPeriod);
                 });
     }
@@ -119,43 +126,41 @@ public class TransactionService {
         Transaction entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         mapper.updateEntityFromDto(dto, entity);
+        entity.setTransactionCategory(resolveCategory(dto.category()));
         return mapper.toDto(repository.save(entity));
     }
 
     @Transactional
     public TransactionResponseDTO updatePartial(UUID id, Map<String, Object> updates) {
         Transaction transaction = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(("Transação não encontrada")));
+                .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
 
         updates.forEach((key, value) -> {
             switch (key) {
                 case "amount" -> transaction.setAmount(new BigDecimal(value.toString()));
                 case "description" -> transaction.setDescription((String) value);
                 case "type" -> transaction.setType(TransactionType.valueOf((String) value));
-                case "responsibilityTag" -> transaction.setResponsibilityTag((String) value);
+                case "category" -> transaction.setTransactionCategory(resolveCategory(parseCategory(value)));
                 case "responsibleUserId" -> {
                     if (value == null) {
                         transaction.setResponsibleUser(null);
                     } else {
                         transaction.setResponsibleUser(
                                 userRepository.findById(UUID.fromString(value.toString()))
-                                        .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Usuário responsável não encontrado!")));
+                                        .orElseThrow(() -> new ResourceNotFoundException("Usuário responsável não encontrado!")));
                     }
                 }
                 case "order" -> transaction.setOrder(value != null ? Integer.valueOf(value.toString()) : null);
                 case "creditCardInvoiceId" -> {
                     if (value == null) {
                         transaction.setCreditCardInvoice(null);
-                        break;
+                    } else {
+                        CreditCardInvoice invoice = invoiceRepository.findById(UUID.fromString(value.toString()))
+                                .orElseThrow(() -> new ResourceNotFoundException("Fatura de cartão não encontrada!"));
+                        transaction.setCreditCardInvoice(invoice);
                     }
-                    CreditCardInvoice invoice = invoiceRepository.findById(UUID.fromString(value.toString()))
-                            .orElseThrow(() -> new ResourceNotFoundException("Fatura de cartão não encontrada!"));
-                    transaction.setCreditCardInvoice(invoice);
                 }
-                case "isClearedByInvoice" -> {
-                    transaction.setClearedByInvoice((Boolean) value);
-                }
+                case "isClearedByInvoice" -> transaction.setClearedByInvoice((Boolean) value);
             }
         });
 
@@ -168,5 +173,46 @@ public class TransactionService {
             throw new ResourceNotFoundException("Transação não encontrada para exclusão");
         }
         repository.deleteById(id);
+    }
+
+    private Integer getNextOrder(UUID periodId) {
+        return repository.findMaxOrderByPeriodId(periodId) + 1;
+    }
+
+    private TransactionCategory resolveCategory(TransactionCategoryDTO categoryDto) {
+        if (categoryDto == null) {
+            return null;
+        }
+
+        if (categoryDto.id() != null) {
+            return transactionCategoryRepository.findById(categoryDto.id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Categoria de transação não encontrada"));
+        }
+
+        if (categoryDto.name() == null || categoryDto.name().isBlank()) {
+            return null;
+        }
+
+        String normalizedName = categoryDto.name().trim();
+        return transactionCategoryRepository.findByNameIgnoreCase(normalizedName)
+                .orElseGet(() -> transactionCategoryRepository.save(new TransactionCategory(normalizedName)));
+    }
+
+    private TransactionCategoryDTO parseCategory(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (!(value instanceof Map<?, ?> categoryMap)) {
+            throw new IllegalArgumentException("Campo 'category' inválido");
+        }
+
+        Object idValue = categoryMap.get("id");
+        Object nameValue = categoryMap.get("name");
+
+        UUID id = idValue == null ? null : UUID.fromString(idValue.toString());
+        String name = Objects.toString(nameValue, null);
+
+        return new TransactionCategoryDTO(id, name);
     }
 }

@@ -1,7 +1,11 @@
 package com.abnerhs.rest_api_finances.exception.handler;
 
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
-import org.springframework.http.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -41,6 +45,14 @@ public class CustomEntityResponseHandler extends ResponseEntityExceptionHandler 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problemDetail);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public final ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problemDetail.setTitle("Requisição inválida");
+        problemDetail.setProperty("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problemDetail);
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         ProblemDetail problemDetail = ProblemDetail.forStatus(status);
@@ -49,9 +61,11 @@ public class CustomEntityResponseHandler extends ResponseEntityExceptionHandler 
         problemDetail.setProperty("timestamp", LocalDateTime.now());
 
         Map<String, String> errors = ex.getBindingResult().getFieldErrors().stream()
-                .collect(Collectors.toMap(FieldError::getField,
-                        e -> e.getDefaultMessage() != null ? e.getDefaultMessage() : "Erro desconhecido",
-                        (existing, replacement) -> existing));
+                .collect(Collectors.toMap(
+                        FieldError::getField,
+                        error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Erro desconhecido",
+                        (existing, replacement) -> existing
+                ));
 
         problemDetail.setProperty("errors", errors);
 

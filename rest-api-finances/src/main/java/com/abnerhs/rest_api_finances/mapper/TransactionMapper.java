@@ -1,5 +1,6 @@
 package com.abnerhs.rest_api_finances.mapper;
 
+import com.abnerhs.rest_api_finances.dto.TransactionCategoryDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
@@ -14,7 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", imports = { ResourceNotFoundException.class })
+@Mapper(componentModel = "spring", imports = {ResourceNotFoundException.class})
 public abstract class TransactionMapper {
 
     @Autowired
@@ -26,22 +27,36 @@ public abstract class TransactionMapper {
     @Autowired
     protected CreditCardInvoiceRepository invoiceRepository;
 
-    @Mapping(target = "period", expression = "java(dto.periodId() != null ? periodRepository.findById(dto.periodId())" +
-            ".orElseThrow(() -> new ResourceNotFoundException(\"Período não encontrado\")) : null)")
-    @Mapping(target = "responsibleUser", expression = "java(dto.responsibleUserId() != null ? userRepository.findById(dto.responsibleUserId())" +
-            ".orElseThrow(() -> new ResourceNotFoundException(\"Usuário não encontrado\")) : null)")
-    @Mapping(target = "creditCardInvoice", expression = "java(dto.creditCardInvoiceId() != null ? invoiceRepository.findById(dto.creditCardInvoiceId())" +
-            ".orElseThrow(() -> new ResourceNotFoundException(\"Fatura não encontrada\")) : null)")
+    @Mapping(target = "period", expression = "java(dto.periodId() != null ? periodRepository.findById(dto.periodId())"
+            + ".orElseThrow(() -> new ResourceNotFoundException(\"PerÃ­odo nÃ£o encontrado\")) : null)")
+    @Mapping(target = "responsibleUser", expression = "java(dto.responsibleUserId() != null ? userRepository.findById(dto.responsibleUserId())"
+            + ".orElseThrow(() -> new ResourceNotFoundException(\"UsuÃ¡rio nÃ£o encontrado\")) : null)")
+    @Mapping(target = "creditCardInvoice", expression = "java(dto.creditCardInvoiceId() != null ? invoiceRepository.findById(dto.creditCardInvoiceId())"
+            + ".orElseThrow(() -> new ResourceNotFoundException(\"Fatura nÃ£o encontrada\")) : null)")
+    @Mapping(target = "transactionCategory", ignore = true)
     @Mapping(target = "clearedByInvoice", source = "isClearedByInvoice", defaultValue = "false")
     public abstract Transaction toEntity(TransactionRequestDTO dto);
 
     @Mapping(source = "period.id", target = "periodId")
     @Mapping(source = "responsibleUser.id", target = "responsibleUserId")
+    @Mapping(target = "category", expression = "java(toCategoryDto(entity))")
     @Mapping(source = "clearedByInvoice", target = "isClearedByInvoice")
     @Mapping(source = "creditCardInvoice.id", target = "creditCardInvoiceId")
     public abstract TransactionResponseDTO toDto(Transaction entity);
 
     public abstract List<TransactionResponseDTO> toDtoList(List<Transaction> entityList);
 
+    @Mapping(target = "transactionCategory", ignore = true)
     public abstract void updateEntityFromDto(TransactionRequestDTO dto, @MappingTarget Transaction entity);
+
+    protected TransactionCategoryDTO toCategoryDto(Transaction entity) {
+        if (entity.getTransactionCategory() == null) {
+            return null;
+        }
+
+        return new TransactionCategoryDTO(
+                entity.getTransactionCategory().getId(),
+                entity.getTransactionCategory().getName()
+        );
+    }
 }

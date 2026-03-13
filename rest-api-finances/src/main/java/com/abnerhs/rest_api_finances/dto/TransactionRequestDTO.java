@@ -25,7 +25,7 @@ public record TransactionRequestDTO(
         UUID periodId,
 
         UUID responsibleUserId,
-        String responsibilityTag,
+        TransactionCategoryDTO category,
         Integer order,
         UUID recurringGroupId,
         UUID creditCardInvoiceId,

@@ -15,6 +15,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     List<Transaction> findByPeriodIdOrderByOrderAsc(UUID periodId);
 
+    @Query("SELECT COALESCE(MAX(t.order), 0) FROM Transaction t WHERE t.period.id = :periodId")
+    Integer findMaxOrderByPeriodId(UUID periodId);
+
     @Query("SELECT new com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO(" +
            "COALESCE(SUM(CASE WHEN t.type = 'REVENUE' THEN t.amount ELSE 0 END), 0), " +
            "COALESCE(SUM(CASE WHEN t.type = 'EXPENSE' THEN t.amount ELSE 0 END), 0), " +
@@ -29,8 +32,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
            "FROM Transaction t WHERE t.period.financialPlan.id = :planId")
     FinancialSummaryDTO getSummaryByPlanId(UUID planId);
 
-    @Query("SELECT new com.abnerhs.rest_api_finances.dto.CategorySpendingDTO(t.responsibilityTag, SUM(t.amount)) " +
-           "FROM Transaction t WHERE t.period.id = :periodId AND t.type = 'EXPENSE' " +
-           "GROUP BY t.responsibilityTag")
+    @Query("SELECT new com.abnerhs.rest_api_finances.dto.CategorySpendingDTO(c.name, SUM(t.amount)) " +
+           "FROM Transaction t LEFT JOIN t.transactionCategory c " +
+           "WHERE t.period.id = :periodId AND t.type = 'EXPENSE' " +
+           "GROUP BY c.name")
     List<CategorySpendingDTO> getSpendingByCategory(UUID periodId);
 }

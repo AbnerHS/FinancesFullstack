@@ -32,7 +32,9 @@ public class Transaction {
     @Enumerated(EnumType.STRING)
     private TransactionType type; // REVENUE ou EXPENSE
 
-    private String responsibilityTag;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private TransactionCategory transactionCategory;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "period_id")
@@ -97,12 +99,12 @@ public class Transaction {
         this.type = type;
     }
 
-    public String getResponsibilityTag() {
-        return responsibilityTag;
+    public TransactionCategory getTransactionCategory() {
+        return transactionCategory;
     }
 
-    public void setResponsibilityTag(String responsibilityTag) {
-        this.responsibilityTag = responsibilityTag;
+    public void setTransactionCategory(TransactionCategory transactionCategory) {
+        this.transactionCategory = transactionCategory;
     }
 
     public FinancialPeriod getPeriod() {
