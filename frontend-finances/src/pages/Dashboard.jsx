@@ -76,16 +76,19 @@ const Dashboard = () => {
                   className="min-w-180 flex-1 max-w-220"
                 >
                   <TransactionsPanel
-                    selectedPeriod={panel.period}
-                    activePeriodId={panel.period.id}
-                    userId={userId}
-                    entries={panel.entries}
-                    creditCards={creditCards}
-                    transactionCategories={transactionCategories}
-                    periods={periods}
-                    responsibleOptions={responsibleOptions}
-                    transactionsLoading={panel.transactionsLoading}
-                    invoicesLoading={panel.invoicesLoading}
+                    panel={{
+                      period: panel.period,
+                      entries: panel.entries,
+                      transactionsLoading: panel.transactionsLoading,
+                      invoicesLoading: panel.invoicesLoading,
+                    }}
+                    shared={{
+                      userId,
+                      periods,
+                      creditCards,
+                      transactionCategories,
+                      responsibleOptions,
+                    }}
                   />
                 </div>
               ))}
