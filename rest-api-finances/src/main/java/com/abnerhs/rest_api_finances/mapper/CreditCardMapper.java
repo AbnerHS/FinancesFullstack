@@ -20,6 +20,7 @@ public abstract class CreditCardMapper {
     protected UserRepository userRepository;
 
     @Mapping(target = "user", expression = "java(userRepository.findById(dto.userId()).orElseThrow(() -> new ResourceNotFoundException(\"Usuário dono não encontrado: \" + dto.userId())))")
+    @Mapping(target = "id", ignore = true)
     public abstract CreditCard toEntity(CreditCardRequestDTO dto);
 
     @Mapping(source = "user.id", target = "userId")
@@ -28,6 +29,7 @@ public abstract class CreditCardMapper {
     public abstract List<CreditCardResponseDTO> toDtoList(List<CreditCard> entityList);
 
     @Mapping(target = "user", ignore = true)
+    @Mapping(target = "id", ignore = true)
     public abstract void updateEntityFromDto(CreditCardRequestDTO dto, @MappingTarget CreditCard entity);
 
     @AfterMapping

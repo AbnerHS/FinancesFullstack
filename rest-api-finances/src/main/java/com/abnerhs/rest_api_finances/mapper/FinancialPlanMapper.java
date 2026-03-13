@@ -21,6 +21,8 @@ public abstract class FinancialPlanMapper {
 
     @Mapping(target = "owner", expression = "java(userRepository.findById(dto.ownerId()).orElseThrow(() -> new ResourceNotFoundException(\"Usuário dono não encontrado com o ID: \" + dto.ownerId())))")
     @Mapping(target = "partner", expression = "java(dto.partnerId() != null ? userRepository.findById(dto.partnerId()).orElse(null) : null)")
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "periods", ignore = true)
     public abstract FinancialPlan toEntity(FinancialPlanRequestDTO dto);
 
     @Mapping(source = "owner.id", target = "ownerId")
@@ -30,10 +32,18 @@ public abstract class FinancialPlanMapper {
     public abstract List<FinancialPlanResponseDTO> toDtoList(List<FinancialPlan> entityList);
 
     @Mapping(target = "partner", ignore = true)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "owner", ignore = true)
+    @Mapping(target = "periods", ignore = true)
     public abstract void updateEntityFromDto(FinancialPlanRequestDTO dto, @MappingTarget FinancialPlan entity);
 
     @AfterMapping
     protected void linkRelationShips(FinancialPlanRequestDTO dto, @MappingTarget FinancialPlan entity){
+        if(dto.ownerId() != null){
+            userRepository.findById(dto.ownerId())
+                    .ifPresent(entity::setOwner);
+        }
+
         if(dto.partnerId() != null){
             userRepository.findById(dto.partnerId())
                     .ifPresent(entity::setPartner);

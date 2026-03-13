@@ -25,6 +25,7 @@ public abstract class CreditCardInvoiceMapper {
 
     @Mapping(target = "creditCard", expression = "java(creditCardRepository.findById(dto.creditCardId()).orElseThrow(() -> new ResourceNotFoundException(\"Credit Card not found\")))")
     @Mapping(target = "period", expression = "java(financialPeriodRepository.findById(dto.periodId()).orElseThrow(() -> new ResourceNotFoundException(\"Financial Period not found\")))")
+    @Mapping(target = "id", ignore = true)
     public abstract CreditCardInvoice toEntity(CreditCardInvoiceRequestDTO dto);
 
     @Mapping(source = "creditCard.id", target = "creditCardId")
@@ -35,6 +36,7 @@ public abstract class CreditCardInvoiceMapper {
 
     @Mapping(target = "creditCard", ignore = true)
     @Mapping(target = "period", ignore = true)
+    @Mapping(target = "id", ignore = true)
     public abstract void updateEntityFromDto(CreditCardInvoiceRequestDTO dto, @MappingTarget CreditCardInvoice entity);
 
     @AfterMapping
