@@ -54,8 +54,8 @@ export const PlanPartnerManager = ({ activePlan }) => {
   const hasChanges = selectedPartnerId !== persistedPartnerId;
 
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm border border-gray-100">
-      <h3 className="mb-3 font-bold text-gray-800 uppercase text-xs tracking-wider flex items-center gap-2">
+    <div className="rounded-[1.75rem] border border-[var(--color-line)] bg-[var(--color-panel-soft)] p-5">
+      <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-[var(--color-muted)]">
         <Users size={16} /> Parceiro do Plano
       </h3>
 
@@ -67,7 +67,7 @@ export const PlanPartnerManager = ({ activePlan }) => {
             [activePlanId]: e.target.value,
           }))
         }
-        className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+        className="app-input"
       >
         <option value="">Sem parceiro</option>
         {selectableUsers.map((user) => (
@@ -81,13 +81,13 @@ export const PlanPartnerManager = ({ activePlan }) => {
         type="button"
         onClick={() => savePartner.mutate()}
         disabled={savePartner.isPending || !hasChanges}
-        className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+        className="app-button-primary mt-3 w-full disabled:opacity-50"
       >
         {savePartner.isPending ? "Salvando..." : "Salvar parceiro"}
       </button>
 
       {savePartner.isError && (
-        <p className="mt-2 text-xs text-rose-600">
+        <p className="mt-2 text-xs text-[var(--color-danger)]">
           {savePartner.error?.message || "Erro ao salvar parceiro."}
         </p>
       )}

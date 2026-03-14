@@ -2,6 +2,14 @@ import { AxiosInstance } from "../api/AxiosInstance";
 import { resolveLink } from "../utils/hateoas";
 
 export const periodService = {
+    create: async (payload) => {
+        const response = await AxiosInstance.post('/periods', payload);
+        return response.data;
+    },
+    update: async (id, payload) => {
+        const response = await AxiosInstance.put(`/periods/${id}`, payload);
+        return response.data;
+    },
     getTransactionsByPeriod: async (periodOrPeriodId) => {
         const transactionsPath =
             resolveLink(periodOrPeriodId?._links?.transactions) ||

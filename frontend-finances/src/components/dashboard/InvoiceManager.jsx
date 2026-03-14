@@ -27,8 +27,8 @@ export const InvoiceManager = ({
   };
 
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm border border-gray-100">
-      <h3 className="mb-4 font-bold text-gray-800 uppercase text-xs tracking-wider flex items-center gap-2">
+    <div className="rounded-[1.75rem] border border-[var(--color-line)] bg-[var(--color-panel-soft)] p-5">
+      <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-[var(--color-muted)]">
         <ReceiptText size={16} /> Criar Fatura
       </h3>
 
@@ -38,7 +38,7 @@ export const InvoiceManager = ({
           onChange={(e) =>
             setForm((current) => ({ ...current, creditCardId: e.target.value }))
           }
-          className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+          className="app-input"
           disabled={creditCards.length === 0}
         >
           {creditCards.length === 0 && <option value="">Sem cartoes</option>}
@@ -55,7 +55,7 @@ export const InvoiceManager = ({
           onChange={(e) =>
             setForm((current) => ({ ...current, periodId: e.target.value }))
           }
-          className="w-full rounded-lg border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+          className="app-input"
           disabled={periods.length === 0}
         >
           {periods.length === 0 && <option value="">Sem periodos</option>}
@@ -76,7 +76,7 @@ export const InvoiceManager = ({
               setForm((current) => ({ ...current, amount: e.target.value }))
             }
             placeholder="0,00"
-            className="w-full rounded-lg border-gray-200 pl-9 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="app-input pl-9"
           />
         </div>
 
@@ -85,13 +85,13 @@ export const InvoiceManager = ({
           disabled={
             createInvoice.isPending || creditCards.length === 0 || periods.length === 0
           }
-          className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="app-button-primary w-full disabled:opacity-50"
         >
           {createInvoice.isPending ? "Criando..." : "Criar fatura"}
         </button>
       </form>
 
-      {errorMessage && <p className="mt-2 text-xs text-rose-600">{errorMessage}</p>}
+      {errorMessage && <p className="mt-2 text-xs text-[var(--color-danger)]">{errorMessage}</p>}
     </div>
   );
 };
