@@ -72,6 +72,27 @@ class TransactionCategoryServiceTest {
     }
 
     @Test
+    void shouldFindCategoryById() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+
+        var response = service.findById(id);
+
+        assertEquals(id, response.id());
+        assertEquals("Casa", response.name());
+    }
+
+    @Test
+    void shouldThrowWhenCategoryIsNotFoundById() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.findById(id));
+    }
+
+    @Test
     void shouldUpdateCategory() {
         UUID id = UUID.randomUUID();
         TransactionCategory category = new TransactionCategory("Casa");
@@ -88,6 +109,62 @@ class TransactionCategoryServiceTest {
     }
 
     @Test
+    void shouldAllowUpdatingCategoryWithItsOwnName() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+        when(repository.findByNameIgnoreCase("Casa")).thenReturn(Optional.of(category));
+        when(repository.save(category)).thenReturn(category);
+
+        var response = service.update(id, new TransactionCategoryRequestDTO("Casa"));
+
+        assertEquals("Casa", response.name());
+    }
+
+    @Test
+    void shouldRejectBlankCategoryNameOnUpdate() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+
+        assertThrows(IllegalArgumentException.class, () -> service.update(id, new TransactionCategoryRequestDTO("   ")));
+    }
+
+    @Test
+    void shouldUpdateCategoryPartially() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+        when(repository.findByNameIgnoreCase("Mercado")).thenReturn(Optional.empty());
+        when(repository.save(category)).thenReturn(category);
+
+        var response = service.updatePartial(id, Map.of("name", "  Mercado "));
+
+        assertEquals("Mercado", response.name());
+        assertEquals("Mercado", category.getName());
+    }
+
+    @Test
+    void shouldIgnoreUnknownFieldsOnPartialUpdate() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+        when(repository.save(category)).thenReturn(category);
+
+        var response = service.updatePartial(id, Map.of("ignored", "value"));
+
+        assertEquals("Casa", response.name());
+    }
+
+    @Test
     void shouldRejectPartialUpdateWhenNameAlreadyExists() {
         UUID id = UUID.randomUUID();
         TransactionCategory category = new TransactionCategory("Casa");
@@ -100,6 +177,46 @@ class TransactionCategoryServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.updatePartial(id, Map.of("name", "Mercado")));
+    }
+
+    @Test
+    void shouldRejectPartialUpdateWhenNameIsBlank() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+
+        assertThrows(IllegalArgumentException.class, () -> service.updatePartial(id, Map.of("name", "   ")));
+    }
+
+    @Test
+    void shouldRejectPartialUpdateWhenNameIsNull() {
+        UUID id = UUID.randomUUID();
+        TransactionCategory category = new TransactionCategory("Casa");
+        category.setId(id);
+        Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put("name", null);
+
+        when(repository.findById(id)).thenReturn(Optional.of(category));
+
+        assertThrows(IllegalArgumentException.class, () -> service.updatePartial(id, updates));
+    }
+
+    @Test
+    void shouldThrowWhenUpdatingMissingCategory() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.update(id, new TransactionCategoryRequestDTO("Moradia")));
+    }
+
+    @Test
+    void shouldThrowWhenPartialUpdatingMissingCategory() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.updatePartial(id, Map.of("name", "Moradia")));
     }
 
     @Test

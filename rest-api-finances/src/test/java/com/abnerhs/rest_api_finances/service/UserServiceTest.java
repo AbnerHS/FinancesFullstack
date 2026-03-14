@@ -106,6 +106,15 @@ class UserServiceTest {
     }
 
     @Test
+    void shouldThrowWhenUpdatingMissingUser() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.update(id, new UserUpdateDTO("John", "john@example.com")));
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     void shouldUpdatePasswordWhenCurrentPasswordMatches() {
         UUID id = UUID.randomUUID();
         User user = new User("john@example.com", "encoded", "John");
@@ -132,5 +141,15 @@ class UserServiceTest {
 
         assertThrows(BadCredentialsException.class, () -> service.updatePassword(id, dto));
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    void shouldThrowWhenUpdatingPasswordForMissingUser() {
+        UUID id = UUID.randomUUID();
+        UserPasswordUpdateDTO dto = new UserPasswordUpdateDTO("current-secret", "new-secret");
+        when(repository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.updatePassword(id, dto));
+        verify(passwordEncoder, never()).matches(any(), any());
     }
 }

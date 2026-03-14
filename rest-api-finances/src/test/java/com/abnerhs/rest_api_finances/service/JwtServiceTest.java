@@ -55,4 +55,21 @@ class JwtServiceTest {
     void shouldRejectInvalidToken() {
         assertThrows(JwtException.class, () -> jwtService.extractUsername("invalid-token"));
     }
+
+    @Test
+    void shouldRejectAccessTokenForDifferentUser() {
+        String token = jwtService.generateToken(user);
+        User anotherUser = new User("mary@example.com", "encoded-password", "Mary");
+
+        assertFalse(jwtService.isAccessTokenValid(token, anotherUser));
+    }
+
+    @Test
+    void shouldRejectExpiredAccessToken() {
+        ReflectionTestUtils.setField(jwtService, "accessTokenExpiration", -1L);
+
+        String token = jwtService.generateToken(user);
+
+        assertThrows(JwtException.class, () -> jwtService.isAccessTokenValid(token, user));
+    }
 }

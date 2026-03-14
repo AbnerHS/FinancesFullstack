@@ -109,6 +109,55 @@ class TransactionServiceTest {
     }
 
     @Test
+    void shouldCreateTransactionWithoutCategoryWhenPayloadHasBlankName() {
+        TransactionRequestDTO dto = buildRequest(UUID.randomUUID(), "   ");
+        Transaction entity = new Transaction();
+        FinancialPeriod period = new FinancialPeriod();
+        period.setId(dto.periodId());
+        entity.setPeriod(period);
+
+        when(mapper.toEntity(dto)).thenReturn(entity);
+        when(repository.findMaxOrderByPeriodId(dto.periodId())).thenReturn(1);
+        when(repository.save(entity)).thenReturn(entity);
+        when(mapper.toDto(entity)).thenReturn(buildResponse(null));
+
+        service.create(dto);
+
+        assertNull(entity.getTransactionCategory());
+        assertEquals(2, entity.getOrder());
+    }
+
+    @Test
+    void shouldCreateTransactionWithoutCategoryWhenPayloadHasNoCategory() {
+        TransactionRequestDTO dto = new TransactionRequestDTO(
+                "Salario",
+                new BigDecimal("1500.00"),
+                TransactionType.REVENUE,
+                UUID.randomUUID(),
+                null,
+                null,
+                1,
+                null,
+                null,
+                false
+        );
+        Transaction entity = new Transaction();
+        FinancialPeriod period = new FinancialPeriod();
+        period.setId(dto.periodId());
+        entity.setPeriod(period);
+
+        when(mapper.toEntity(dto)).thenReturn(entity);
+        when(repository.findMaxOrderByPeriodId(dto.periodId())).thenReturn(0);
+        when(repository.save(entity)).thenReturn(entity);
+        when(mapper.toDto(entity)).thenReturn(buildResponse(null));
+
+        service.create(dto);
+
+        assertNull(entity.getTransactionCategory());
+        assertEquals(1, entity.getOrder());
+    }
+
+    @Test
     void shouldRejectCreateWhenCategoryIdDoesNotExist() {
         UUID categoryId = UUID.randomUUID();
         TransactionRequestDTO dto = buildRequestWithCategoryId(categoryId, null);
@@ -166,6 +215,44 @@ class TransactionServiceTest {
         assertEquals("CASA", result.getFirst().category().name());
         verify(periodRepository).save(any(FinancialPeriod.class));
         verify(repository, times(2)).save(any(Transaction.class));
+    }
+
+    @Test
+    void shouldReuseExistingPeriodsWhenCreatingRecurringTransactions() {
+        UUID planId = UUID.randomUUID();
+        FinancialPlan plan = new FinancialPlan();
+        plan.setId(planId);
+
+        FinancialPeriod initialPeriod = new FinancialPeriod();
+        initialPeriod.setId(UUID.randomUUID());
+        initialPeriod.setMonth(1);
+        initialPeriod.setYear(2026);
+        initialPeriod.setFinancialPlan(plan);
+
+        FinancialPeriod secondPeriod = new FinancialPeriod();
+        secondPeriod.setId(UUID.randomUUID());
+        secondPeriod.setMonth(2);
+        secondPeriod.setYear(2026);
+        secondPeriod.setFinancialPlan(plan);
+
+        TransactionRequestDTO dto = buildRequest(initialPeriod.getId());
+        RecurringTransactionRequestDTO recurringRequest = new RecurringTransactionRequestDTO(dto, 2);
+
+        when(periodRepository.findById(initialPeriod.getId())).thenReturn(Optional.of(initialPeriod));
+        when(periodRepository.findByMonthAndYearAndFinancialPlanId(1, 2026, planId)).thenReturn(Optional.of(initialPeriod));
+        when(periodRepository.findByMonthAndYearAndFinancialPlanId(2, 2026, planId)).thenReturn(Optional.of(secondPeriod));
+        when(transactionCategoryRepository.findByNameIgnoreCase("CASA")).thenReturn(Optional.of(buildCategory("CASA")));
+        when(repository.findMaxOrderByPeriodId(initialPeriod.getId())).thenReturn(0);
+        when(repository.findMaxOrderByPeriodId(secondPeriod.getId())).thenReturn(4);
+        when(mapper.toEntity(dto)).thenReturn(new Transaction(), new Transaction());
+        when(repository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mapper.toDto(any(Transaction.class))).thenAnswer(invocation -> toResponse(invocation.getArgument(0)));
+
+        List<TransactionResponseDTO> result = service.createRecurring(recurringRequest);
+
+        assertEquals(2, result.size());
+        assertEquals(5, result.getLast().order());
+        verify(periodRepository, times(0)).save(any(FinancialPeriod.class));
     }
 
     @Test
@@ -227,6 +314,33 @@ class TransactionServiceTest {
         assertEquals(response, service.update(id, dto));
         verify(mapper).updateEntityFromDto(dto, entity);
         assertEquals(category, entity.getTransactionCategory());
+    }
+
+    @Test
+    void shouldUpdateTransactionRemovingCategoryWhenPayloadHasNoCategory() {
+        UUID id = UUID.randomUUID();
+        TransactionRequestDTO dto = new TransactionRequestDTO(
+                "Salario",
+                new BigDecimal("1500.00"),
+                TransactionType.REVENUE,
+                UUID.randomUUID(),
+                null,
+                null,
+                1,
+                null,
+                null,
+                false
+        );
+        Transaction entity = new Transaction();
+        entity.setTransactionCategory(buildCategory("CASA"));
+
+        when(repository.findById(id)).thenReturn(Optional.of(entity));
+        when(repository.save(entity)).thenReturn(entity);
+        when(mapper.toDto(entity)).thenReturn(buildResponse(null));
+
+        service.update(id, dto);
+
+        assertNull(entity.getTransactionCategory());
     }
 
     @Test
@@ -340,6 +454,38 @@ class TransactionServiceTest {
     }
 
     @Test
+    void shouldAllowPartialUpdateToClearOrder() {
+        UUID transactionId = UUID.randomUUID();
+        Transaction transaction = new Transaction();
+        transaction.setOrder(3);
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("order", null);
+
+        when(repository.findById(transactionId)).thenReturn(Optional.of(transaction));
+        when(repository.save(transaction)).thenReturn(transaction);
+        when(mapper.toDto(transaction)).thenReturn(buildResponse());
+
+        service.updatePartial(transactionId, updates);
+
+        assertNull(transaction.getOrder());
+    }
+
+    @Test
+    void shouldIgnoreUnknownFieldsOnPartialUpdate() {
+        UUID transactionId = UUID.randomUUID();
+        Transaction transaction = new Transaction();
+        transaction.setDescription("Original");
+
+        when(repository.findById(transactionId)).thenReturn(Optional.of(transaction));
+        when(repository.save(transaction)).thenReturn(transaction);
+        when(mapper.toDto(transaction)).thenReturn(buildResponse());
+
+        service.updatePartial(transactionId, Map.of("ignored", "value"));
+
+        assertEquals("Original", transaction.getDescription());
+    }
+
+    @Test
     void shouldRejectPartialUpdateWhenResponsibleUserDoesNotExist() {
         UUID transactionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -442,7 +588,7 @@ class TransactionServiceTest {
                 new BigDecimal("1500.00"),
                 null,
                 TransactionType.REVENUE,
-                new TransactionCategoryDTO(category.getId(), category.getName()),
+                category == null ? null : new TransactionCategoryDTO(category.getId(), category.getName()),
                 UUID.randomUUID(),
                 null,
                 1,

@@ -160,6 +160,21 @@ class FinancialPlanServiceTest {
     }
 
     @Test
+    void shouldIgnoreUnknownFieldsOnPartialUpdate() {
+        UUID id = UUID.randomUUID();
+        FinancialPlan entity = new FinancialPlan();
+        entity.setName("Plano");
+
+        when(repository.findById(id)).thenReturn(Optional.of(entity));
+        when(repository.save(entity)).thenReturn(entity);
+        when(mapper.toDto(entity)).thenReturn(new FinancialPlanResponseDTO(id, "Plano", UUID.randomUUID(), null));
+
+        service.updatePartial(id, Map.of("ignored", "value"));
+
+        assertEquals("Plano", entity.getName());
+    }
+
+    @Test
     void shouldRejectPartialUpdateWhenPartnerDoesNotExist() {
         UUID id = UUID.randomUUID();
         UUID partnerId = UUID.randomUUID();

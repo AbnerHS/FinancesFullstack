@@ -131,6 +131,21 @@ class CreditCardServiceTest {
     }
 
     @Test
+    void shouldIgnoreUnknownFieldsOnPartialUpdate() {
+        UUID id = UUID.randomUUID();
+        CreditCard card = new CreditCard();
+        card.setName("Visa");
+
+        when(repository.findById(id)).thenReturn(Optional.of(card));
+        when(repository.save(card)).thenReturn(card);
+        when(mapper.toDto(card)).thenReturn(new CreditCardResponseDTO(id, "Visa", UUID.randomUUID()));
+
+        service.updatePartial(id, Map.of("ignored", "value"));
+
+        assertEquals("Visa", card.getName());
+    }
+
+    @Test
     void shouldRejectPartialUpdateWhenUserDoesNotExist() {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.randomUUID();

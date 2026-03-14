@@ -56,6 +56,22 @@ class FinancialPeriodServiceTest {
     }
 
     @Test
+    void shouldKeepExistingBalanceWhenMapperProvidesOne() {
+        FinancialPeriodRequestDTO dto = new FinancialPeriodRequestDTO(3, 2026, UUID.randomUUID());
+        FinancialPeriod entity = new FinancialPeriod();
+        entity.setMonthlyBalance(BigDecimal.TEN);
+        FinancialPeriodResponseDTO response = new FinancialPeriodResponseDTO(UUID.randomUUID(), 3, 2026, BigDecimal.TEN, dto.financialPlanId());
+
+        when(repository.existsByMonthAndYearAndFinancialPlanId(dto.month(), dto.year(), dto.financialPlanId())).thenReturn(false);
+        when(mapper.toEntity(dto)).thenReturn(entity);
+        when(repository.save(entity)).thenReturn(entity);
+        when(mapper.toDto(entity)).thenReturn(response);
+
+        assertEquals(response, service.create(dto));
+        assertEquals(BigDecimal.TEN, entity.getMonthlyBalance());
+    }
+
+    @Test
     void shouldRejectDuplicatedPeriod() {
         FinancialPeriodRequestDTO dto = new FinancialPeriodRequestDTO(3, 2026, UUID.randomUUID());
         when(repository.existsByMonthAndYearAndFinancialPlanId(dto.month(), dto.year(), dto.financialPlanId())).thenReturn(true);
@@ -161,6 +177,20 @@ class FinancialPeriodServiceTest {
         assertEquals(8, entity.getMonth());
         assertEquals(2028, entity.getYear());
         assertEquals(new BigDecimal("450.90"), entity.getMonthlyBalance());
+    }
+
+    @Test
+    void shouldIgnoreUnknownFieldsOnPartialUpdate() {
+        UUID id = UUID.randomUUID();
+        FinancialPeriod entity = new FinancialPeriod();
+        entity.setMonth(3);
+        when(repository.findById(id)).thenReturn(Optional.of(entity));
+        when(repository.save(entity)).thenReturn(entity);
+        when(mapper.toDto(entity)).thenReturn(new FinancialPeriodResponseDTO(id, 3, 2026, BigDecimal.ZERO, UUID.randomUUID()));
+
+        service.updatePartial(id, Map.of("ignored", "value"));
+
+        assertEquals(3, entity.getMonth());
     }
 
     @Test

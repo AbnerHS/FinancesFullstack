@@ -16,9 +16,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,6 +79,15 @@ class AuthenticationServiceTest {
     }
 
     @Test
+    void shouldThrowWhenAuthenticatedUserCannotBeLoaded() {
+        AuthenticationRequestDTO request = new AuthenticationRequestDTO("john@example.com", "secret123");
+        when(repository.findByEmail(request.email())).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> service.authenticate(request));
+        verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+    }
+
+    @Test
     void shouldRefreshTokenWhenTokenIsValid() {
         User user = new User("john@example.com", "encoded-password", "John");
 
@@ -101,5 +112,13 @@ class AuthenticationServiceTest {
         when(jwtService.isRefreshTokenValid("refresh-token", user)).thenReturn(false);
 
         assertThrows(BadCredentialsException.class, () -> service.refreshToken("refresh-token"));
+    }
+
+    @Test
+    void shouldRejectRefreshTokenWhenUsernameExtractionFails() {
+        when(jwtService.extractUsername("refresh-token")).thenThrow(new IllegalArgumentException("invalid"));
+
+        assertThrows(BadCredentialsException.class, () -> service.refreshToken("refresh-token"));
+        verify(repository, never()).findByEmail(anyString());
     }
 }
