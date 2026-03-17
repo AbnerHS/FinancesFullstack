@@ -10,10 +10,10 @@ Este arquivo serve como guia operacional para um agente de IA trabalhar neste re
 
 ## Estrutura do Repositorio
 
-- `rest-api-finances/`: API REST em Java/Spring Boot com Oracle via Docker.
+- `rest-api-finances/`: API REST em Java/Spring Boot com MySQL via Docker.
 - `frontend/`: frontend web atual em React, TypeScript e Vite.
 
-## Como Rodar Localmente (API + Oracle)
+## Como Rodar Localmente (API + MySQL)
 
 1. Subir a stack do backend:
    - `cd rest-api-finances`
@@ -23,15 +23,15 @@ Este arquivo serve como guia operacional para um agente de IA trabalhar neste re
 
 Arquivo: `rest-api-finances/docker-compose.yml`
 
-- `oracle-db`
-  - Porta: `1521:1521`
+- `mysql-db`
+  - Porta: `3306:3306`
 - `spring-app`
-  - Portas: `8080:8080` (HTTP) e `5005:5005` (debug)
+  - Porta: `8080:8080` (HTTP)
 
 ### Comandos Uteis (backend)
 
 - Logs do Spring: `docker compose logs -f spring-app`
-- Logs do Oracle: `docker compose logs -f oracle-db`
+- Logs do MySQL: `docker compose logs -f mysql-db`
 - Ver variaveis dentro do container: `docker exec -it spring-app env`
 
 ## Backend (`rest-api-finances/`)
@@ -45,7 +45,7 @@ Arquivo: `rest-api-finances/docker-compose.yml`
 - OpenAPI/Swagger (SpringDoc)
 - Spring Data JPA / Hibernate
 - Flyway
-- Oracle Database
+- MySQL 8
 
 ### Pacotes (convencao)
 
@@ -74,12 +74,10 @@ Base: `com.abnerhs.rest_api_finances`
 Fonte: `rest-api-finances/.env` (carregado no container do `spring-app`).
 
 - Banco/conexao:
-  - `DB_HOST`, `DB_PORT`, `DB_SERVICE_NAME`
+  - `DB_HOST`, `DB_PORT`, `DB_NAME`
   - `DB_USERNAME`, `DB_PASSWORD`
+  - `MYSQL_ROOT_PASSWORD`
   - `SPRING_DATASOURCE_URL`
-- Flyway:
-  - `FLYWAY_SCHEMAS`
-  - `FLYWAY_REPAIR_ON_MIGRATE`
 - Servidor:
   - `SERVER_PORT`
 - JWT:

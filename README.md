@@ -21,7 +21,7 @@ O projeto esta dividido em duas aplicacoes principais:
 - Spring HATEOAS
 - Flyway
 - MapStruct
-- Oracle Database Free 21c
+- MySQL 8 (inicialmente desenvolvido com Oracle Databrase Free 21c)
 - Docker e Docker Compose
 - Swagger / OpenAPI via Springdoc
 
@@ -50,7 +50,7 @@ O backend possui:
 - autenticacao com access token e refresh token em cookie HttpOnly
 - endpoints para usuarios, planos financeiros, periodos, transacoes, cartoes e faturas
 - documentacao interativa com Swagger
-- persistencia com Oracle, JPA/Hibernate e migracoes com Flyway
+- persistencia com MySQL, JPA/Hibernate e migracoes com Flyway
 - estrutura REST com HATEOAS
 
 ### Frontend
@@ -134,7 +134,7 @@ docker compose up -d
 
 Isso sobe:
 
-- Oracle Database
+- MySQL
 - aplicacao Spring Boot
 
 API padrao:
@@ -195,4 +195,4 @@ rest-api-finances/target/site/jacoco/index.html
 - evoluir a cobertura dos controllers e filtros de seguranca
 - continuar a evolucao do frontend em `frontend/`
 - melhorar a experiencia visual e os fluxos de uso da interface
-- reduzir diferencas entre o ambiente Oracle e o ambiente de testes
+- reduzir diferencas entre o ambiente MySQL e o ambiente de testes
