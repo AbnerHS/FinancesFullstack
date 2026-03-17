@@ -1,20 +1,20 @@
-# Sistema de gestão financeira pessoal e compartilhada
+# Sistema de gestao financeira pessoal e compartilhada
 
-Projeto de prática e estudo com backend Java/Spring Boot e frontend React para controle financeiro pessoal e compartilhado.
+Projeto de pratica e estudo com backend Java/Spring Boot e frontend React para controle financeiro pessoal e compartilhado.
 
 ## Visao geral
 
-O projeto está dividido em duas aplicaçoes:
+O projeto esta dividido em duas aplicacoes principais:
 
-- `rest-api-finances`: API REST responsavel por autenticação, usuários, planos financeiros, períodos, transações, cartões e faturas.
-- `frontend-finances`: interface web em desenvolvimento, consumindo a API para login, cadastro e operação do dashboard financeiro.
+- `rest-api-finances`: API REST responsavel por autenticacao, usuarios, planos financeiros, periodos, transacoes, cartoes e faturas.
+- `frontend`: interface web atual do projeto.
 
 ## Stack tecnologica
 
 ### Backend
 
 - Java 21
-- Spring Boot 4
+- Spring Boot
 - Spring Web MVC
 - Spring Data JPA / Hibernate
 - Spring Security com JWT
@@ -28,15 +28,18 @@ O projeto está dividido em duas aplicaçoes:
 ### Frontend
 
 - React 19
+- TypeScript 5
 - Vite 7
-- React Router
-- React Query
-- Axios
-- Zustand
-- React Hook Form
+- TanStack Router
+- TanStack Query
+- shadcn/ui
 - Tailwind CSS 4
+- Zustand
+- Axios
+- React Hook Form
 - Lucide React
 - ESLint
+- Prettier
 
 ## Estado atual do projeto
 
@@ -44,45 +47,45 @@ O projeto está dividido em duas aplicaçoes:
 
 O backend possui:
 
-- autenticação com access token e refresh token em cookie HttpOnly
-- endpoints para usuários, planos financeiros, períodos, transações, cartões e faturas
-- documentação interativa com Swagger
-- persistencia com Oracle, JPA/Hibernate e migrações com Flyway
+- autenticacao com access token e refresh token em cookie HttpOnly
+- endpoints para usuarios, planos financeiros, periodos, transacoes, cartoes e faturas
+- documentacao interativa com Swagger
+- persistencia com Oracle, JPA/Hibernate e migracoes com Flyway
 - estrutura REST com HATEOAS
 
 ### Frontend
 
-O frontend está em desenvolvimento ativo. Atualmente a aplicação possui:
+O frontend ativo esta em desenvolvimento em `frontend/`. Atualmente a aplicacao usa:
 
-- fluxo de autenticação com login e cadastro
-- rotas públicas e protegidas
-- dashboard principal conectado a hooks e stores
-- integração com a API para usuários, planos, períodos, transações, cartões e faturas
-- gerenciamento de estado de autenticação com Zustand
-- consumo de dados assincros com React Query
-- organização por `pages`, `components`, `hooks`, `services` e `store`
+- React com TypeScript
+- roteamento com TanStack Router
+- componentes base com shadcn/ui
+- Tailwind CSS para estilos
+- gerenciamento de estado com Zustand
+- integracoes assincoras com TanStack Query e Axios
 
-Hoje o foco da interface está no dashboard e nos fluxos operacionais principais, com componentes para:
+A estrutura principal do frontend inclui:
 
-- estatisticas gerais
-- seleção de planos e períodos
-- painel e tabela de transações
-- gerenciamento de cartões
-- gerenciamento de faturas
-- gerenciamento de parceria em planos
+- `frontend/src/components`
+- `frontend/src/features`
+- `frontend/src/layouts`
+- `frontend/src/lib`
+- `frontend/src/pages`
+- `frontend/src/routes`
+- `frontend/src/stores`
 
-## Documentação da API
+## Documentacao da API
 
-A documentação da API com Swagger está implementada no backend.
+A documentacao da API com Swagger esta implementada no backend.
 
-Depois de iniciar a API, a documentação pode ser acessada em:
+Depois de iniciar a API, a documentacao pode ser acessada em:
 
 - `http://localhost:8080/swagger-ui.html`
 - `http://localhost:8080/swagger-ui/index.html`
 
 ## Testes
 
-Os testes estão em desenvolvimento.
+Os testes estao em desenvolvimento.
 
 ### Stack de testes atual
 
@@ -95,11 +98,11 @@ Os testes estão em desenvolvimento.
 
 ### Escopo atual
 
-No momento já existem testes unitários e de integração cobrindo parte dos servicos centrais, autenticação e fluxos HTTP principais. A suite está sendo expandida gradualmente com foco em:
+Ja existem testes unitarios e de integracao cobrindo parte dos servicos centrais, autenticacao e fluxos HTTP principais. A suite segue evoluindo com foco em:
 
-- casos de sucesso e casos de erro
-- cobertura de regras de negócio
-- validação de respostas HTTP e tratamento de exceções
+- casos de sucesso e erro
+- cobertura de regras de negocio
+- validacao de respostas HTTP e tratamento de excecoes
 - aumento progressivo de coverage
 
 ## Estrutura do repositorio
@@ -107,6 +110,7 @@ No momento já existem testes unitários e de integração cobrindo parte dos se
 ```text
 finances/
 |-- rest-api-finances/
+|-- frontend/
 |-- frontend-finances/
 |-- README.md
 ```
@@ -116,7 +120,8 @@ finances/
 ### Pre-requisitos
 
 - Java 21
-- Node.js 20+ e npm
+- Node.js 20+
+- pnpm
 - Docker e Docker Compose
 
 ### 1. Iniciar o backend com Docker
@@ -124,7 +129,7 @@ finances/
 No diretorio `rest-api-finances`:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Isso sobe:
@@ -146,13 +151,13 @@ http://localhost:8080/swagger-ui.html
 
 ### 2. Iniciar o frontend
 
-No diretorio `frontend-finances`, instale as dependencias:
+No diretorio `frontend`, instale as dependencias:
 
 ```bash
-npm install
+pnpm install
 ```
 
-Crie um arquivo `.env` no frontend com a URL base da API:
+Configure o ambiente do frontend com a URL base da API, por exemplo:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api
@@ -161,10 +166,10 @@ VITE_API_BASE_URL=http://localhost:8080/api
 Depois inicie o servidor de desenvolvimento:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
-O frontend será servido pelo Vite, normalmente em:
+O frontend sera servido pelo Vite, normalmente em:
 
 ```text
 http://localhost:5173
@@ -186,8 +191,8 @@ rest-api-finances/target/site/jacoco/index.html
 
 ## Proximos passos
 
-- ampliar a cobertura de testes unitarios e de integração
+- ampliar a cobertura de testes unitarios e de integracao
 - evoluir a cobertura dos controllers e filtros de seguranca
-- continuar a evolução do dashboard frontend
-- melhorar a experiencia visual e os fluxos de uso do frontend
+- continuar a evolucao do frontend em `frontend/`
+- melhorar a experiencia visual e os fluxos de uso da interface
 - reduzir diferencas entre o ambiente Oracle e o ambiente de testes
