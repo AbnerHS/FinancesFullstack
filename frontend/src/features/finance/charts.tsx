@@ -29,7 +29,9 @@ type CategoryItem = {
   totalAmount: number
 }
 
-const pieColors = ["#0d3241", "#1c5a71", "#4f8ea6", "#266c53", "#a45844", "#7a6377"]
+const pieColors = ["#60a5fa", "#22d3ee", "#a78bfa", "#34d399", "#fb923c", "#f472b6"]
+const chartGrid = "rgba(148, 163, 184, 0.18)"
+const chartAxis = "#94a3b8"
 
 function tooltipCurrency(
   value: number | string | readonly (number | string)[] | undefined
@@ -51,23 +53,36 @@ export function DashboardCharts({
         <Card className="app-panel min-w-0">
           <div className="space-y-2">
             <p className="app-eyebrow">Saldo por periodo</p>
-            <h3 className="font-serif text-2xl font-semibold text-slate-900">
+            <h3 className="font-serif text-2xl font-semibold text-foreground">
               Tendencia do saldo
             </h3>
           </div>
-          <div className="mt-6 h-80 min-w-0 min-h-[20rem]">
+          <div className="mt-6 h-80 min-h-[20rem] min-w-0">
             <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 200 }}>
-              <LineChart data={comparisonData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#d7e4ea" />
-                <XAxis dataKey="label" stroke="#58707b" />
-                <YAxis stroke="#58707b" tickFormatter={(value) => formatCurrency(value)} />
-                <Tooltip formatter={(value) => tooltipCurrency(value)} />
+              <LineChart data={comparisonData} margin={{ top: 8, right: 12, bottom: 0, left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} />
+                <XAxis dataKey="label" stroke={chartAxis} />
+                <YAxis
+                  width={92}
+                  tickMargin={10}
+                  stroke={chartAxis}
+                  tickFormatter={(value) => formatCurrency(value)}
+                />
+                <Tooltip
+                  formatter={(value) => tooltipCurrency(value)}
+                  contentStyle={{
+                    borderRadius: "16px",
+                    border: "1px solid rgba(148, 163, 184, 0.18)",
+                    backgroundColor: "rgba(15, 23, 42, 0.94)",
+                    color: "#e2e8f0",
+                  }}
+                />
                 <Line
                   type="monotone"
                   dataKey="balance"
-                  stroke="#0d3241"
+                  stroke="#60a5fa"
                   strokeWidth={3}
-                  dot={{ fill: "#0d3241", strokeWidth: 2 }}
+                  dot={{ fill: "#60a5fa", strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -77,11 +92,11 @@ export function DashboardCharts({
         <Card className="app-panel min-w-0">
           <div className="space-y-2">
             <p className="app-eyebrow">Categorias</p>
-            <h3 className="font-serif text-2xl font-semibold text-slate-900">
+            <h3 className="font-serif text-2xl font-semibold text-foreground">
               Distribuicao de despesas
             </h3>
           </div>
-          <div className="mt-6 h-80 min-w-0 min-h-[20rem]">
+          <div className="mt-6 h-80 min-h-[20rem] min-w-0">
             <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 200 }}>
               <PieChart>
                 <Pie
@@ -96,7 +111,15 @@ export function DashboardCharts({
                     <Cell key={entry.category} fill={pieColors[index % pieColors.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => tooltipCurrency(value)} />
+                <Tooltip
+                  formatter={(value) => tooltipCurrency(value)}
+                  contentStyle={{
+                    borderRadius: "16px",
+                    border: "1px solid rgba(148, 163, 184, 0.18)",
+                    backgroundColor: "rgba(15, 23, 42, 0.94)",
+                    color: "#e2e8f0",
+                  }}
+                />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -107,20 +130,33 @@ export function DashboardCharts({
       <Card className="app-panel min-w-0">
         <div className="space-y-2">
           <p className="app-eyebrow">Comparacao</p>
-          <h3 className="font-serif text-2xl font-semibold text-slate-900">
+          <h3 className="font-serif text-2xl font-semibold text-foreground">
             Receitas x despesas
           </h3>
         </div>
-        <div className="mt-6 h-80 min-w-0 min-h-[20rem]">
+        <div className="mt-6 h-80 min-h-[20rem] min-w-0">
           <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 200 }}>
-            <BarChart data={comparisonData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#d7e4ea" />
-              <XAxis dataKey="label" stroke="#58707b" />
-              <YAxis stroke="#58707b" tickFormatter={(value) => formatCurrency(value)} />
-              <Tooltip formatter={(value) => tooltipCurrency(value)} />
+            <BarChart data={comparisonData} margin={{ top: 8, right: 12, bottom: 0, left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} />
+              <XAxis dataKey="label" stroke={chartAxis} />
+              <YAxis
+                width={92}
+                tickMargin={10}
+                stroke={chartAxis}
+                tickFormatter={(value) => formatCurrency(value)}
+              />
+              <Tooltip
+                formatter={(value) => tooltipCurrency(value)}
+                contentStyle={{
+                  borderRadius: "16px",
+                  border: "1px solid rgba(148, 163, 184, 0.18)",
+                  backgroundColor: "rgba(15, 23, 42, 0.94)",
+                  color: "#e2e8f0",
+                }}
+              />
               <Legend />
-              <Bar dataKey="incomes" name="Receitas" fill="#266c53" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="expenses" name="Despesas" fill="#a45844" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="incomes" name="Receitas" fill="#34d399" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="expenses" name="Despesas" fill="#fb7185" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -26,7 +26,7 @@ export function ProfilePage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="app-eyebrow">Perfil</p>
-            <h2 className="font-serif text-3xl font-semibold text-slate-900">
+            <h2 className="font-serif text-3xl font-semibold text-foreground">
               Dados básicos da conta
             </h2>
           </div>
@@ -72,7 +72,7 @@ export function ProfilePage() {
             {profileMutation.isPending ? "Salvando..." : "Atualizar perfil"}
           </Button>
           {profileMutation.isSuccess ? (
-            <p className="text-sm text-emerald-700">Perfil atualizado com sucesso.</p>
+            <p className="text-sm text-emerald-500 dark:text-emerald-400">Perfil atualizado com sucesso.</p>
           ) : null}
           <FormError message={profileError} />
         </form>
@@ -82,7 +82,7 @@ export function ProfilePage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="app-eyebrow">Segurança</p>
-            <h2 className="font-serif text-3xl font-semibold text-slate-900">
+            <h2 className="font-serif text-3xl font-semibold text-foreground">
               Alterar senha
             </h2>
           </div>
@@ -134,7 +134,7 @@ export function ProfilePage() {
             {passwordMutation.isPending ? "Atualizando..." : "Atualizar senha"}
           </Button>
           {passwordMutation.isSuccess ? (
-            <p className="text-sm text-emerald-700">Senha atualizada com sucesso.</p>
+            <p className="text-sm text-emerald-500 dark:text-emerald-400">Senha atualizada com sucesso.</p>
           ) : null}
           <FormError message={passwordError} />
         </form>

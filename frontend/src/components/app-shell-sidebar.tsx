@@ -23,11 +23,11 @@ type AppShellSidebarProps = {
 }
 
 const navItems = [
-  { to: "/dashboard", label: "Dashboard", description: "Resumo e fluxo diário", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Dashboard", description: "Resumo e fluxo diario", icon: LayoutDashboard },
   { to: "/profile", label: "Perfil", description: "Conta e senha", icon: UserRound },
   { to: "/plans", label: "Planos", description: "Estrutura financeira", icon: FolderKanban },
-  { to: "/periods", label: "Períodos", description: "Comparação mensal", icon: WalletCards },
-  { to: "/cards", label: "Cartões", description: "Cartões e faturas", icon: CreditCard },
+  { to: "/periods", label: "Periodos", description: "Comparacao mensal", icon: WalletCards },
+  { to: "/cards", label: "Cartoes", description: "Cartoes e faturas", icon: CreditCard },
   { to: "/partner", label: "Parceiro", description: "Participantes do plano", icon: Users },
 ]
 
@@ -36,7 +36,7 @@ export function MobileSidebarButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center justify-center rounded-full border border-border bg-card p-3 text-foreground shadow-sm lg:hidden"
+      className="inline-flex items-center justify-center rounded-full border border-border bg-card/80 p-3 text-foreground shadow-sm backdrop-blur-xl lg:hidden"
       aria-label="Abrir menu"
     >
       <Menu size={18} />
@@ -57,7 +57,7 @@ export function AppShellSidebar({
         type="button"
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-30 bg-slate-950/35 transition lg:hidden",
+          "fixed inset-0 z-30 bg-slate-950/55 backdrop-blur-sm transition lg:hidden",
           isOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         )}
         aria-label="Fechar menu"
@@ -65,36 +65,33 @@ export function AppShellSidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-border bg-[linear-gradient(180deg,rgba(248,252,254,0.98),rgba(212,227,234,0.96))] shadow-[0_24px_60px_rgba(13,50,65,0.12)] transition-transform duration-300 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-sidebar-border bg-[linear-gradient(180deg,rgba(248,251,255,0.88),rgba(226,235,255,0.82))] shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur-2xl transition-transform duration-300 dark:bg-[linear-gradient(180deg,rgba(11,22,40,0.96),rgba(19,34,56,0.94))] dark:shadow-[0_28px_90px_rgba(2,6,23,0.54)] lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between px-5 py-5">
             <Link to="/dashboard" className="space-y-1" onClick={onClose}>
-              <div className="font-serif text-2xl font-semibold text-slate-900">Finances</div>
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
-                Editorial Finance Hub
-              </p>
+              <div className="font-serif text-2xl font-semibold text-foreground">Finances</div>
             </Link>
             <button
               type="button"
-              className="rounded-full border border-border p-2 text-foreground lg:hidden"
+              className="rounded-full border border-border bg-card/50 p-2 text-foreground lg:hidden"
               onClick={onClose}
             >
               <X size={16} />
             </button>
           </div>
 
-          <div className="mx-4 rounded-[1.75rem] border border-border bg-white/85 p-4 shadow-[0_18px_50px_rgba(17,60,58,0.08)] backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Usuário ativo</p>
+          <div className="mx-4 rounded-[1.75rem] border border-border bg-card/75 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Usuario ativo</p>
             <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-lg font-semibold text-sky-900">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-lg font-semibold text-primary">
                 {userName?.slice(0, 1) || "F"}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{userName || "Sua conta"}</p>
-                <p className="truncate text-xs text-slate-500">{userEmail || "Sem email"}</p>
+                <p className="truncate text-sm font-semibold text-foreground">{userName || "Sua conta"}</p>
+                <p className="truncate text-xs text-muted-foreground">{userEmail || "Sem email"}</p>
               </div>
             </div>
           </div>
@@ -109,20 +106,20 @@ export function AppShellSidebar({
                   onClick={onClose}
                   activeProps={{
                     className:
-                      "border-sky-900 bg-sky-950 text-white shadow-[0_18px_40px_rgba(17,60,58,0.22)]",
+                      "border-primary/20 bg-primary text-primary-foreground shadow-[0_18px_40px_rgba(37,99,235,0.24)] dark:text-primary-foreground",
                   }}
                   inactiveProps={{
                     className:
-                      "border-transparent bg-transparent text-slate-700 hover:border-border hover:bg-white/80",
+                      "border-transparent bg-transparent text-foreground hover:border-border hover:bg-card/70",
                   }}
-                  className="group flex items-start gap-3 rounded-[1.5rem] border px-4 py-3 transition"
+                  className="group flex items-start gap-3 rounded-[1.5rem] border px-4 py-3 transition [&[aria-current=page]_.nav-description]:text-primary-foreground/80 [&[aria-current=page]_.nav-icon]:bg-primary-foreground/16 [&[aria-current=page]_.nav-icon]:text-primary-foreground"
                 >
-                  <div className="mt-0.5 rounded-2xl bg-sky-100 p-2 text-sky-900 group-[.active]:bg-white/12 group-[.active]:text-white">
+                  <div className="nav-icon mt-0.5 rounded-2xl bg-primary/12 p-2 text-primary">
                     <Icon size={16} />
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-semibold">{item.label}</div>
-                    <div className="text-xs text-slate-500 group-[.active]:text-white/75">
+                    <div className="nav-description text-xs text-muted-foreground">
                       {item.description}
                     </div>
                   </div>
@@ -135,7 +132,7 @@ export function AppShellSidebar({
             <Button
               type="button"
               variant="outline"
-              className="h-12 w-full justify-start gap-2 rounded-[1.25rem] bg-white text-slate-700"
+              className="h-12 w-full justify-start gap-2 rounded-[1.25rem] bg-card/70 text-foreground"
               onClick={onLogout}
             >
               <LogOut size={16} />

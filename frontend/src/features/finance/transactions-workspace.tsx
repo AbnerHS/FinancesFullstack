@@ -150,18 +150,28 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   }
 
   return (
-    <Card className="border-border bg-white/90 p-5">
+    <Card className="border-border bg-card/90 p-5 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="app-eyebrow">{panel.label}</p>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             Receitas, despesas e leitura rapida do periodo selecionado.
           </p>
         </div>
         <div className="grid gap-2 text-right text-sm">
-          <span className="text-emerald-700">Receitas: {formatCurrency(panel.stats.incomes)}</span>
-          <span className="text-rose-700">Despesas: {formatCurrency(panel.stats.expenses)}</span>
-          <span className={`font-semibold ${panel.stats.balance > 0 ? "text-emerald-700" : "text-rose-700"}`}>
+          <span className="text-emerald-500 dark:text-emerald-400">
+            Receitas: {formatCurrency(panel.stats.incomes)}
+          </span>
+          <span className="text-rose-500 dark:text-rose-400">
+            Despesas: {formatCurrency(panel.stats.expenses)}
+          </span>
+          <span
+            className={`font-semibold ${
+              panel.stats.balance > 0
+                ? "text-emerald-500 dark:text-emerald-400"
+                : "text-rose-500 dark:text-rose-400"
+            }`}
+          >
             Saldo: {formatCurrency(panel.stats.balance)}
           </span>
         </div>
@@ -249,8 +259,8 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
               </div>
 
               {!editingTransaction ? (
-                <div className="space-y-2 flex items-end">
-                  <div className="rounded-xl border border-border bg-white px-3 w-full">
+                <div className="flex items-end space-y-2">
+                  <div className="w-full rounded-xl border border-border bg-card/90 px-3">
                     <div className="flex items-center gap-3">
                       <Label>Recorrente</Label>
                       <div className="flex min-h-11 items-center">
@@ -268,9 +278,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                           }
                         />
                       </div>
-                      {form.isRecurring && (
+                      {form.isRecurring ? (
                         <div className="flex flex-row items-center gap-2">
-                          <Label>Períodos</Label>
+                          <Label>Periodos</Label>
                           <Input
                             className="h-8"
                             type="number"
@@ -285,7 +295,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                             }
                           />
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -344,14 +354,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
           <h4 className="app-eyebrow">Transacoes por responsavel</h4>
           <div className="mt-3 space-y-4">
             {panel.transactionsLoading ? (
-              <p className="text-sm text-slate-500">Carregando transacoes...</p>
+              <p className="text-sm text-muted-foreground">Carregando transacoes...</p>
             ) : groupedTransactions.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma transacao cadastrada.</p>
+              <p className="text-sm text-muted-foreground">Nenhuma transacao cadastrada.</p>
             ) : (
               groupedTransactions.map((group) => (
                 <div key={group.id} className="space-y-2">
-                  <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                       {group.label}
                     </p>
                   </div>
@@ -364,23 +374,24 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                       onDragEnd={reorder.endDrag}
                       onDragOver={(event) => reorder.dragOver(transaction, event)}
                       onDrop={(event) => reorder.dropOnEntry(transaction, event)}
-                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 transition ${reorder.dragOverId === transaction.id
-                        ? "border-primary ring-2 ring-primary/15"
-                        : "border-border"
-                        }`}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card/95 px-4 py-3 transition ${
+                        reorder.dragOverId === transaction.id
+                          ? "border-primary ring-2 ring-primary/15"
+                          : "border-border"
+                      }`}
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="rounded-lg border border-border bg-secondary/60 p-2 text-slate-500">
+                        <div className="rounded-lg border border-border bg-secondary/60 p-2 text-muted-foreground">
                           <GripVertical size={14} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-slate-900">
+                          <p className="font-semibold text-foreground">
                             {transaction.description}{" "}
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase text-gray-500">
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
                               {transaction.category?.name || "Sem categoria"}
                             </span>
                             {transaction.recurringGroupId ? (
-                              <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium uppercase text-sky-700">
+                              <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
                                 Recorrente
                               </span>
                             ) : null}
@@ -390,8 +401,11 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
                       <div className="flex items-center gap-2">
                         <span
-                          className={`text-sm font-semibold ${transaction.type === "REVENUE" ? "text-emerald-700" : "text-rose-700"
-                            }`}
+                          className={`text-sm font-semibold ${
+                            transaction.type === "REVENUE"
+                              ? "text-emerald-500 dark:text-emerald-400"
+                              : "text-rose-500 dark:text-rose-400"
+                          }`}
                         >
                           {formatCurrency(transaction.amount)}
                         </span>
@@ -401,7 +415,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                           size="sm"
                           className={
                             transaction.type === "EXPENSE" && transaction.isClearedByInvoice
-                              ? "text-emerald-700"
+                              ? "text-emerald-500 dark:text-emerald-400"
                               : undefined
                           }
                           onClick={() => transactionLinking.openPaymentModal(transaction)}
@@ -458,24 +472,24 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
           <h4 className="app-eyebrow">Faturas do periodo</h4>
           <div className="mt-3 space-y-2">
             {panel.invoicesLoading ? (
-              <p className="text-sm text-slate-500">Carregando faturas...</p>
+              <p className="text-sm text-muted-foreground">Carregando faturas...</p>
             ) : panel.invoices.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma fatura registrada.</p>
+              <p className="text-sm text-muted-foreground">Nenhuma fatura registrada.</p>
             ) : (
               panel.invoices.map((invoice) => {
                 const card = shared.creditCards.find((item) => item.id === invoice.creditCardId)
                 return (
                   <div
                     key={invoice.id}
-                    className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3"
+                    className="flex items-center justify-between rounded-xl border border-border bg-card/90 px-4 py-3"
                   >
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">
+                      <p className="text-sm font-semibold text-foreground">
                         {card?.name || "Cartao"}
                       </p>
-                      <p className="text-xs text-slate-500">Fatura vinculada ao periodo</p>
+                      <p className="text-xs text-muted-foreground">Fatura vinculada ao periodo</p>
                     </div>
-                    <p className="text-sm font-semibold text-rose-700">
+                    <p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
                       {formatCurrency(invoice.amount)}
                     </p>
                   </div>
@@ -486,14 +500,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
         </Card>
 
         {transactionLinking.paymentModalEntry ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-border bg-white p-5 shadow-xl">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                 Vincular a fatura
               </h3>
-              <p className="mt-2 text-sm text-slate-600">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Transacao:{" "}
-                <span className="font-semibold text-slate-900">
+                <span className="font-semibold text-foreground">
                   {transactionLinking.paymentModalEntry.description}
                 </span>
               </p>
@@ -522,13 +536,13 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
               </div>
 
               {transactionLinking.linkTransactionError ? (
-                <p className="mt-2 text-xs text-rose-600">
+                <p className="mt-2 text-xs text-rose-500 dark:text-rose-400">
                   {transactionLinking.linkTransactionError}
                 </p>
               ) : null}
 
               {panel.invoices.length === 0 ? (
-                <p className="mt-2 text-xs text-amber-600">
+                <p className="mt-2 text-xs text-amber-500 dark:text-amber-400">
                   Nenhuma fatura disponivel neste periodo.
                 </p>
               ) : null}
@@ -538,12 +552,12 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                   <Button
                     type="button"
                     variant="outline"
-                    className="text-amber-700"
+                    className="text-amber-500 dark:text-amber-400"
                     onClick={() => {
                       transactionLinking.unlinkTransactionFromInvoice.mutate(
                         transactionLinking.paymentModalEntry!.id
-                      );
-                      transactionLinking.closePaymentModal();
+                      )
+                      transactionLinking.closePaymentModal()
                     }}
                     disabled={transactionLinking.unlinkTransactionFromInvoice.isPending}
                   >

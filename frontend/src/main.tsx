@@ -11,7 +11,7 @@ import { router } from "@/router.tsx"
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider defaultTheme="system">
         <RouterProvider router={router} />
       </ThemeProvider>
     </QueryClientProvider>

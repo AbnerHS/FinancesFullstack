@@ -16,7 +16,7 @@ export function PartnerPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="app-eyebrow">Participantes</p>
-            <h2 className="font-serif text-3xl font-semibold text-slate-900">
+            <h2 className="font-serif text-3xl font-semibold text-foreground">
               Responsáveis do plano
             </h2>
           </div>
@@ -27,7 +27,7 @@ export function PartnerPage() {
 
         <div className="mt-6 space-y-3">
           {responsibleOptions.length === 0 ? (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               O plano ativo ainda não possui participantes adicionais.
             </p>
           ) : (
@@ -36,7 +36,7 @@ export function PartnerPage() {
                 key={option.id}
                 className="rounded-[1.25rem] border border-border bg-secondary/60 px-4 py-3"
               >
-                <p className="text-sm font-semibold text-slate-900">{option.label}</p>
+                <p className="text-sm font-semibold text-foreground">{option.label}</p>
               </div>
             ))
           )}

@@ -39,8 +39,8 @@ export function PlanManager({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="app-eyebrow">Planos Financeiros</p>
-          <h2 className="font-serif text-3xl font-semibold text-slate-900">
-            Estrutura dos seus espaços financeiros
+          <h2 className="font-serif text-3xl font-semibold text-foreground">
+            Estrutura dos seus espacos financeiros
           </h2>
         </div>
       </div>
@@ -56,8 +56,8 @@ export function PlanManager({
                 onClick={() => onSelectPlanId(plan.id)}
                 className={`rounded-[1.5rem] border p-5 text-left transition ${
                   isActive
-                    ? "border-sky-950 bg-sky-950 text-white shadow-[0_22px_48px_rgba(17,60,58,0.18)]"
-                    : "border-border bg-secondary/70 text-slate-700 hover:border-primary"
+                    ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_22px_48px_rgba(37,99,235,0.20)]"
+                    : "border-border bg-secondary/70 text-foreground hover:border-primary/40"
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -68,7 +68,7 @@ export function PlanManager({
                     </span>
                   ) : null}
                 </div>
-                <p className={`mt-2 text-sm ${isActive ? "text-white/80" : "text-slate-500"}`}>
+                <p className={`mt-2 text-sm ${isActive ? "text-white/80" : "text-muted-foreground"}`}>
                   {plan.partnerId ? "Compartilhado com parceiro" : "Plano individual"}
                 </p>
               </button>
@@ -77,11 +77,11 @@ export function PlanManager({
         </div>
 
         <Card className="border-border bg-secondary/60 p-5">
-          <div className="flex gap-2 rounded-full bg-white/90 p-1">
+          <div className="flex gap-2 rounded-full bg-card/90 p-1">
             <button
               type="button"
               className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
-                mode === "create" ? "bg-primary text-white" : "text-slate-500"
+                mode === "create" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
               }`}
               onClick={startCreate}
             >
@@ -90,7 +90,7 @@ export function PlanManager({
             <button
               type="button"
               className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
-                mode === "edit" ? "bg-primary text-white" : "text-slate-500"
+                mode === "edit" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
               }`}
               onClick={startEdit}
               disabled={!activePlan}
@@ -145,7 +145,7 @@ export function PeriodsManager({
   const months = [
     "Janeiro",
     "Fevereiro",
-    "Março",
+    "Marco",
     "Abril",
     "Maio",
     "Junho",
@@ -161,13 +161,13 @@ export function PeriodsManager({
     <section className="app-panel">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="app-eyebrow">Períodos</p>
-          <h2 className="font-serif text-3xl font-semibold text-slate-900">
-            Comparação mensal e manutenção
+          <p className="app-eyebrow">Periodos</p>
+          <h2 className="font-serif text-3xl font-semibold text-foreground">
+            Comparacao mensal e manutencao
           </h2>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/70 px-4 py-2 text-sm text-slate-600">
-          {selectedPeriodIds.length} períodos em comparação
+        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/70 px-4 py-2 text-sm text-muted-foreground">
+          {selectedPeriodIds.length} periodos em comparacao
         </div>
       </div>
 
@@ -182,12 +182,12 @@ export function PeriodsManager({
                 onClick={() => onTogglePeriodId(period.id)}
                 className={`rounded-[1.5rem] border p-5 text-left transition ${
                   selected
-                    ? "border-primary bg-accent/70"
-                    : "border-border bg-secondary/60 hover:border-primary"
+                    ? "border-primary/20 bg-accent/80"
+                    : "border-border bg-secondary/60 hover:border-primary/40"
                 }`}
               >
-                <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Período</p>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Periodo</p>
+                <h3 className="mt-2 text-lg font-semibold text-foreground">
                   {formatMonthYear(period)}
                 </h3>
               </button>
@@ -204,7 +204,7 @@ export function PeriodsManager({
             }}
           >
             <div className="space-y-2">
-              <Label>Mês</Label>
+              <Label>Mes</Label>
               <Select
                 value={String(draft.month)}
                 onChange={(event) =>
@@ -231,7 +231,7 @@ export function PeriodsManager({
             </div>
 
             <Button type="submit" className="h-11 w-full" disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Criando..." : "Criar período"}
+              {saveMutation.isPending ? "Criando..." : "Criar periodo"}
             </Button>
             <FormError message={errorMessage} />
           </form>
@@ -263,7 +263,7 @@ export function CreditCardsManager({
   return (
     <Card className="border-border bg-secondary/60 p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="app-eyebrow">Cartões de crédito</h3>
+        <h3 className="app-eyebrow">Cartoes de credito</h3>
         {!isEditing ? (
           <Button type="button" variant="outline" size="sm" onClick={startCreate}>
             Novo
@@ -273,14 +273,14 @@ export function CreditCardsManager({
 
       <div className="mb-4 space-y-2">
         {creditCards.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhum cartão cadastrado.</p>
+          <p className="text-sm text-muted-foreground">Nenhum cartao cadastrado.</p>
         ) : null}
         {creditCards.map((card) => (
           <div
             key={card.id}
-            className="flex items-center justify-between rounded-[1rem] border border-border bg-white px-3 py-2"
+            className="flex items-center justify-between rounded-[1rem] border border-border bg-card/90 px-3 py-2"
           >
-            <span className="text-sm font-medium text-slate-900">{card.name}</span>
+            <span className="text-sm font-medium text-foreground">{card.name}</span>
             <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(card)}>
               Editar
             </Button>
@@ -296,7 +296,7 @@ export function CreditCardsManager({
         }}
       >
         <div className="space-y-2">
-          <Label>{isEditing ? "Editar cartão" : "Novo cartão"}</Label>
+          <Label>{isEditing ? "Editar cartao" : "Novo cartao"}</Label>
           <Input
             value={form.name}
             onChange={(event) => setForm({ name: event.target.value })}
@@ -308,8 +308,8 @@ export function CreditCardsManager({
             {saveMutation.isPending
               ? "Salvando..."
               : isEditing
-                ? "Salvar edição"
-                : "Criar cartão"}
+                ? "Salvar edicao"
+                : "Criar cartao"}
           </Button>
           {isEditing ? (
             <Button type="button" variant="outline" className="h-11" onClick={cancelEdit}>
@@ -318,7 +318,7 @@ export function CreditCardsManager({
           ) : null}
         </div>
         {editingCard?.name ? (
-          <p className="text-xs text-slate-500">Editando: {editingCard.name}</p>
+          <p className="text-xs text-muted-foreground">Editando: {editingCard.name}</p>
         ) : null}
         <FormError message={errorMessage} />
       </form>
@@ -357,8 +357,8 @@ export function InvoiceManager({
             setForm((current) => ({ ...current, creditCardId: event.target.value }))
           }
         >
-          {creditCards.length === 0 ? <option value="">Sem cartões</option> : null}
-          {creditCards.length > 0 ? <option value="">Selecione o cartão</option> : null}
+          {creditCards.length === 0 ? <option value="">Sem cartoes</option> : null}
+          {creditCards.length > 0 ? <option value="">Selecione o cartao</option> : null}
           {creditCards.map((card) => (
             <option key={card.id} value={card.id}>
               {card.name}
@@ -370,8 +370,8 @@ export function InvoiceManager({
           value={form.periodId}
           onChange={(event) => setForm((current) => ({ ...current, periodId: event.target.value }))}
         >
-          {periods.length === 0 ? <option value="">Sem períodos</option> : null}
-          {periods.length > 0 ? <option value="">Selecione o período</option> : null}
+          {periods.length === 0 ? <option value="">Sem periodos</option> : null}
+          {periods.length > 0 ? <option value="">Selecione o periodo</option> : null}
           {periods.map((period) => (
             <option key={period.id} value={period.id}>
               {formatMonthYear(period)}
@@ -403,11 +403,11 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="app-eyebrow">Categorias</p>
-          <h3 className="font-serif text-2xl font-semibold text-slate-900">
-            Base de classificação
+          <h3 className="font-serif text-2xl font-semibold text-foreground">
+            Base de classificacao
           </h3>
         </div>
-        <div className="rounded-full bg-accent p-3 text-primary">
+        <div className="rounded-full bg-primary/12 p-3 text-primary">
           <Tags size={18} />
         </div>
       </div>
@@ -415,12 +415,12 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-wrap gap-2">
           {categories.length === 0 ? (
-            <p className="text-sm text-slate-500">Nenhuma categoria cadastrada.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada.</p>
           ) : null}
           {categories.map((category) => (
             <span
               key={category.id}
-              className="rounded-full border border-border bg-secondary/70 px-3 py-2 text-sm text-slate-700"
+              className="rounded-full border border-border bg-secondary/70 px-3 py-2 text-sm text-foreground"
             >
               {category.name}
             </span>
@@ -439,7 +439,7 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
               className="mt-3"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ex.: Educação"
+              placeholder="Ex.: Educacao"
             />
             <Button type="submit" className="mt-3 h-11 w-full" disabled={createMutation.isPending}>
               <Plus size={16} />
@@ -465,7 +465,7 @@ export function PlanPartnerManager({ activePlan }: { activePlan: Plan | null }) 
 
   return (
     <Card className="border-border bg-secondary/60 p-5">
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-slate-500">
+      <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
         <Users size={16} /> Parceiro do plano
       </h3>
 

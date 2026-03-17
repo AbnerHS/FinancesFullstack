@@ -118,7 +118,7 @@ export function DashboardPage() {
           </div>
 
           <div>
-            <label className="app-label">Responsável</label>
+            <label className="app-label">Responsavel</label>
             <Select
               className="mt-2"
               value={responsibleFilter}
@@ -136,7 +136,7 @@ export function DashboardPage() {
 
         <div className="mt-5 flex flex-wrap gap-2">
           {periodsLoading ? (
-            <p className="text-sm text-slate-500">Carregando períodos...</p>
+            <p className="text-sm text-muted-foreground">Carregando periodos...</p>
           ) : (
             periods.map((period) => {
               const selected = selectedPeriodIds.includes(period.id)
@@ -147,8 +147,8 @@ export function DashboardPage() {
                   onClick={() => togglePeriodId(period.id)}
                   className={`rounded-full border px-4 py-2 text-sm transition ${
                     selected
-                      ? "border-primary bg-accent text-primary"
-                      : "border-border bg-secondary/60 text-slate-700"
+                      ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
+                      : "border-border bg-secondary/70 text-foreground hover:border-primary/40 hover:bg-accent/70"
                   }`}
                 >
                   {formatMonthYear(period)}
@@ -179,7 +179,7 @@ export function DashboardPage() {
           icon={<ArrowRight size={18} />}
         />
         <MetricCard
-          title="Variação"
+          title="Variacao"
           value={variation === null ? "--" : `${variation.toFixed(1)}%`}
           tone={variation !== null && variation < 0 ? "negative" : "positive"}
           icon={<Sparkles size={18} />}
@@ -188,9 +188,9 @@ export function DashboardPage() {
 
       <section className="space-y-5">
         <div>
-          <h3 className="font-serif text-3xl font-semibold text-slate-900">Transações</h3>
-          <p className="mt-2 text-sm text-slate-600">
-            Painéis de transações, faturas e manutenção estrutural do dashboard.
+          <h3 className="font-serif text-3xl font-semibold text-foreground">Transacoes</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Paineis de transacoes, faturas e manutencao estrutural do dashboard.
           </p>
         </div>
 
@@ -211,8 +211,8 @@ export function DashboardPage() {
             ))}
 
             {periods.length > 0 && filteredPanels.length === 0 ? (
-              <div className="flex min-w-[22rem] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-slate-500">
-                Selecione ao menos um período para ativar o workspace.
+              <div className="flex min-w-[22rem] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
+                Selecione ao menos um periodo para ativar o workspace.
               </div>
             ) : null}
           </div>
@@ -227,12 +227,12 @@ export function DashboardPage() {
             <div>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="app-eyebrow">Cartões</p>
-                  <h3 className="font-serif text-2xl font-semibold text-slate-900">
-                    Cartões e faturas
+                  <p className="app-eyebrow">Cartoes</p>
+                  <h3 className="font-serif text-2xl font-semibold text-foreground">
+                    Cartoes e faturas
                   </h3>
                 </div>
-                <div className="rounded-full bg-accent p-3 text-primary">
+                <div className="rounded-full bg-primary/12 p-3 text-primary">
                   <CreditCard size={18} />
                 </div>
               </div>
@@ -242,7 +242,7 @@ export function DashboardPage() {
             <div>
               <div className="mb-4">
                 <p className="app-eyebrow">Faturas</p>
-                <h3 className="font-serif text-2xl font-semibold text-slate-900">
+                <h3 className="font-serif text-2xl font-semibold text-foreground">
                   Registro integrado
                 </h3>
               </div>
@@ -267,19 +267,19 @@ export function DashboardPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="app-eyebrow">Contexto do plano</p>
-              <h3 className="font-serif text-2xl font-semibold text-slate-900">
-                Leitura rápida
+              <h3 className="font-serif text-2xl font-semibold text-foreground">
+                Leitura rapida
               </h3>
             </div>
-            <div className="rounded-full bg-accent p-3 text-primary">
+            <div className="rounded-full bg-primary/12 p-3 text-primary">
               <Users size={18} />
             </div>
           </div>
           <dl className="mt-6 space-y-4">
             <InfoRow label="Plano ativo" value={activePlan?.name || "Sem plano"} />
-            <InfoRow label="Períodos disponíveis" value={String(periods.length)} />
-            <InfoRow label="Cartões cadastrados" value={String(creditCards.length)} />
-            <InfoRow label="Lançamentos visíveis" value={String(allTransactions.length)} />
+            <InfoRow label="Periodos disponiveis" value={String(periods.length)} />
+            <InfoRow label="Cartoes cadastrados" value={String(creditCards.length)} />
+            <InfoRow label="Lancamentos visiveis" value={String(allTransactions.length)} />
           </dl>
         </section>
       </section>
@@ -307,10 +307,10 @@ function MetricCard({
 
   const classes =
     normalizedTone === "positive"
-      ? { value: "text-emerald-700", icon: "bg-emerald-100 text-emerald-700" }
+      ? { value: "text-emerald-500 dark:text-emerald-400", icon: "bg-emerald-500/12 text-emerald-500 dark:text-emerald-400" }
       : normalizedTone === "negative"
-        ? { value: "text-rose-700", icon: "bg-rose-100 text-rose-700" }
-        : { value: "text-slate-900", icon: "bg-accent text-primary" }
+        ? { value: "text-rose-500 dark:text-rose-400", icon: "bg-rose-500/12 text-rose-500 dark:text-rose-400" }
+        : { value: "text-foreground", icon: "bg-primary/12 text-primary" }
 
   return (
     <Card className="app-panel">
@@ -328,8 +328,8 @@ function MetricCard({
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-border bg-secondary/60 px-4 py-3">
-      <dt className="text-sm text-slate-500">{label}</dt>
-      <dd className="text-sm font-semibold text-slate-900">{value}</dd>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-sm font-semibold text-foreground">{value}</dd>
     </div>
   )
 }
