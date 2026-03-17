@@ -2,6 +2,10 @@ import { AxiosInstance } from "../api/AxiosInstance";
 import { resolveLink } from "../utils/hateoas";
 
 export const planService = {
+    create: async (payload) => {
+        const response = await AxiosInstance.post('/plans', payload);
+        return response.data;
+    },
     getMyPlans: async () => {
         const response = await AxiosInstance.get('/users/me/plans');
         return response.data?._embedded?.plans ?? [];
@@ -9,6 +13,9 @@ export const planService = {
     update: async (id, payload) => {
         const response = await AxiosInstance.put(`/plans/${id}`, payload);
         return response.data;
+    },
+    delete: async (id) => {
+        await AxiosInstance.delete(`/plans/${id}`);
     },
     getPeriodsByPlan: async (planOrPlanId) => {
         const periodsPath =

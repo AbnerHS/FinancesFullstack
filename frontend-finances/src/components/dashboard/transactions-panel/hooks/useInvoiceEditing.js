@@ -5,6 +5,7 @@ import { invoiceService } from "../../../../services/invoiceService";
 import { createInvoiceDraft, DEFAULT_INVOICE_DRAFT } from "../utils/formDefaults";
 import { getProblemDetailMessage } from "../utils/errorUtils";
 import { transactionsQueryKeys } from "../utils/queryKeys";
+import { parseCurrencyInput } from "../../../../utils/currency";
 
 export const useInvoiceEditing = ({ activePeriodId }) => {
   const queryClient = useQueryClient();
@@ -29,7 +30,7 @@ export const useInvoiceEditing = ({ activePeriodId }) => {
         throw new Error("Fatura invalida.");
       }
 
-      const amountNumber = Number(draft.amount);
+      const amountNumber = parseCurrencyInput(draft.amount);
       if (Number.isNaN(amountNumber) || amountNumber <= 0) {
         throw new Error("Informe um valor valido.");
       }

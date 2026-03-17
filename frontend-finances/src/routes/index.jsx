@@ -6,6 +6,11 @@ import Register from '../pages/Register';
 import AuthLayout from '../layouts/AuthLayout';
 import Dashboard from '../pages/Dashboard';
 import Layout from '../layouts/Layout';
+import Cards from '../pages/Cards';
+import Partner from '../pages/Partner';
+import Periods from '../pages/Periods';
+import Plans from '../pages/Plans';
+import Profile from '../pages/Profile';
 import ProtetectedRoute from '../components/auth/ProtectedRoute';
 import PublicRoute from '../components/auth/PublicRoute';
 
@@ -42,6 +47,26 @@ const router = createBrowserRouter([
       {
         path: '/dashboard',
         element: <Dashboard />,
+      },
+      {
+        path: '/profile',
+        element: <Profile />,
+      },
+      {
+        path: '/plans',
+        element: <Plans />,
+      },
+      {
+        path: '/periods',
+        element: <Periods />,
+      },
+      {
+        path: '/cards',
+        element: <Cards />,
+      },
+      {
+        path: '/partner',
+        element: <Partner />,
       },
     ]
   }

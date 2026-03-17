@@ -1,6 +1,7 @@
 import Save from "lucide-react/dist/esm/icons/save";
 import X from "lucide-react/dist/esm/icons/x";
 import { memo } from "react";
+import { CurrencyInput } from "../../../shared/CurrencyInput";
 import {
   useTransactionsPanelCommands,
   useTransactionsPanelLookups,
@@ -16,6 +17,7 @@ export const TransactionEditRow = memo(function TransactionEditRow({
   const { transactionEditing } = useTransactionsPanelCommands();
   const { register, setValue, watch } = transactionEditing.form;
   const recurringGroupId = watch("recurringGroupId");
+  const amount = watch("amount");
 
   return (
     <tr
@@ -89,15 +91,14 @@ export const TransactionEditRow = memo(function TransactionEditRow({
 
       <td className="px-6 py-4 text-right">
         <div className="flex justify-end">
-          <div className="relative">
-            <span className="absolute left-2 top-1.5 text-xs text-gray-400">R$</span>
-            <input
-              type="number"
-              step="0.01"
-              className="w-28 rounded-md border-gray-200 bg-white py-1.5 pl-7 pr-2 text-right text-sm font-bold shadow-sm"
-              {...register("amount")}
-            />
-          </div>
+          <CurrencyInput
+            value={amount}
+            onValueChange={(nextValue) =>
+              setValue("amount", nextValue, { shouldDirty: true, shouldValidate: true })
+            }
+            className="w-32 rounded-md border-gray-200 bg-white py-1.5 pr-2 text-sm font-bold shadow-sm"
+            align="right"
+          />
         </div>
       </td>
 

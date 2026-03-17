@@ -1,6 +1,7 @@
 import Save from "lucide-react/dist/esm/icons/save";
 import X from "lucide-react/dist/esm/icons/x";
 import { memo } from "react";
+import { CurrencyInput } from "../../../shared/CurrencyInput";
 import {
   useTransactionsPanelCommands,
   useTransactionsPanelLookups,
@@ -9,7 +10,8 @@ import {
 export const InvoiceEditRow = memo(function InvoiceEditRow() {
   const { creditCards } = useTransactionsPanelLookups();
   const { invoiceEditing } = useTransactionsPanelCommands();
-  const { register } = invoiceEditing.form;
+  const { register, watch, setValue } = invoiceEditing.form;
+  const amount = watch("amount");
 
   return (
     <tr className="group bg-indigo-50/30 transition-colors">
@@ -35,15 +37,14 @@ export const InvoiceEditRow = memo(function InvoiceEditRow() {
 
       <td className="px-6 py-4 text-right">
         <div className="flex justify-end">
-          <div className="relative">
-            <span className="absolute left-2 top-1.5 text-xs text-gray-400">R$</span>
-            <input
-              type="number"
-              step="0.01"
-              className="w-28 rounded-md border-gray-200 bg-white py-1.5 pl-7 pr-2 text-right text-sm font-bold shadow-sm"
-              {...register("amount")}
-            />
-          </div>
+          <CurrencyInput
+            value={amount}
+            onValueChange={(nextValue) =>
+              setValue("amount", nextValue, { shouldDirty: true, shouldValidate: true })
+            }
+            className="w-32 rounded-md border-gray-200 bg-white py-1.5 pr-2 text-sm font-bold shadow-sm"
+            align="right"
+          />
         </div>
       </td>
 

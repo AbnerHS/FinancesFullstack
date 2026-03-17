@@ -6,9 +6,11 @@ import { usePeriods } from "./usePeriods";
 import { useCreditCards } from "./useCreditCards";
 import { useTransactionCategories } from "./useTransactionCategories";
 import { periodService } from "../services/periodService";
+import { reportService } from "../services/reportService";
 import { userService } from "../services/userService";
 import { useAuthStore } from "../store/authStore";
 import { useDashboardStore } from "../store/dashboardStore";
+import { formatMonthYear } from "../utils/dashboard";
 
 const arraysEqual = (a, b) => {
   if (a.length !== b.length) return false;
@@ -170,6 +172,16 @@ export const useDashboard = () => {
     })),
   });
 
+  const categorySpendingQueries = useQueries({
+    queries: selectedPeriods.map((period) => ({
+      queryKey: ["report-spending-by-category", period.id],
+      queryFn: () => reportService.getSpendingByCategory(period.id),
+      enabled: Boolean(period?.id),
+      staleTime: 1000 * 60 * 5,
+      placeholderData: [],
+    })),
+  });
+
   const periodPanels = useMemo(
     () =>
       selectedPeriods.map((period, index) => {
@@ -208,6 +220,7 @@ export const useDashboard = () => {
 
         return {
           period,
+          label: formatMonthYear(period),
           entries,
           invoices,
           transactions,
@@ -237,6 +250,48 @@ export const useDashboard = () => {
     [periodPanels]
   );
 
+  const categorySpending = useMemo(() => {
+    const totals = new Map();
+
+    categorySpendingQueries.forEach((query) => {
+      const items = query.data ?? [];
+      items.forEach((item) => {
+        const label = item.category || "Sem categoria";
+        totals.set(label, (totals.get(label) ?? 0) + Number(item.totalAmount || 0));
+      });
+    });
+
+    return [...totals.entries()]
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [categorySpendingQueries]);
+
+  const periodComparison = useMemo(
+    () =>
+      periodPanels.map((panel) => ({
+        id: panel.period.id,
+        label: panel.label,
+        incomes: panel.stats.incomes,
+        expenses: panel.stats.expenses,
+        balance: panel.stats.balance,
+        transactionCount: panel.transactions.length,
+        invoiceCount: panel.invoices.length,
+      })),
+    [periodPanels]
+  );
+
+  const allEntries = useMemo(
+    () =>
+      periodPanels.flatMap((panel) =>
+        panel.entries.map((entry) => ({
+          ...entry,
+          period: panel.period,
+          periodLabel: panel.label,
+        }))
+      ),
+    [periodPanels]
+  );
+
   const { data: creditCards = [] } = useCreditCards();
   const { data: transactionCategories = [] } = useTransactionCategories();
 
@@ -251,7 +306,10 @@ export const useDashboard = () => {
     setSelectedPlanId,
     selectedPeriods,
     periodPanels,
+    periodComparison,
     combinedStats,
+    allEntries,
+    categorySpending,
     creditCards,
     transactionCategories,
     responsibleOptions,

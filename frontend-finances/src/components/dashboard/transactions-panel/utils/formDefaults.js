@@ -3,6 +3,8 @@
  * @typedef {import("../types").InvoiceDraft} InvoiceDraft
  */
 
+import { formatCurrencyInputFromValue } from "../../../../utils/currency";
+
 /** @type {TransactionDraft} */
 export const DEFAULT_TRANSACTION_DRAFT = {
   description: "",
@@ -26,7 +28,7 @@ export const DEFAULT_INVOICE_DRAFT = {
 export const createTransactionDraft = (entry) => ({
   ...DEFAULT_TRANSACTION_DRAFT,
   description: entry?.description || "",
-  amount: entry?.amount || "",
+  amount: formatCurrencyInputFromValue(entry?.amount),
   type: entry?.type || "EXPENSE",
   categoryId: entry?.category?.id || "",
   categoryName: entry?.category?.name || "",
@@ -36,7 +38,7 @@ export const createTransactionDraft = (entry) => ({
 
 export const createInvoiceDraft = (entry) => ({
   ...DEFAULT_INVOICE_DRAFT,
-  amount: entry?.amount || "",
+  amount: formatCurrencyInputFromValue(entry?.amount),
   creditCardId: entry?.creditCardId || "",
   periodId: entry?.periodId || "",
 });
