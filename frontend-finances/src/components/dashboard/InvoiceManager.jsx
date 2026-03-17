@@ -1,4 +1,5 @@
 import { ReceiptText } from "lucide-react";
+import { CurrencyInput } from "../shared/CurrencyInput";
 import { useInvoiceManager } from "../../hooks/useInvoiceManager";
 
 const formatPeriodLabel = (period) => {
@@ -67,18 +68,13 @@ export const InvoiceManager = ({
           ))}
         </select>
 
-        <div className="relative">
-          <span className="absolute left-3 top-2 text-gray-400 text-sm">R$</span>
-          <input
-            type="number"
-            value={form.amount}
-            onChange={(e) =>
-              setForm((current) => ({ ...current, amount: e.target.value }))
-            }
-            placeholder="0,00"
-            className="app-input pl-9"
-          />
-        </div>
+        <CurrencyInput
+          value={form.amount}
+          onValueChange={(nextValue) =>
+            setForm((current) => ({ ...current, amount: nextValue }))
+          }
+          className="app-input"
+        />
 
         <button
           type="submit"

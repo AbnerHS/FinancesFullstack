@@ -1,9 +1,4 @@
-export const formatCurrency = (value) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+export { formatCurrency } from "./currency";
 
 export const formatMonthYear = (period) => {
   if (!period) {

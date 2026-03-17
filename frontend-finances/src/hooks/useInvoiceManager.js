@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoiceService } from "../services/invoiceService";
+import { parseCurrencyInput } from "../utils/currency";
 
 const getErrorMessage = (error) =>
   error?.response?.data?.detail ||
@@ -42,7 +43,7 @@ export const useInvoiceManager = ({
         throw new Error("Selecione um periodo.");
       }
 
-      const amountNumber = Number(resolvedForm.amount);
+      const amountNumber = parseCurrencyInput(resolvedForm.amount);
       if (Number.isNaN(amountNumber) || amountNumber <= 0) {
         throw new Error("Informe um valor valido.");
       }

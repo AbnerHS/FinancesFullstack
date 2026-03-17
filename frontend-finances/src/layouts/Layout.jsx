@@ -57,7 +57,7 @@ const Layout = () => {
       />
 
       <div className="lg:pl-[19rem]">
-        <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[color:rgba(243,239,230,0.82)] backdrop-blur-xl">
+        <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[color:rgba(207,223,231,0.92)] backdrop-blur-xl">
           <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
             <div className="flex items-start gap-3">
               <MobileSidebarButton onClick={() => setSidebarOpen(true)} />

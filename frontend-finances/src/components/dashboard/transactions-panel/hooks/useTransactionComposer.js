@@ -6,6 +6,7 @@ import { DEFAULT_TRANSACTION_DRAFT } from "../utils/formDefaults";
 import { ensureTransactionCategory } from "../utils/ensureTransactionCategory";
 import { getProblemDetailErrors, getProblemDetailMessage } from "../utils/errorUtils";
 import { transactionsQueryKeys } from "../utils/queryKeys";
+import { parseCurrencyInput } from "../../../../utils/currency";
 
 export const useTransactionComposer = ({
   activePeriodId,
@@ -23,7 +24,7 @@ export const useTransactionComposer = ({
         throw new Error("Periodo e usuario sao obrigatorios.");
       }
 
-      const amountNumber = Number(draft.amount);
+      const amountNumber = parseCurrencyInput(draft.amount);
       if (Number.isNaN(amountNumber) || amountNumber <= 0) {
         throw new Error("Informe um valor valido.");
       }

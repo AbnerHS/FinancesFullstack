@@ -7,6 +7,7 @@ import { createTransactionDraft, DEFAULT_TRANSACTION_DRAFT } from "../utils/form
 import { ensureTransactionCategory } from "../utils/ensureTransactionCategory";
 import { getProblemDetailMessage } from "../utils/errorUtils";
 import { transactionsQueryKeys } from "../utils/queryKeys";
+import { parseCurrencyInput } from "../../../../utils/currency";
 
 export const useTransactionEditing = ({
   periods,
@@ -54,7 +55,7 @@ export const useTransactionEditing = ({
       };
 
       if (draft.amount !== "") {
-        const amountNumber = Number(draft.amount);
+        const amountNumber = parseCurrencyInput(draft.amount);
         if (Number.isNaN(amountNumber) || amountNumber <= 0) {
           throw new Error("Informe um valor valido.");
         }

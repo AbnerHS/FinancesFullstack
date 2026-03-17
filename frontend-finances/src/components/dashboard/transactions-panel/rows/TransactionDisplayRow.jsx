@@ -34,7 +34,7 @@ export const TransactionDisplayRow = memo(function TransactionDisplayRow({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <td className="px-6 py-4">
+      <td className="px-6 py-2">
         <div className="flex items-center gap-3">
           {draggable && (
             <div className="cursor-grab text-gray-300 hover:text-gray-500 active:cursor-grabbing">
@@ -57,7 +57,7 @@ export const TransactionDisplayRow = memo(function TransactionDisplayRow({
         </div>
       </td>
 
-      <td className="px-6 py-4 text-right">
+      <td className="px-6 py-2 text-right">
         <div className="flex flex-col items-end">
           <span
             className={`text-md font-bold ${
@@ -69,7 +69,7 @@ export const TransactionDisplayRow = memo(function TransactionDisplayRow({
         </div>
       </td>
 
-      <td className="px-6 py-4">
+      <td className="px-6 py-2">
         <div className="flex items-center justify-center gap-2">
           <button
             title="Editar lancamento"
