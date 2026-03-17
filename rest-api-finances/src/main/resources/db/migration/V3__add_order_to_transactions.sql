@@ -1,2 +1,2 @@
 ALTER TABLE transactions
-    ADD "ORDER" NUMBER(10,0);
+    ADD display_order INT;

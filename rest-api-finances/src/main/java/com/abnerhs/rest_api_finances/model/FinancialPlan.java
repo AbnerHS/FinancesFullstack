@@ -13,7 +13,7 @@ public class FinancialPlan {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name= "id", columnDefinition = "RAW(16)", updatable = false)
+    @Column(name= "id", updatable = false)
     private UUID id;
 
     private String name; // Ex: "Orçamento Mensal Familiar"

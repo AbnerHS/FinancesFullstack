@@ -6,39 +6,29 @@ spring:
     url: ${SPRING_DATASOURCE_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-    driver-class-name: oracle.jdbc.OracleDriver
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
   hikari:
     maximum-pool-size: 10
     minimum-idle: 5
     idle-timeout: 30000
-    pool-name: MyOraclePool
+    pool-name: MySqlPool
 
   jpa:
-    database-platform: org.hibernate.dialect.OracleDialect
+    database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: none
     properties:
       hibernate:
-        default_schema: ${DB_USERNAME}
         format_sql: true
-  #        show_sql: true
-  #      javax:
-  #        persistence:
-  #          schema-generation:
-  #            scripts:
-  #              action: create
-  #              create-target: target/schema_inicial.sql
+        type:
+          preferred_uuid_jdbc_type: BINARY
 
   flyway:
     enabled: true
     user: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     url: ${SPRING_DATASOURCE_URL}
-#    schemas: ${FLYWAY_SCHEMAS}
-#    baseline-on-migrate: true
-#    repair-on-migrate: true
-
 
 logging:
   level:

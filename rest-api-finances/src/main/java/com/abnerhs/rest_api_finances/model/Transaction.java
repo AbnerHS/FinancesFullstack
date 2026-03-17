@@ -46,7 +46,7 @@ public class Transaction {
 
     private UUID recurringGroupId;
 
-    @Column(name = "\"ORDER\"")
+    @Column(name = "display_order")
     private Integer order;
 
     @ManyToOne(fetch = FetchType.LAZY)

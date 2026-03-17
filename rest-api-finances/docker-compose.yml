@@ -1,34 +1,35 @@
-version: '3.8'
-
 services:
-  oracle-db:
-    image: container-registry.oracle.com/database/free:latest
+  mysql-db:
+    image: mysql:8.4
+    env_file: .env
     volumes:
-      - ./init-db:/opt/oracle/scripts/startup
-      - oracle_data:/opt/oracle/oradata
-    container_name: oracle-db
+      - mysql_data:/var/lib/mysql
+    container_name: mysql-db
     ports:
-      - "1521:1521"
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "echo 'exit' | sqlplus -L dev_user/db314159@FREEPDB1"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 20s
       timeout: 10s
       retries: 10
-      start_period: 30s
+      start_period: 40s
 
   spring-app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     env_file: .env
     container_name: spring-app
-    volumes:
-      - .:/app
-      - "C:\\Users\\ricks\\.m2:/root/.m2"
     ports:
       - "8080:8080"
-      - "5005:5005"
     depends_on:
-      oracle-db:
+      mysql-db:
         condition: service_healthy # Espera o banco estar pronto para subir o Spring
 
 volumes:
-  oracle_data:
+  mysql_data:

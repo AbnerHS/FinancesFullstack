@@ -12,9 +12,9 @@ public class OpenApiConfig {
     OpenAPI customOpenAPI(){
         return new OpenAPI()
                 .info(new Info()
-                        .title("REST API finances project with Oracle databse and Docker")
+                        .title("REST API finances project with MySQL database and Docker")
                         .version("v1")
-                        .description("REST API finances project with Oracle databse and Docker")
+                        .description("REST API finances project with MySQL database and Docker")
                 );
     }
 
