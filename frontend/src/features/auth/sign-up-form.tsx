@@ -94,6 +94,7 @@ export function SignUpForm() {
           <Button
             className="h-11 w-full text-sm"
             disabled={isSubmitting || registerUser.isPending}
+            type="submit"
           >
             {isSubmitting || registerUser.isPending ? "Criando..." : "Criar conta"}
           </Button>
