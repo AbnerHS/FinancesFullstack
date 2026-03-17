@@ -1,3 +1,72 @@
-node_modules
-.env
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# IDE Settings
+.idea/
+.eclipse/
+.vscode/
+.classpath
+.project
+.settings/
+*.iml
+*.ipr
+*.iws
+
+# Build Artifacts
+target/
+build/
+out/
+
+# Dependency Directories
+/node_modules/
+/bower_components/
+
+# System Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and Temporary Files
+*.log
+logs/
+temp/
+*.tmp
+*.swp
+*~
+
+# Maven Wrapper
+# The .mvn directory itself should generally be included, but its generated files might be ignored.
+# The official Maven documentation suggests checking in the .mvn folder.
+# If you choose to ignore some files inside it, add specific patterns here.
+
+# Environment and Secrets
+# Sensitive application properties should not be committed to the repository.
+# Use environment variables or a secrets manager instead.
+.env
+application*.properties.example
+application*.yml.example
+# Exclude actual properties/yml files if they contain sensitive data and you use external management
+# application*.properties
+# application*.yml
