@@ -1,3 +1,5 @@
+import { useState } from "react"
+import { createPortal } from "react-dom"
 import { Plus, Tags, Users } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -495,13 +497,16 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
 
 export function DashboardPlanQuickCreate({
   activePlan,
+  hasPlans,
   onSelectPlanId,
   userId,
 }: {
   activePlan: Plan | null
+  hasPlans: boolean
   onSelectPlanId: (id: string | null) => void
   userId: string | null
 }) {
+  const [isOpen, setIsOpen] = useState(false)
   const {
     createYearPeriods,
     draft,
@@ -514,65 +519,111 @@ export function DashboardPlanQuickCreate({
     startCreate,
   } = usePlanManager({ activePlan, userId, onSelectPlanId })
 
+  const openModal = () => {
+    startCreate()
+    setIsOpen(true)
+  }
+
   return (
-    <Card className="border-border bg-secondary/70 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="app-eyebrow">Novo plano</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Crie um plano sem sair do dashboard.
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={startCreate}>
-          Limpar
+    <>
+      <div className="flex items-end">
+        <Button type="button" className="h-11 w-full" onClick={openModal}>
+          {hasPlans ? "Novo plano" : "Criar primeiro plano"}
         </Button>
       </div>
 
-      <form
-        className="mt-4 space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          saveMutation.mutate()
-        }}
-      >
-        <div className="space-y-2">
-          <Label>Nome do plano</Label>
-          <Input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ex.: Casa 2026"
-          />
-        </div>
+      {isOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="app-eyebrow">{hasPlans ? "Novo plano" : "Bem-vindo"}</p>
+                    <h3 className="mt-2 text-xl font-semibold text-foreground">
+                      {hasPlans ? "Crie outro espaco financeiro" : "Vamos montar seu primeiro plano"}
+                    </h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {hasPlans
+                        ? "Voce pode comecar do zero e, se quiser, ja criar todos os periodos do ano."
+                        : "Comece criando um plano para organizar suas transacoes, categorias, cartoes e periodos."}
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>
+                    Fechar
+                  </Button>
+                </div>
 
-        <div className="rounded-[1.25rem] border border-border bg-card/80 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="space-y-1">
-              <Label>Gerar 12 periodos</Label>
-              <p className="text-xs text-muted-foreground">Janeiro a Dezembro no ano escolhido.</p>
-            </div>
-            <Switch
-              checked={createYearPeriods}
-              onClick={() => setCreateYearPeriods(!createYearPeriods)}
-            />
-          </div>
+                <form
+                  className="mt-5 space-y-4"
+                  onSubmit={async (event) => {
+                    event.preventDefault()
+                    try {
+                      await saveMutation.mutateAsync()
+                      setIsOpen(false)
+                    } catch {
+                      // O hook ja expoe a mensagem de erro para o formulario.
+                    }
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label>Nome do plano</Label>
+                    <Input
+                      autoFocus
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      placeholder="Ex.: Casa 2026"
+                    />
+                  </div>
 
-          <div className="mt-3 space-y-2">
-            <Label>Ano</Label>
-            <Input
-              disabled={!createYearPeriods}
-              type="number"
-              value={periodsYear}
-              onChange={(event) => setPeriodsYear(Number(event.target.value) || periodsYear)}
-            />
-          </div>
-        </div>
+                  <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label>Gerar 12 periodos</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Cria Janeiro a Dezembro automaticamente para voce comecar mais rapido.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={createYearPeriods}
+                        onClick={() => setCreateYearPeriods(!createYearPeriods)}
+                      />
+                    </div>
 
-        <Button type="submit" className="h-11 w-full" disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? "Criando..." : "Criar plano"}
-        </Button>
-        <FormError message={errorMessage} />
-      </form>
-    </Card>
+                    <div className="mt-4 space-y-2">
+                      <Label>Ano</Label>
+                      <Input
+                        disabled={!createYearPeriods}
+                        type="number"
+                        value={periodsYear}
+                        onChange={(event) => setPeriodsYear(Number(event.target.value) || periodsYear)}
+                      />
+                    </div>
+                  </div>
+
+                  {!hasPlans ? (
+                    <div className="rounded-[1.25rem] border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                      Dica: se este for seu primeiro plano, ativar os 12 periodos deixa o dashboard pronto
+                      para lancamentos e comparacoes mensais.
+                    </div>
+                  ) : null}
+
+                  <FormError message={errorMessage} />
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={saveMutation.isPending}>
+                      {saveMutation.isPending ? "Criando..." : "Criar plano"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   )
 }
 
