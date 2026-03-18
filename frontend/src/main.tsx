@@ -8,6 +8,12 @@ import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { queryClient } from "@/lib/query-client.ts"
 import { router } from "@/router.tsx"
 
+document.documentElement.lang = "pt-BR"
+document.documentElement.setAttribute("translate", "no")
+document.documentElement.classList.add("notranslate")
+document.body.setAttribute("translate", "no")
+document.body.classList.add("notranslate")
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
