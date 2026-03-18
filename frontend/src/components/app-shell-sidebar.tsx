@@ -71,7 +71,7 @@ export function AppShellSidebar({
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between px-5 py-5">
-            <Link to="/dashboard" className="space-y-1" onClick={onClose}>
+            <Link to="/" className="space-y-1" onClick={onClose}>
               <div className="font-serif text-2xl font-semibold text-foreground">Finances</div>
             </Link>
             <button

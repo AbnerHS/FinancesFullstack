@@ -48,7 +48,7 @@ const signUpRoute = createRoute({
 
 const dashboardRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: "/dashboard",
+  path: "/",
   component: DashboardPage,
 })
 
