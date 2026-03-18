@@ -16,6 +16,7 @@ import { useDashboard } from "@/features/finance/hooks.ts"
 import {
   CategoryManager,
   CreditCardsManager,
+  DashboardPlanQuickCreate,
   InvoiceManager,
   PlanPartnerManager,
 } from "@/features/finance/managers.tsx"
@@ -101,7 +102,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <section className="app-panel">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_18rem]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_22rem]">
           <div>
             <label className="app-label">Plano financeiro</label>
             <Select
@@ -132,6 +133,12 @@ export function DashboardPage() {
               ))}
             </Select>
           </div>
+
+          <DashboardPlanQuickCreate
+            activePlan={activePlan}
+            onSelectPlanId={setSelectedPlanId}
+            userId={userId}
+          />
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">

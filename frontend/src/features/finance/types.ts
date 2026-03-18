@@ -73,6 +73,7 @@ export type TransactionFormValues = {
   periodId: string
   responsibleUserId: string
   categoryId: string
+  categoryName: string
   isRecurring: boolean
   numberOfPeriods: number
   recurringGroupId?: string | null

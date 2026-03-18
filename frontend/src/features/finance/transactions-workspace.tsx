@@ -3,6 +3,7 @@ import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
+import { Combobox } from "@/components/ui/combobox.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
@@ -50,6 +51,7 @@ const emptyForm = (periodId: string): TransactionFormValues => ({
   periodId,
   responsibleUserId: "",
   categoryId: "",
+  categoryName: "",
   isRecurring: false,
   numberOfPeriods: 2,
   recurringGroupId: null,
@@ -59,6 +61,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   const [form, setForm] = useState<TransactionFormValues>(() => emptyForm(panel.period.id))
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
+  const [formError, setFormError] = useState<string | null>(null)
 
   const { createTransaction, createRecurringTransaction, updateTransaction, deleteTransaction } =
     useTransactionMutations(panel.period.id, shared.periods)
@@ -72,6 +75,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   const groupedTransactions = useMemo(
     () => buildTransactionGroups(reorder.transactions, shared.responsibleOptions),
     [reorder.transactions, shared.responsibleOptions]
+  )
+  const categoryOptions = useMemo(
+    () =>
+      shared.transactionCategories.map((category) => ({
+        label: category.name,
+        value: category.id,
+      })),
+    [shared.transactionCategories]
   )
 
   const mutationError = useMemo(() => {
@@ -101,10 +112,12 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   const resetComposer = () => {
     setEditingTransaction(null)
     setEditingScope("SINGLE")
+    setFormError(null)
     setForm(emptyForm(panel.period.id))
   }
 
   const submit = async () => {
+    setFormError(null)
     const amount = parseCurrencyInput(form.amount)
     if (!form.description.trim()) {
       throw new Error("Informe a descricao.")
@@ -113,13 +126,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
       throw new Error("Informe um valor valido.")
     }
 
+    const categoryName = form.categoryName.trim()
     const payload = {
       description: form.description.trim(),
       amount,
       type: form.type,
       periodId: panel.period.id,
       responsibleUserId: form.responsibleUserId || null,
-      category: form.categoryId ? { id: form.categoryId } : null,
+      category: categoryName ? (form.categoryId ? { id: form.categoryId } : { name: categoryName }) : null,
     }
 
     if (editingTransaction?.id) {
@@ -180,10 +194,16 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
       <div className="mt-6 space-y-5">
         <Card className="border-border bg-secondary/55 p-4">
           <form
-            className="space-y-4"
+            className="space-y-1"
             onSubmit={async (event) => {
               event.preventDefault()
-              await submit()
+              try {
+                await submit()
+              } catch (error) {
+                setFormError(
+                  error instanceof Error ? error.message : "Nao foi possivel salvar a transacao."
+                )
+              }
             }}
           >
             <div className="grid gap-3 xl:grid-cols-4">
@@ -224,24 +244,24 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
               <div className="space-y-2">
                 <Label>Categoria</Label>
-                <Select
-                  value={form.categoryId}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, categoryId: event.target.value }))
+                <Combobox
+                  options={categoryOptions}
+                  value={form.categoryName}
+                  onValueChange={(nextName, matchedCategory) =>
+                    setForm((current) => ({
+                      ...current,
+                      categoryName: nextName,
+                      categoryId: matchedCategory?.value || "",
+                    }))
                   }
-                >
-                  <option value="">Sem categoria</option>
-                  {shared.transactionCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </Select>
+                  emptyMessage="Digite para criar uma nova categoria."
+                  placeholder="Digite para buscar ou criar"
+                />
               </div>
             </div>
 
             <div className={`grid gap-3 ${editingTransaction ? "grid-cols-3" : "xl:grid-cols-[minmax(0,1fr)_26rem_minmax(0,1fr)]"}`}>
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2">
                 <Label>Responsavel</Label>
                 <Select
                   value={form.responsibleUserId}
@@ -346,7 +366,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
               </div>
             </div>
 
-            <FormError message={mutationError} />
+            <FormError message={formError || mutationError} />
           </form>
         </Card>
 
@@ -442,6 +462,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                               periodId: panel.period.id,
                               responsibleUserId: transaction.responsibleUserId || "",
                               categoryId: transaction.category?.id || "",
+                              categoryName: transaction.category?.name || "",
                               isRecurring: false,
                               numberOfPeriods: 2,
                               recurringGroupId: transaction.recurringGroupId || null,

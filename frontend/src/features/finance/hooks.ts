@@ -468,8 +468,16 @@ export function usePlanManager({
   onSelectPlanId: (id: string | null) => void
 }) {
   const queryClient = useQueryClient()
+  const currentYear = new Date().getFullYear()
   const [draft, setDraft] = useState("")
   const [mode, setMode] = useState<"create" | "edit">("create")
+  const [createYearPeriods, setCreateYearPeriods] = useState(false)
+  const [periodsYear, setPeriodsYear] = useState(currentYear)
+
+  const resetCreateOptions = () => {
+    setCreateYearPeriods(false)
+    setPeriodsYear(currentYear)
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -490,30 +498,60 @@ export function usePlanManager({
         throw new Error("Usuário não identificado.")
       }
 
-      return planService.create({ name, ownerId: userId, partnerId: null })
+      const createdPlan = await planService.create({ name, ownerId: userId, partnerId: null })
+
+      if (createYearPeriods) {
+        if (!Number.isInteger(periodsYear) || periodsYear < 2000) {
+          throw new Error("Informe um ano válido para criar os períodos.")
+        }
+
+        await Promise.all(
+          Array.from({ length: 12 }, (_, index) =>
+            periodService.create({
+              month: index + 1,
+              year: periodsYear,
+              financialPlanId: createdPlan.id,
+            })
+          )
+        )
+      }
+
+      return createdPlan
     },
     onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: financeKeys.plans })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
+        response?.id
+          ? queryClient.invalidateQueries({ queryKey: financeKeys.periods(response.id) })
+          : Promise.resolve(),
+      ])
       if (response?.id) {
         onSelectPlanId(response.id)
       }
       setMode("create")
       setDraft("")
+      resetCreateOptions()
     },
   })
 
   return {
+    createYearPeriods,
     draft,
     mode,
+    periodsYear,
     setDraft,
+    setCreateYearPeriods,
+    setPeriodsYear,
     saveMutation,
     startCreate: () => {
       setMode("create")
       setDraft("")
+      resetCreateOptions()
     },
     startEdit: () => {
       setMode("edit")
       setDraft(activePlan?.name || "")
+      resetCreateOptions()
     },
     errorMessage: saveMutation.error
       ? getErrorMessage(saveMutation.error, "Não foi possível salvar o plano.")
@@ -643,6 +681,7 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
       queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactions(periodId) }),
       queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoices(periodId) }),
       queryClient.invalidateQueries({ queryKey: financeKeys.categoryReport(periodId) }),
+      queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
     ])
   }
 
@@ -658,6 +697,7 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
         queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactionsRoot }),
         queryClient.invalidateQueries({ queryKey: ["report-spending-by-category"] }),
         queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoices(periodId) }),
+        queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
       ])
     },
   })
@@ -704,6 +744,7 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactionsRoot }),
         queryClient.invalidateQueries({ queryKey: ["report-spending-by-category"] }),
+        queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
       ])
     },
   })
