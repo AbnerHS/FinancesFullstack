@@ -175,6 +175,41 @@ O frontend sera servido pelo Vite, normalmente em:
 http://localhost:5173
 ```
 
+### Deploy do frontend na Vercel
+
+Para publicar apenas o frontend na Vercel, use `frontend/` como Root Directory do projeto.
+
+Arquivos de referencia disponiveis:
+
+- `frontend/.env.example`: desenvolvimento local com proxy do Vite
+- `frontend/.env.production.example`: producao apontando para a API publica
+- `frontend/vercel.json`: rewrite para SPA com TanStack Router
+
+Variavel obrigatoria na Vercel:
+
+```env
+VITE_API_BASE_URL=https://SUA_API_PUBLICA/api
+```
+
+Importante:
+
+- se o frontend estiver na Vercel, a API precisa estar acessivel por `https`; um IP publico servido apenas por `http` sera bloqueado pelo navegador por mixed content
+- como o frontend usa `withCredentials`, o backend precisa permitir CORS com a origem da Vercel em `APP_CORS_ALLOWED_ORIGINS`
+- para o refresh token funcionar entre dominios, configure no backend:
+
+```env
+JWT_REFRESH_COOKIE_SECURE=true
+JWT_REFRESH_COOKIE_SAME_SITE=None
+APP_CORS_ALLOWED_ORIGINS=https://SEU-PROJETO.vercel.app
+```
+
+Exemplo de desenvolvimento local mantendo o proxy do Vite:
+
+```env
+VITE_API_BASE_URL=/api
+VITE_API_PROXY_TARGET=http://SEU_IP_PUBLICO:8080
+```
+
 ### 3. Rodar os testes do backend
 
 No diretorio `rest-api-finances`:
