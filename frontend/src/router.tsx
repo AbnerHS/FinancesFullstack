@@ -5,6 +5,7 @@ import {
   createRouter,
 } from "@tanstack/react-router"
 
+import { GoogleAuthCallback } from "@/features/auth/google-auth-callback.tsx"
 import { LoginForm } from "@/features/auth/login-form.tsx"
 import { requireAuth, requireGuest } from "@/features/auth/auth-guards.ts"
 import { SignUpForm } from "@/features/auth/sign-up-form.tsx"
@@ -25,6 +26,12 @@ const publicRoute = createRoute({
   id: "public",
   beforeLoad: requireGuest,
   component: Outlet,
+})
+
+const authCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/auth/google/callback",
+  component: GoogleAuthCallback,
 })
 
 const appRoute = createRoute({
@@ -83,6 +90,7 @@ const partnerRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
+  authCallbackRoute,
   publicRoute.addChildren([loginRoute, signUpRoute]),
   appRoute.addChildren([
     dashboardRoute,

@@ -12,6 +12,7 @@ import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
+import com.abnerhs.rest_api_finances.dto.GoogleAuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.RecurringTransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.RegisterRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionCategoryDTO;
@@ -70,6 +71,10 @@ public final class TestDataFactory {
 
     public static AuthenticationResponseDTO authenticationResponse() {
         return new AuthenticationResponseDTO("access-token", "refresh-token", userResponse());
+    }
+
+    public static GoogleAuthenticationRequestDTO googleAuthenticationRequest() {
+        return new GoogleAuthenticationRequestDTO("google-auth-code");
     }
 
     public static CreditCardRequestDTO creditCardRequest() {

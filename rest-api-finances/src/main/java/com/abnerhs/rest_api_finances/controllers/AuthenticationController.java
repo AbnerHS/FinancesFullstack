@@ -2,6 +2,7 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.dto.AuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.AuthenticationResponseDTO;
+import com.abnerhs.rest_api_finances.dto.GoogleAuthenticationRequestDTO;
 import com.abnerhs.rest_api_finances.dto.RegisterRequestDTO;
 import com.abnerhs.rest_api_finances.service.AuthenticationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,17 @@ public class AuthenticationController {
             HttpServletResponse response
     ) {
         var authResponse = service.authenticate(request);
+        addRefreshTokenCookie(response, authResponse.refreshToken());
+        return ResponseEntity.ok(authResponse.withoutRefreshToken());
+    }
+
+    @PostMapping("/google")
+    @Operation(summary = "Authenticate a user with Google OAuth2", tags = {"Authentication"})
+    public ResponseEntity<AuthenticationResponseDTO> authenticateWithGoogle(
+            @RequestBody GoogleAuthenticationRequestDTO request,
+            HttpServletResponse response
+    ) {
+        var authResponse = service.authenticateWithGoogle(request);
         addRefreshTokenCookie(response, authResponse.refreshToken());
         return ResponseEntity.ok(authResponse.withoutRefreshToken());
     }

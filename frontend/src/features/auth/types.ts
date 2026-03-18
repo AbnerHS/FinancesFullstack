@@ -14,6 +14,10 @@ export type LoginInput = {
   password: string
 }
 
+export type GoogleLoginInput = {
+  code: string
+}
+
 export type SignUpInput = {
   name: string
   email: string

@@ -161,6 +161,8 @@ Configure o ambiente do frontend com a URL base da API, por exemplo:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api
+VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
+VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
 ```
 
 Depois inicie o servidor de desenvolvimento:
@@ -189,6 +191,8 @@ Variavel obrigatoria na Vercel:
 
 ```env
 VITE_API_BASE_URL=https://SUA_API_PUBLICA/api
+VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
+VITE_GOOGLE_REDIRECT_URI=https://SEU_FRONTEND_PUBLICO/auth/google/callback
 ```
 
 Importante:
@@ -222,6 +226,14 @@ Exemplo de desenvolvimento local mantendo o proxy do Vite:
 ```env
 VITE_API_BASE_URL=/api
 VITE_API_PROXY_TARGET=http://SEU_IP_PUBLICO:8080
+VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
+VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
+```
+
+No backend, `GOOGLE_OAUTH_REDIRECT_URI` deve apontar exatamente para o mesmo callback configurado no frontend:
+
+```env
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:5173/auth/google/callback
 ```
 
 ### 3. Rodar os testes do backend
