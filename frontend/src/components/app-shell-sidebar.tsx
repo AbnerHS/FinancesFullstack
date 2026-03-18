@@ -23,11 +23,11 @@ type AppShellSidebarProps = {
 }
 
 const navItems = [
-  { to: "/", label: "Dashboard", description: "Resumo e fluxo diario", icon: LayoutDashboard },
+  { to: "/", label: "Dashboard", description: "Resumo e fluxo diário", icon: LayoutDashboard },
   { to: "/profile", label: "Perfil", description: "Conta e senha", icon: UserRound },
   { to: "/plans", label: "Planos", description: "Estrutura financeira", icon: FolderKanban },
-  { to: "/periods", label: "Periodos", description: "Comparacao mensal", icon: WalletCards },
-  { to: "/cards", label: "Cartoes", description: "Cartoes e faturas", icon: CreditCard },
+  { to: "/periods", label: "Períodos", description: "Comparação mensal", icon: WalletCards },
+  { to: "/cards", label: "Cartões", description: "Cartões e faturas", icon: CreditCard },
   { to: "/partner", label: "Parceiro", description: "Participantes do plano", icon: Users },
 ]
 
@@ -84,7 +84,7 @@ export function AppShellSidebar({
           </div>
 
           <div className="mx-4 rounded-[1.75rem] border border-border bg-card/75 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Usuario ativo</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Usuário ativo</p>
             <div className="mt-3 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-lg font-semibold text-primary">
                 {userName?.slice(0, 1) || "F"}

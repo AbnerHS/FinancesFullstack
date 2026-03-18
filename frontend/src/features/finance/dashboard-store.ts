@@ -7,7 +7,8 @@ type DashboardStoreState = {
   setSelectedPlanId: (selectedPlanId: string | null) => void
   setSelectedPeriodIds: (
     nextOrUpdater: string[] | ((currentIds: string[]) => string[])
-  ) => void
+  ) => void,
+  clearSelections: () => void
 }
 
 export const useDashboardStore = create<DashboardStoreState>()(
@@ -25,6 +26,9 @@ export const useDashboardStore = create<DashboardStoreState>()(
 
           return { selectedPeriodIds: Array.isArray(next) ? next : [] }
         }),
+      clearSelections: () => {
+        set({ selectedPlanId: null, selectedPeriodIds: [] })
+      }
     }),
     {
       name: "dashboard-selection",

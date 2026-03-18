@@ -7,7 +7,7 @@ const readRequiredEnv = (key: "VITE_GOOGLE_CLIENT_ID" | "VITE_GOOGLE_REDIRECT_UR
     return value
   }
 
-  throw new Error(`${key} nao foi configurada.`)
+  throw new Error(`${key} não foi configurada.`)
 }
 
 const readApiBaseUrl = () => {
@@ -21,7 +21,7 @@ const readApiBaseUrl = () => {
     return "/api"
   }
 
-  throw new Error("VITE_API_BASE_URL nao foi configurada para o build de producao.")
+  throw new Error("VITE_API_BASE_URL não foi configurada para o build de produção.")
 }
 
 export const apiBaseUrl = readApiBaseUrl()

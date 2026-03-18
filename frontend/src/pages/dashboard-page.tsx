@@ -121,7 +121,7 @@ export function DashboardPage() {
           </div>
 
           <div>
-            <label className="app-label">Responsavel</label>
+            <label className="app-label">Responsável</label>
             <Select
               className="mt-2"
               disabled={responsibleOptions.length === 0}
@@ -147,16 +147,16 @@ export function DashboardPage() {
 
         {plans.length === 0 ? (
           <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-secondary/50 px-5 py-4">
-            <p className="font-semibold text-foreground">Seu dashboard comeca por um plano financeiro.</p>
+            <p className="font-semibold text-foreground">Seu dashboard começa por um plano financeiro.</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Crie seu primeiro plano para liberar periodos, transacoes, categorias e cartoes.
+              Crie seu primeiro plano para liberar períodos, transações, categorias e cartões.
             </p>
           </div>
         ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {periodsLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando periodos...</p>
+            <p className="text-sm text-muted-foreground">Carregando períodos...</p>
           ) : (
             periods.map((period) => {
               const selected = selectedPeriodIds.includes(period.id)
@@ -199,7 +199,7 @@ export function DashboardPage() {
           icon={<ArrowRight size={18} />}
         />
         <MetricCard
-          title="Variacao"
+          title="Variação"
           value={variation === null ? "--" : `${variation.toFixed(1)}%`}
           tone={variation !== null && variation < 0 ? "negative" : "positive"}
           icon={<Sparkles size={18} />}
@@ -208,9 +208,9 @@ export function DashboardPage() {
 
       <section className="space-y-5">
         <div>
-          <h3 className="font-serif text-3xl font-semibold text-foreground">Transacoes</h3>
+          <h3 className="font-serif text-3xl font-semibold text-foreground">Transações</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Paineis de transacoes, faturas e manutencao estrutural do dashboard.
+            Painéis de transações, faturas e manutenção estrutural do dashboard.
           </p>
         </div>
 
@@ -232,7 +232,7 @@ export function DashboardPage() {
 
             {periods.length > 0 && filteredPanels.length === 0 ? (
               <div className="flex min-w-[22rem] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
-                Selecione ao menos um periodo para ativar o workspace.
+                Selecione ao menos um período para ativar o workspace.
               </div>
             ) : null}
           </div>
@@ -247,9 +247,9 @@ export function DashboardPage() {
             <div>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="app-eyebrow">Cartoes</p>
+                  <p className="app-eyebrow">Cartões</p>
                   <h3 className="font-serif text-2xl font-semibold text-foreground">
-                    Cartoes e faturas
+                    Cartões e faturas
                   </h3>
                 </div>
                 <div className="rounded-full bg-primary/12 p-3 text-primary">
@@ -288,7 +288,7 @@ export function DashboardPage() {
             <div>
               <p className="app-eyebrow">Contexto do plano</p>
               <h3 className="font-serif text-2xl font-semibold text-foreground">
-                Leitura rapida
+                Leitura rápida
               </h3>
             </div>
             <div className="rounded-full bg-primary/12 p-3 text-primary">
@@ -297,9 +297,9 @@ export function DashboardPage() {
           </div>
           <dl className="mt-6 space-y-4">
             <InfoRow label="Plano ativo" value={activePlan?.name || "Sem plano"} />
-            <InfoRow label="Periodos disponiveis" value={String(periods.length)} />
-            <InfoRow label="Cartoes cadastrados" value={String(creditCards.length)} />
-            <InfoRow label="Lancamentos visiveis" value={String(allTransactions.length)} />
+            <InfoRow label="Períodos disponíveis" value={String(periods.length)} />
+            <InfoRow label="Cartões cadastrados" value={String(creditCards.length)} />
+            <InfoRow label="Lançamentos visíveis" value={String(allTransactions.length)} />
           </dl>
         </section>
       </section>

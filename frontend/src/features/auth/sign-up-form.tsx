@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react"
 import { Link } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 
@@ -27,7 +28,7 @@ export function SignUpForm() {
 
   return (
     <AuthShell
-      title="Criar conta"
+      title="Criar Conta"
       description="Abra sua conta para começar a organizar planos, períodos e responsabilidades financeiras."
       footer={
         <span>
@@ -96,7 +97,8 @@ export function SignUpForm() {
             disabled={isSubmitting || registerUser.isPending}
             type="submit"
           >
-            {isSubmitting || registerUser.isPending ? "Criando..." : "Criar conta"}
+            <Plus size={16} />
+            {isSubmitting || registerUser.isPending ? "Criando..." : "Criar Conta"}
           </Button>
         </form>
       </Card>

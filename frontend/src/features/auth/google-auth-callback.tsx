@@ -36,12 +36,12 @@ export function GoogleAuthCallback() {
   return (
     <AuthShell
       title="Entrando com Google"
-      description="Estamos validando sua autenticacao e preparando seu workspace."
-      footer="Se algo der errado, voce sera redirecionado para a tela de login."
+      description="Estamos validando sua autenticação e preparando seu workspace."
+      footer="Se algo der errado, você será redirecionado para a tela de login."
     >
       <Card className="space-y-3 p-6 text-sm text-muted-foreground">
         <p>Concluindo seu acesso com Google...</p>
-        <p>Esta etapa envia o codigo de autorizacao ao backend e salva sua sessao local.</p>
+        <p>Esta etapa envia o código de autorização ao backend e salva sua sessão local.</p>
       </Card>
     </AuthShell>
   )

@@ -1,4 +1,4 @@
-import { CheckCircle2, GripVertical, Pencil, Trash2 } from "lucide-react"
+import { CheckCircle2, GripVertical, Pencil, Plus, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -87,19 +87,19 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
   const mutationError = useMemo(() => {
     if (createTransaction.error) {
-      return getErrorMessage(createTransaction.error, "Nao foi possivel salvar a transacao.")
+      return getErrorMessage(createTransaction.error, "Não foi possível salvar a transação.")
     }
     if (createRecurringTransaction.error) {
       return getErrorMessage(
         createRecurringTransaction.error,
-        "Nao foi possivel criar a recorrencia."
+        "Não foi possível criar a recorrência."
       )
     }
     if (updateTransaction.error) {
-      return getErrorMessage(updateTransaction.error, "Nao foi possivel atualizar a transacao.")
+      return getErrorMessage(updateTransaction.error, "Não foi possível atualizar a transação.")
     }
     if (deleteTransaction.error) {
-      return getErrorMessage(deleteTransaction.error, "Nao foi possivel remover a transacao.")
+      return getErrorMessage(deleteTransaction.error, "Não foi possível remover a transação.")
     }
     return null
   }, [
@@ -120,10 +120,10 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
     setFormError(null)
     const amount = parseCurrencyInput(form.amount)
     if (!form.description.trim()) {
-      throw new Error("Informe a descricao.")
+      throw new Error("Informe a descrição.")
     }
     if (Number.isNaN(amount) || amount <= 0) {
-      throw new Error("Informe um valor valido.")
+      throw new Error("Informe um valor válido.")
     }
 
     const categoryName = form.categoryName.trim()
@@ -149,7 +149,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
       })
     } else if (form.isRecurring) {
       if (!Number.isFinite(form.numberOfPeriods) || form.numberOfPeriods < 2) {
-        throw new Error("Informe pelo menos 2 periodos para recorrencia.")
+        throw new Error("Informe pelo menos 2 períodos para recorrência.")
       }
 
       await createRecurringTransaction.mutateAsync({
@@ -169,7 +169,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
         <div>
           <p className="app-eyebrow">{panel.label}</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Receitas, despesas e leitura rapida do periodo selecionado.
+            Receitas, despesas e leitura rápida do período selecionado.
           </p>
         </div>
         <div className="grid gap-2 text-right text-sm">
@@ -201,14 +201,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                 await submit()
               } catch (error) {
                 setFormError(
-                  error instanceof Error ? error.message : "Nao foi possivel salvar a transacao."
+                  error instanceof Error ? error.message : "Não foi possível salvar a transação."
                 )
               }
             }}
           >
             <div className="grid gap-3 xl:grid-cols-4">
               <div className="space-y-2 xl:col-span-1">
-                <Label>Descricao</Label>
+                <Label>Descrição</Label>
                 <Input
                   value={form.description}
                   onChange={(event) =>
@@ -262,7 +262,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
             <div className={`grid gap-3 ${editingTransaction ? "grid-cols-3" : "xl:grid-cols-[minmax(0,1fr)_26rem_minmax(0,1fr)]"}`}>
               <div className="flex flex-col gap-2">
-                <Label>Responsavel</Label>
+                <Label>Responsável</Label>
                 <Select
                   value={form.responsibleUserId}
                   onChange={(event) =>
@@ -300,7 +300,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                       </div>
                       {form.isRecurring ? (
                         <div className="flex flex-row items-center gap-2">
-                          <Label>Periodos</Label>
+                          <Label>Períodos</Label>
                           <Input
                             className="h-8"
                             type="number"
@@ -321,14 +321,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                 </div>
               ) : editingTransaction.recurringGroupId ? (
                 <div className="space-y-2">
-                  <Label>Aplicar edicao</Label>
+                  <Label>Aplicar edição</Label>
                   <Select
                     value={editingScope}
                     onChange={(event) =>
                       setEditingScope(event.target.value as "SINGLE" | "GROUP")
                     }
                   >
-                    <option value="SINGLE">Somente esta transacao</option>
+                    <option value="SINGLE">Somente esta transação</option>
                     <option value="GROUP">Todas do grupo recorrente</option>
                   </Select>
                 </div>
@@ -346,17 +346,18 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                     updateTransaction.isPending
                   }
                 >
+                  {!editingTransaction ? <Plus size={16} /> : null}
                   {editingTransaction
                     ? updateTransaction.isPending
                       ? "Salvando..."
-                      : "Salvar edicao"
+                      : "Salvar Edição"
                     : form.isRecurring
                       ? createRecurringTransaction.isPending
                         ? "Criando..."
-                        : "Lancar recorrencia"
+                        : "Criar Recorrência"
                       : createTransaction.isPending
                         ? "Criando..."
-                        : "Adicionar transacao"}
+                        : "Adicionar Transação"}
                 </Button>
                 {editingTransaction ? (
                   <Button type="button" variant="outline" className="h-11" onClick={resetComposer}>
@@ -371,12 +372,12 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
         </Card>
 
         <Card className="border-border bg-secondary/40 p-4">
-          <h4 className="app-eyebrow">Transacoes por responsavel</h4>
+          <h4 className="app-eyebrow">Transações por responsável</h4>
           <div className="mt-3 space-y-4">
             {panel.transactionsLoading ? (
-              <p className="text-sm text-muted-foreground">Carregando transacoes...</p>
+              <p className="text-sm text-muted-foreground">Carregando transações...</p>
             ) : groupedTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma transacao cadastrada.</p>
+              <p className="text-sm text-muted-foreground">Nenhuma transação cadastrada.</p>
             ) : (
               groupedTransactions.map((group) => (
                 <div key={group.id} className="space-y-2">
@@ -490,7 +491,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
         </Card>
 
         <Card className="border-border bg-secondary/40 p-4">
-          <h4 className="app-eyebrow">Faturas do periodo</h4>
+          <h4 className="app-eyebrow">Faturas do período</h4>
           <div className="mt-3 space-y-2">
             {panel.invoicesLoading ? (
               <p className="text-sm text-muted-foreground">Carregando faturas...</p>
@@ -506,9 +507,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                   >
                     <div>
                       <p className="text-sm font-semibold text-foreground">
-                        {card?.name || "Cartao"}
+                        {card?.name || "Cartão"}
                       </p>
-                      <p className="text-xs text-muted-foreground">Fatura vinculada ao periodo</p>
+                      <p className="text-xs text-muted-foreground">Fatura vinculada ao período</p>
                     </div>
                     <p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
                       {formatCurrency(invoice.amount)}
@@ -527,7 +528,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                 Vincular a fatura
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Transacao:{" "}
+                Transação:{" "}
                 <span className="font-semibold text-foreground">
                   {transactionLinking.paymentModalEntry.description}
                 </span>
@@ -564,7 +565,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
               {panel.invoices.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-500 dark:text-amber-400">
-                  Nenhuma fatura disponivel neste periodo.
+                  Nenhuma fatura disponível neste período.
                 </p>
               ) : null}
 

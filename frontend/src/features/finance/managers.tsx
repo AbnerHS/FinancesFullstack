@@ -54,7 +54,7 @@ export function PlanManager({
         <div>
           <p className="app-eyebrow">Planos Financeiros</p>
           <h2 className="font-serif text-3xl font-semibold text-foreground">
-            Estrutura dos seus espacos financeiros
+            Estrutura dos seus espaços financeiros
           </h2>
         </div>
       </div>
@@ -133,7 +133,7 @@ export function PlanManager({
               <div className="rounded-[1.25rem] border border-border bg-card/80 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="space-y-1">
-                    <Label>Criar 12 periodos</Label>
+                    <Label>Criar 12 Períodos</Label>
                     <p className="text-xs text-muted-foreground">
                       Gera Janeiro a Dezembro automaticamente.
                     </p>
@@ -145,7 +145,7 @@ export function PlanManager({
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <Label>Ano dos periodos</Label>
+                  <Label>Ano dos Períodos</Label>
                   <Input
                     disabled={!createYearPeriods}
                     type="number"
@@ -156,11 +156,12 @@ export function PlanManager({
               </div>
             ) : null}
             <Button type="submit" className="h-11 w-full" disabled={saveMutation.isPending}>
+              {mode === "create" ? <Plus size={16} /> : null}
               {saveMutation.isPending
                 ? "Salvando..."
                 : mode === "edit"
                   ? "Salvar nome"
-                  : "Criar plano"}
+                  : "Criar Plano"}
             </Button>
             <FormError message={errorMessage} />
           </form>
@@ -185,7 +186,7 @@ export function PeriodsManager({
   const months = [
     "Janeiro",
     "Fevereiro",
-    "Marco",
+    "Março",
     "Abril",
     "Maio",
     "Junho",
@@ -201,13 +202,13 @@ export function PeriodsManager({
     <section className="app-panel">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="app-eyebrow">Periodos</p>
+          <p className="app-eyebrow">Períodos</p>
           <h2 className="font-serif text-3xl font-semibold text-foreground">
-            Comparacao mensal e manutencao
+            Comparação mensal e manutenção
           </h2>
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/70 px-4 py-2 text-sm text-muted-foreground">
-          {selectedPeriodIds.length} periodos em comparacao
+          {selectedPeriodIds.length} períodos em comparação
         </div>
       </div>
 
@@ -226,7 +227,7 @@ export function PeriodsManager({
                     : "border-border bg-secondary/60 hover:border-primary/40"
                 }`}
               >
-                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Periodo</p>
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Período</p>
                 <h3 className="mt-2 text-lg font-semibold text-foreground">
                   {formatMonthYear(period)}
                 </h3>
@@ -244,7 +245,7 @@ export function PeriodsManager({
             }}
           >
             <div className="space-y-2">
-              <Label>Mes</Label>
+              <Label>Mês</Label>
               <Select
                 value={String(draft.month)}
                 onChange={(event) =>
@@ -271,7 +272,8 @@ export function PeriodsManager({
             </div>
 
             <Button type="submit" className="h-11 w-full" disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Criando..." : "Criar periodo"}
+              <Plus size={16} />
+              {saveMutation.isPending ? "Criando..." : "Criar Período"}
             </Button>
             <FormError message={errorMessage} />
           </form>
@@ -303,17 +305,18 @@ export function CreditCardsManager({
   return (
     <Card className="border-border bg-secondary/60 p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="app-eyebrow">Cartoes de credito</h3>
+        <h3 className="app-eyebrow">Cartões de Crédito</h3>
         {!isEditing ? (
           <Button type="button" variant="outline" size="sm" onClick={startCreate}>
-            Novo
+            <Plus size={16} />
+            Novo Cartão
           </Button>
         ) : null}
       </div>
 
       <div className="mb-4 space-y-2">
         {creditCards.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum cartao cadastrado.</p>
+          <p className="text-sm text-muted-foreground">Nenhum cartão cadastrado.</p>
         ) : null}
         {creditCards.map((card) => (
           <div
@@ -336,7 +339,7 @@ export function CreditCardsManager({
         }}
       >
         <div className="space-y-2">
-          <Label>{isEditing ? "Editar cartao" : "Novo cartao"}</Label>
+          <Label>{isEditing ? "Editar Cartão" : "Novo Cartão"}</Label>
           <Input
             value={form.name}
             onChange={(event) => setForm({ name: event.target.value })}
@@ -345,11 +348,12 @@ export function CreditCardsManager({
         </div>
         <div className="flex gap-2">
           <Button type="submit" className="h-11 flex-1" disabled={saveMutation.isPending}>
+            {!isEditing ? <Plus size={16} /> : null}
             {saveMutation.isPending
               ? "Salvando..."
               : isEditing
-                ? "Salvar edicao"
-                : "Criar cartao"}
+                ? "Salvar edição"
+                : "Criar Cartão"}
           </Button>
           {isEditing ? (
             <Button type="button" variant="outline" className="h-11" onClick={cancelEdit}>
@@ -383,7 +387,7 @@ export function InvoiceManager({
 
   return (
     <Card className="border-border bg-secondary/60 p-5">
-      <h3 className="app-eyebrow">Criar fatura</h3>
+      <h3 className="app-eyebrow">Criar Fatura</h3>
       <form
         className="mt-4 space-y-3"
         onSubmit={(event) => {
@@ -397,8 +401,8 @@ export function InvoiceManager({
             setForm((current) => ({ ...current, creditCardId: event.target.value }))
           }
         >
-          {creditCards.length === 0 ? <option value="">Sem cartoes</option> : null}
-          {creditCards.length > 0 ? <option value="">Selecione o cartao</option> : null}
+          {creditCards.length === 0 ? <option value="">Sem cartões</option> : null}
+          {creditCards.length > 0 ? <option value="">Selecione o cartão</option> : null}
           {creditCards.map((card) => (
             <option key={card.id} value={card.id}>
               {card.name}
@@ -410,8 +414,8 @@ export function InvoiceManager({
           value={form.periodId}
           onChange={(event) => setForm((current) => ({ ...current, periodId: event.target.value }))}
         >
-          {periods.length === 0 ? <option value="">Sem periodos</option> : null}
-          {periods.length > 0 ? <option value="">Selecione o periodo</option> : null}
+          {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+          {periods.length > 0 ? <option value="">Selecione o período</option> : null}
           {periods.map((period) => (
             <option key={period.id} value={period.id}>
               {formatMonthYear(period)}
@@ -427,7 +431,8 @@ export function InvoiceManager({
         />
 
         <Button type="submit" className="h-11 w-full" disabled={createInvoice.isPending}>
-          {createInvoice.isPending ? "Criando..." : "Criar fatura"}
+          <Plus size={16} />
+          {createInvoice.isPending ? "Criando..." : "Criar Fatura"}
         </Button>
         <FormError message={errorMessage} />
       </form>
@@ -444,7 +449,7 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
         <div>
           <p className="app-eyebrow">Categorias</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground">
-            Base de classificacao
+            Base de classificação
           </h3>
         </div>
         <div className="rounded-full bg-primary/12 p-3 text-primary">
@@ -474,16 +479,16 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
               createMutation.mutate()
             }}
           >
-            <Label>Nova categoria</Label>
+            <Label>Nova Categoria</Label>
             <Input
               className="mt-3"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ex.: Educacao"
+              placeholder="Ex.: Educação"
             />
             <Button type="submit" className="mt-3 h-11 w-full" disabled={createMutation.isPending}>
               <Plus size={16} />
-              {createMutation.isPending ? "Salvando..." : "Criar categoria"}
+              {createMutation.isPending ? "Salvando..." : "Criar Categoria"}
             </Button>
             <div className="mt-3">
               <FormError message={errorMessage} />
@@ -528,7 +533,8 @@ export function DashboardPlanQuickCreate({
     <>
       <div className="flex items-end">
         <Button type="button" className="h-11 w-full" onClick={openModal}>
-          {hasPlans ? "Novo plano" : "Criar primeiro plano"}
+          <Plus size={16} />
+          {hasPlans ? "Novo Plano" : "Criar Primeiro Plano"}
         </Button>
       </div>
 
@@ -538,14 +544,14 @@ export function DashboardPlanQuickCreate({
               <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="app-eyebrow">{hasPlans ? "Novo plano" : "Bem-vindo"}</p>
+                    <p className="app-eyebrow">{hasPlans ? "Novo Plano" : "Bem-vindo"}</p>
                     <h3 className="mt-2 text-xl font-semibold text-foreground">
-                      {hasPlans ? "Crie outro espaco financeiro" : "Vamos montar seu primeiro plano"}
+                      {hasPlans ? "Crie outro espaço financeiro" : "Vamos montar seu primeiro plano"}
                     </h3>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {hasPlans
-                        ? "Voce pode comecar do zero e, se quiser, ja criar todos os periodos do ano."
-                        : "Comece criando um plano para organizar suas transacoes, categorias, cartoes e periodos."}
+                        ? "Você pode começar do zero e, se quiser, já criar todos os períodos do ano."
+                        : "Comece criando um plano para organizar suas transações, categorias, cartões e períodos."}
                     </p>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>
@@ -578,9 +584,9 @@ export function DashboardPlanQuickCreate({
                   <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="space-y-1">
-                        <Label>Gerar 12 periodos</Label>
+                        <Label>Gerar 12 Períodos</Label>
                         <p className="text-xs text-muted-foreground">
-                          Cria Janeiro a Dezembro automaticamente para voce comecar mais rapido.
+                          Cria Janeiro a Dezembro automaticamente para você começar mais rápido.
                         </p>
                       </div>
                       <Switch
@@ -602,8 +608,8 @@ export function DashboardPlanQuickCreate({
 
                   {!hasPlans ? (
                     <div className="rounded-[1.25rem] border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-                      Dica: se este for seu primeiro plano, ativar os 12 periodos deixa o dashboard pronto
-                      para lancamentos e comparacoes mensais.
+                      Dica: se este for seu primeiro plano, ativar os 12 períodos deixa o dashboard pronto
+                      para lançamentos e comparações mensais.
                     </div>
                   ) : null}
 
@@ -614,7 +620,8 @@ export function DashboardPlanQuickCreate({
                       Cancelar
                     </Button>
                     <Button type="submit" disabled={saveMutation.isPending}>
-                      {saveMutation.isPending ? "Criando..." : "Criar plano"}
+                      <Plus size={16} />
+                      {saveMutation.isPending ? "Criando..." : "Criar Plano"}
                     </Button>
                   </div>
                 </form>
@@ -638,7 +645,7 @@ export function PlanPartnerManager({ activePlan }: { activePlan: Plan | null }) 
   return (
     <Card className="border-border bg-secondary/60 p-5">
       <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
-        <Users size={16} /> Parceiro do plano
+        <Users size={16} /> Parceiro do Plano
       </h3>
 
       <Select value={selectedPartnerId} onChange={(event) => setSelectedPartnerId(event.target.value)}>

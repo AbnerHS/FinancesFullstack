@@ -46,7 +46,11 @@ function orderByPeriods(ids: string[], periods: Period[]) {
 }
 
 export function usePlans() {
-  return useQuery(financeQueries.plans())
+  const isAuthenticated = Boolean(useAuthStore((state) => state.user?.id))
+  return useQuery({
+    ...financeQueries.plans(),
+    enabled: isAuthenticated,
+  })
 }
 
 export function usePeriods(plan: Plan | null) {
@@ -54,35 +58,58 @@ export function usePeriods(plan: Plan | null) {
 }
 
 export function useCreditCards() {
-  return useQuery(financeQueries.cards())
+  const isAuthenticated = Boolean(useAuthStore((state) => state.user?.id))
+  return useQuery({
+    ...financeQueries.cards(),
+    enabled: isAuthenticated,
+  })
 }
 
 export function useTransactionCategories() {
-  return useQuery(financeQueries.categories())
+  const isAuthenticated = Boolean(useAuthStore((state) => state.user?.id))
+  return useQuery({
+    ...financeQueries.categories(),
+    enabled: isAuthenticated,
+  })
 }
 
 export function useDashboard() {
   const { data: plans = [], isLoading: plansLoading } = usePlans()
   const user = useAuthStore((state) => state.user)
+  const isAuthenticated = Boolean(user?.id)
   const selectedPlanId = useDashboardStore((state) => state.selectedPlanId)
   const selectedPeriodIds = useDashboardStore((state) => state.selectedPeriodIds)
   const setSelectedPlanId = useDashboardStore((state) => state.setSelectedPlanId)
   const setSelectedPeriodIds = useDashboardStore((state) => state.setSelectedPeriodIds)
 
   const activePlan = useMemo(
-    () => plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null,
-    [plans, selectedPlanId]
+    () => (isAuthenticated ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null : null),
+    [isAuthenticated, plans, selectedPlanId]
   )
 
   useEffect(() => {
-    if (plansLoading || !activePlan) {
+    if (isAuthenticated) {
+      return
+    }
+
+    if (selectedPlanId !== null) {
+      setSelectedPlanId(null)
+    }
+
+    if (selectedPeriodIds.length > 0) {
+      setSelectedPeriodIds([])
+    }
+  }, [isAuthenticated, selectedPeriodIds, selectedPlanId, setSelectedPeriodIds, setSelectedPlanId])
+
+  useEffect(() => {
+    if (!isAuthenticated || plansLoading || !activePlan) {
       return
     }
 
     if (activePlan.id !== selectedPlanId) {
       setSelectedPlanId(activePlan.id)
     }
-  }, [activePlan, plansLoading, selectedPlanId, setSelectedPlanId])
+  }, [activePlan, isAuthenticated, plansLoading, selectedPlanId, setSelectedPlanId])
 
   const {
     data: periods = [],
@@ -91,7 +118,7 @@ export function useDashboard() {
   } = usePeriods(activePlan)
 
   useEffect(() => {
-    if (!activePlan || !periodsFetched || periodsLoading) {
+    if (!isAuthenticated || !activePlan || !periodsFetched || periodsLoading) {
       return
     }
 
@@ -112,6 +139,7 @@ export function useDashboard() {
     }
   }, [
     activePlan,
+    isAuthenticated,
     periods,
     periodsFetched,
     periodsLoading,
@@ -780,7 +808,7 @@ export function useTransactionLinking(activePeriodId: string) {
   const linkTransactionToInvoice = useMutation({
     mutationFn: async () => {
       if (!paymentModalEntry?.id) {
-        throw new Error("Transacao invalida.")
+        throw new Error("Transação inválida.")
       }
       if (!selectedInvoiceId) {
         throw new Error("Selecione uma fatura.")
@@ -821,7 +849,7 @@ export function useTransactionLinking(activePeriodId: string) {
     linkTransactionToInvoice,
     unlinkTransactionFromInvoice,
     linkTransactionError: linkTransactionToInvoice.error
-      ? getErrorMessage(linkTransactionToInvoice.error, "Nao foi possivel vincular a transacao.")
+      ? getErrorMessage(linkTransactionToInvoice.error, "Não foi possível vincular a transação.")
       : null,
   }
 }

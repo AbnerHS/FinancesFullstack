@@ -4,31 +4,32 @@ import { useMemo, useState } from "react"
 import { AppShellSidebar, MobileSidebarButton } from "@/components/app-shell-sidebar.tsx"
 import { ThemeToggle } from "@/components/theme-toggle.tsx"
 import { useAuthStore } from "@/stores/auth-store.ts"
+import { useDashboardStore } from "@/features/finance/dashboard-store"
 
 const routeMeta: Record<string, { title: string; description: string }> = {
   "/": {
     title: "Dashboard Financeiro",
-    description: "Acompanhe o plano, compare periodos e mantenha a operacao central em uma visao so.",
+    description: "Acompanhe o plano, compare períodos e mantenha a operação central em uma visão só.",
   },
   "/profile": {
     title: "Meu Perfil",
-    description: "Atualize dados basicos da conta e mantenha o acesso seguro.",
+    description: "Atualize dados básicos da conta e mantenha o acesso seguro.",
   },
   "/plans": {
     title: "Planos Financeiros",
     description: "Organize os planos e escolha o contexto ativo do produto.",
   },
   "/periods": {
-    title: "Periodos",
-    description: "Crie periodos, compare meses e prepare o fluxo financeiro de cada janela.",
+    title: "Períodos",
+    description: "Crie períodos, compare meses e prepare o fluxo financeiro de cada janela.",
   },
   "/cards": {
-    title: "Cartoes e Faturas",
-    description: "Centralize cartoes, faturas e recorte das despesas ligadas ao credito.",
+    title: "Cartões e Faturas",
+    description: "Centralize cartões, faturas e recorte das despesas ligadas ao crédito.",
   },
   "/partner": {
     title: "Parceiro do Plano",
-    description: "Defina o parceiro e mantenha a atribuicao de responsabilidades consistente.",
+    description: "Defina o parceiro e mantenha a atribuição de responsabilidades consistente.",
   },
 }
 
@@ -37,6 +38,7 @@ export function AppLayout() {
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const clearTokens = useAuthStore((state) => state.clearTokens)
+  const clearSelections = useDashboardStore((state) => state.clearSelections)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const meta = useMemo(
@@ -51,6 +53,7 @@ export function AppLayout() {
         onClose={() => setSidebarOpen(false)}
         onLogout={async () => {
           clearTokens()
+          clearSelections()
           await navigate({ to: "/login" })
         }}
         userName={user?.name}
@@ -69,7 +72,7 @@ export function AppLayout() {
             <div className="hidden items-center gap-3 md:flex">
               <ThemeToggle />
               <div className="rounded-full border border-border bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-xl">
-                {user?.name || "Usuario"}
+                {user?.name || "Usuário"}
               </div>
             </div>
           </div>

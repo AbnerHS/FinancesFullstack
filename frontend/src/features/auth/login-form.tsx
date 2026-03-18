@@ -30,18 +30,18 @@ export function LoginForm() {
   const authError = new URLSearchParams(window.location.search).get("authError")
   const callbackErrorMessage =
     authError === "google"
-      ? "Nao foi possivel concluir o login com Google. Tente novamente."
+      ? "Não foi possível concluir o login com Google. Tente novamente."
       : null
 
   return (
     <AuthShell
       title="Entrar"
-      description="Acesse seu workspace financeiro para acompanhar planos, periodos e transacoes."
+      description="Acesse seu workspace financeiro para acompanhar planos, períodos e transações."
       footer={
         <span>
-          Ainda nao tem conta?{" "}
+          Ainda não tem conta?{" "}
           <Link to="/sign-up" className="font-semibold text-primary">
-            Criar agora
+            Criar Conta
           </Link>
         </span>
       }
@@ -85,7 +85,7 @@ export function LoginForm() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                {...register("email", { required: "O email e obrigatorio." })}
+                {...register("email", { required: "O email é obrigatório." })}
               />
               <FormError message={errors.email?.message} />
             </div>
@@ -96,7 +96,7 @@ export function LoginForm() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                {...register("password", { required: "A senha e obrigatoria." })}
+                {...register("password", { required: "A senha é obrigatória." })}
               />
               <FormError message={errors.password?.message} />
             </div>
@@ -105,7 +105,7 @@ export function LoginForm() {
               message={
                 callbackErrorMessage ??
                 (login.error
-                  ? getErrorMessage(login.error, "Nao foi possivel entrar na conta.")
+                  ? getErrorMessage(login.error, "Não foi possível entrar na conta.")
                   : null)
               }
             />

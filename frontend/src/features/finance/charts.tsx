@@ -52,9 +52,9 @@ export function DashboardCharts({
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Card className="app-panel min-w-0">
           <div className="space-y-2">
-            <p className="app-eyebrow">Saldo por periodo</p>
+            <p className="app-eyebrow">Saldo por período</p>
             <h3 className="font-serif text-2xl font-semibold text-foreground">
-              Tendencia do saldo
+              Tendência do saldo
             </h3>
           </div>
           <div className="mt-6 h-80 min-h-[20rem] min-w-0">
@@ -93,7 +93,7 @@ export function DashboardCharts({
           <div className="space-y-2">
             <p className="app-eyebrow">Categorias</p>
             <h3 className="font-serif text-2xl font-semibold text-foreground">
-              Distribuicao de despesas
+              Distribuição de despesas
             </h3>
           </div>
           <div className="mt-6 h-80 min-h-[20rem] min-w-0">
@@ -129,7 +129,7 @@ export function DashboardCharts({
 
       <Card className="app-panel min-w-0">
         <div className="space-y-2">
-          <p className="app-eyebrow">Comparacao</p>
+          <p className="app-eyebrow">Comparação</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground">
             Receitas x despesas
           </h3>
