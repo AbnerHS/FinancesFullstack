@@ -18,10 +18,16 @@ Este arquivo serve como guia operacional para um agente de IA trabalhar neste re
 1. Subir a stack do backend:
    - `cd rest-api-finances`
    - `docker compose up -d`
+2. Na Oracle Cloud Infrastructure, usar:
+   - `docker compose -f docker-compose.yml -f docker-compose.oci.yml up -d --build`
 
 ### Docker Compose (servicos / portas)
 
-Arquivo: `rest-api-finances/docker-compose.yml`
+Arquivos:
+
+- `rest-api-finances/docker-compose.yml`: base compartilhada
+- `rest-api-finances/docker-compose.override.yml`: desenvolvimento local
+- `rest-api-finances/docker-compose.oci.yml`: instancia Oracle/Ubuntu
 
 - `mysql-db`
   - Porta: `3306:3306`

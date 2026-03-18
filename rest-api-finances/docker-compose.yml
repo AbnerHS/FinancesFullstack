@@ -2,16 +2,14 @@ services:
   mysql-db:
     image: mysql:8.4
     env_file: .env
-    volumes:
-      - mysql_data:/var/lib/mysql
     container_name: mysql-db
-    ports:
-      - "3306:3306"
     environment:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USERNAME}
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 20s
@@ -25,8 +23,6 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     container_name: spring-app
-    ports:
-      - "8080:8080"
     depends_on:
       mysql-db:
         condition: service_healthy # Espera o banco estar pronto para subir o Spring

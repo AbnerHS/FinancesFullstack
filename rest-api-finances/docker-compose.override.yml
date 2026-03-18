@@ -1,0 +1,8 @@
+services:
+  mysql-db:
+    ports:
+      - "3306:3306"
+
+  spring-app:
+    ports:
+      - "8080:8080"

@@ -132,6 +132,25 @@ No diretorio `rest-api-finances`:
 docker compose up -d
 ```
 
+Isso usa automaticamente:
+
+- `docker-compose.yml` como base compartilhada
+- `docker-compose.override.yml` para desenvolvimento local
+
+Para a instancia Oracle Cloud, use o arquivo especifico do ambiente:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.oci.yml up -d --build
+```
+
+Organizacao recomendada dos arquivos:
+
+- `rest-api-finances/docker-compose.yml`: servicos comuns
+- `rest-api-finances/docker-compose.override.yml`: portas e ajustes locais
+- `rest-api-finances/docker-compose.oci.yml`: ajustes da instancia Oracle/Ubuntu
+- `rest-api-finances/.env.example`: exemplo de configuracao
+- `rest-api-finances/.env`: configuracao real de cada maquina
+
 Isso sobe:
 
 - MySQL
