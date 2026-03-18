@@ -9,12 +9,18 @@ type RetriableConfig = {
   url?: string
 }
 
+const defaultHeaders: Record<string, string> = {
+  "Content-Type": "application/json",
+}
+
+if (apiBaseUrl.includes("ngrok-free.dev")) {
+  defaultHeaders["ngrok-skip-browser-warning"] = "1"
+}
+
 export const http = axios.create({
   baseURL: apiBaseUrl,
   withCredentials: true,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: defaultHeaders,
 })
 
 http.interceptors.request.use((config) => {
