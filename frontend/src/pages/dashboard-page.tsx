@@ -16,6 +16,7 @@ import { useDashboard } from "@/features/finance/hooks.ts"
 import {
   CategoryManager,
   CreditCardsManager,
+  DashboardPlanQuickCreate,
   InvoiceManager,
   PlanPartnerManager,
 } from "@/features/finance/managers.tsx"
@@ -101,14 +102,16 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <section className="app-panel">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_18rem]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_22rem]">
           <div>
             <label className="app-label">Plano financeiro</label>
             <Select
               className="mt-2"
+              disabled={plans.length === 0}
               value={selectedPlanId || ""}
               onChange={(event) => setSelectedPlanId(event.target.value)}
             >
+              {plans.length === 0 ? <option value="">Nenhum plano ainda</option> : null}
               {plans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
                   {plan.name}
@@ -121,6 +124,7 @@ export function DashboardPage() {
             <label className="app-label">Responsavel</label>
             <Select
               className="mt-2"
+              disabled={responsibleOptions.length === 0}
               value={responsibleFilter}
               onChange={(event) => setResponsibleFilter(event.target.value)}
             >
@@ -132,7 +136,23 @@ export function DashboardPage() {
               ))}
             </Select>
           </div>
+
+          <DashboardPlanQuickCreate
+            activePlan={activePlan}
+            hasPlans={plans.length > 0}
+            onSelectPlanId={setSelectedPlanId}
+            userId={userId}
+          />
         </div>
+
+        {plans.length === 0 ? (
+          <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-secondary/50 px-5 py-4">
+            <p className="font-semibold text-foreground">Seu dashboard comeca por um plano financeiro.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Crie seu primeiro plano para liberar periodos, transacoes, categorias e cartoes.
+            </p>
+          </div>
+        ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {periodsLoading ? (

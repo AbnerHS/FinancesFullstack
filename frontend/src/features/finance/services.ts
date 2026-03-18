@@ -136,7 +136,7 @@ export const transactionService = {
     type: "REVENUE" | "EXPENSE"
     periodId: string
     responsibleUserId?: string | null
-    category?: { id: string } | null
+    category?: { id?: string; name?: string } | null
   }) {
     const { data } = await http.post<Transaction>("/transactions", payload)
     return data
@@ -148,7 +148,7 @@ export const transactionService = {
       type: "REVENUE" | "EXPENSE"
       periodId: string
       responsibleUserId?: string | null
-      category?: { id: string } | null
+      category?: { id?: string; name?: string } | null
     }
     numberOfPeriods: number
   }) {
