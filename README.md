@@ -203,6 +203,20 @@ JWT_REFRESH_COOKIE_SAME_SITE=None
 APP_CORS_ALLOWED_ORIGINS=https://SEU-PROJETO.vercel.app
 ```
 
+Exemplo para o dominio que voce esta usando agora:
+
+```env
+APP_CORS_ALLOWED_ORIGINS=https://finances-fullstack.vercel.app
+JWT_REFRESH_COOKIE_SECURE=true
+JWT_REFRESH_COOKIE_SAME_SITE=None
+```
+
+Se quiser deixar a VM aceitar mais de um dominio temporario, tambem pode usar patterns:
+
+```env
+APP_CORS_ALLOWED_ORIGIN_PATTERNS=https://*.vercel.app,https://*.ngrok-free.dev
+```
+
 Exemplo de desenvolvimento local mantendo o proxy do Vite:
 
 ```env
