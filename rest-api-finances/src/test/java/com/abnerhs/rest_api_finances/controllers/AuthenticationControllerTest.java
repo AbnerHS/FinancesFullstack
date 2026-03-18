@@ -93,6 +93,33 @@ class AuthenticationControllerTest {
     }
 
     @Test
+    void shouldAuthenticateWithGoogleAndSetRefreshCookie() throws Exception {
+        var request = TestDataFactory.googleAuthenticationRequest();
+        when(service.authenticateWithGoogle(request)).thenReturn(TestDataFactory.authenticationResponse());
+
+        mockMvc.perform(post("/api/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.user.email").value("john@example.com"))
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refresh_token=refresh-token")));
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenGoogleAuthenticationFails() throws Exception {
+        var request = TestDataFactory.googleAuthenticationRequest();
+        when(service.authenticateWithGoogle(request)).thenThrow(new BadCredentialsException("Credenciais do Google invalidas"));
+
+        mockMvc.perform(post("/api/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value("Credenciais do Google invalidas"));
+    }
+
+    @Test
     void shouldRefreshTokenUsingCookie() throws Exception {
         AuthenticationResponseDTO response = new AuthenticationResponseDTO(
                 "new-access-token",

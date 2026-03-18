@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import com.abnerhs.rest_api_finances.model.enums.AuthProvider;
 
 import java.util.Collection;
 import java.util.List;
@@ -26,12 +27,23 @@ public class User implements UserDetails {
 
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider", nullable = false)
+    private AuthProvider authProvider = AuthProvider.LOCAL;
+
+    @Column(name = "google_subject", unique = true)
+    private String googleSubject;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     public User() {}
 
     public User(String email, String password, String name) {
         this.email = email;
         this.password = password;
         this.name = name;
+        this.authProvider = AuthProvider.LOCAL;
     }
 
     public UUID getId() { return id; }
@@ -42,6 +54,16 @@ public class User implements UserDetails {
     public void setPassword(String password) { this.password = password; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public AuthProvider getAuthProvider() { return authProvider; }
+    public void setAuthProvider(AuthProvider authProvider) { this.authProvider = authProvider; }
+    public String getGoogleSubject() { return googleSubject; }
+    public void setGoogleSubject(String googleSubject) { this.googleSubject = googleSubject; }
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+
+    public boolean usesGoogleAuthentication() {
+        return authProvider == AuthProvider.GOOGLE;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

@@ -33,3 +33,11 @@ app:
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
     allowed-origin-patterns:
+
+google:
+  oauth:
+    client-id: test-client-id
+    client-secret: test-client-secret
+    redirect-uri: http://localhost:5173/auth/google/callback
+    token-uri: https://oauth2.googleapis.com/token
+    userinfo-uri: https://openidconnect.googleapis.com/v1/userinfo
