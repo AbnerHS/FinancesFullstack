@@ -14,7 +14,7 @@ export function useLogin() {
     onSuccess: async (data) => {
       setAccessToken({ accessToken: data.accessToken })
       setUser({ user: data.user })
-      await navigate({ to: "/dashboard" })
+      await navigate({ to: "/" })
     },
   })
 }
@@ -28,7 +28,7 @@ export function useRegister() {
     onSuccess: async (data) => {
       setAccessToken({ accessToken: data.accessToken })
       setUser({ user: data.user })
-      await navigate({ to: "/dashboard" })
+      await navigate({ to: "/" })
     },
   })
 }

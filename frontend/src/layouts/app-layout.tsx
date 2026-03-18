@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle.tsx"
 import { useAuthStore } from "@/stores/auth-store.ts"
 
 const routeMeta: Record<string, { title: string; description: string }> = {
-  "/dashboard": {
+  "/": {
     title: "Dashboard Financeiro",
     description: "Acompanhe o plano, compare periodos e mantenha a operacao central em uma visao so.",
   },
@@ -40,7 +40,7 @@ export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const meta = useMemo(
-    () => routeMeta[location.pathname] ?? routeMeta["/dashboard"],
+    () => routeMeta[location.pathname] ?? routeMeta["/"],
     [location.pathname]
   )
 

@@ -23,7 +23,7 @@ type AppShellSidebarProps = {
 }
 
 const navItems = [
-  { to: "/dashboard", label: "Dashboard", description: "Resumo e fluxo diario", icon: LayoutDashboard },
+  { to: "/", label: "Dashboard", description: "Resumo e fluxo diario", icon: LayoutDashboard },
   { to: "/profile", label: "Perfil", description: "Conta e senha", icon: UserRound },
   { to: "/plans", label: "Planos", description: "Estrutura financeira", icon: FolderKanban },
   { to: "/periods", label: "Periodos", description: "Comparacao mensal", icon: WalletCards },

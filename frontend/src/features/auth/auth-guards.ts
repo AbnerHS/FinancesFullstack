@@ -10,6 +10,6 @@ export function requireAuth() {
 
 export function requireGuest() {
   if (useAuthStore.getState().accessToken) {
-    throw redirect({ to: "/dashboard" })
+    throw redirect({ to: "/" })
   }
 }
