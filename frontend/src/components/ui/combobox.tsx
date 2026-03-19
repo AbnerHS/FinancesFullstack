@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { cn } from "@/lib/utils.ts"
 
@@ -37,11 +37,20 @@ function autoCapitalizeFirstLetter(value: string) {
   return value.charAt(0).toLocaleUpperCase() + value.slice(1)
 }
 
+function filterOptions(options: ComboboxOption[], value: string) {
+  if (!value) {
+    return options
+  }
+
+  return options.filter((option) =>
+    normalize(option.label).includes(value)
+  )
+}
+
 export function Combobox({
   allowCustomValue = true,
   className,
   disabled,
-  emptyMessage = "Nenhum resultado encontrado.",
   onValueChange,
   options,
   placeholder,
@@ -61,18 +70,12 @@ export function Combobox({
     [normalizedValue, options]
   )
   const filteredOptions = useMemo(() => {
-    if (!normalizedValue) {
-      return options
-    }
-
-    return options.filter((option) =>
-      normalize(option.label).includes(normalizedValue)
-    )
+    return filterOptions(options, normalizedValue)
   }, [normalizedValue, options])
-
-  useEffect(() => {
-    setHighlightedIndex(filteredOptions.length > 0 ? 0 : -1)
-  }, [filteredOptions])
+  const resolvedHighlightedIndex =
+    filteredOptions.length === 0
+      ? -1
+      : Math.min(Math.max(highlightedIndex, 0), filteredOptions.length - 1)
 
   const commitValue = (nextValue: string) => {
     const resolvedValue = autoCapitalizeFirstLetter(nextValue)
@@ -96,9 +99,11 @@ export function Combobox({
   }
 
   const highlightedOption =
-    highlightedIndex >= 0 && highlightedIndex < filteredOptions.length
-      ? filteredOptions[highlightedIndex]
+    resolvedHighlightedIndex >= 0 &&
+    resolvedHighlightedIndex < filteredOptions.length
+      ? filteredOptions[resolvedHighlightedIndex]
       : null
+  const shouldShowPopup = isOpen && filteredOptions.length > 0
 
   return (
     <div className={cn("relative", className)}>
@@ -122,34 +127,65 @@ export function Combobox({
           }
         }}
         onChange={(event) => {
-          commitValue(event.target.value)
-          setIsOpen(true)
+          const nextValue = event.target.value
+          const nextFilteredOptions = filterOptions(
+            options,
+            normalize(nextValue)
+          )
+
+          commitValue(nextValue)
+          setHighlightedIndex(nextFilteredOptions.length > 0 ? 0 : -1)
+          setIsOpen(nextFilteredOptions.length > 0)
         }}
         onFocus={() => {
-          if (!disabled) {
+          if (!disabled && filteredOptions.length > 0) {
+            setHighlightedIndex(resolvedHighlightedIndex >= 0 ? resolvedHighlightedIndex : 0)
             setIsOpen(true)
           }
         }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown") {
             event.preventDefault()
+            if (filteredOptions.length === 0) {
+              return
+            }
+
             if (!isOpen) {
               setIsOpen(true)
+              setHighlightedIndex(0)
               return
             }
 
             setHighlightedIndex((current) =>
               filteredOptions.length === 0
                 ? -1
-                : Math.min(current + 1, filteredOptions.length - 1)
+                : Math.min(
+                    Math.max(current, 0) + 1,
+                    filteredOptions.length - 1
+                  )
             )
             return
           }
 
           if (event.key === "ArrowUp") {
             event.preventDefault()
+            if (filteredOptions.length === 0) {
+              return
+            }
+
+            if (!isOpen) {
+              setIsOpen(true)
+              setHighlightedIndex(filteredOptions.length - 1)
+              return
+            }
+
             setHighlightedIndex((current) =>
-              filteredOptions.length === 0 ? -1 : Math.max(current - 1, 0)
+              filteredOptions.length === 0
+                ? -1
+                : Math.max(
+                    current < 0 ? filteredOptions.length - 1 : current - 1,
+                    0
+                  )
             )
             return
           }
@@ -190,6 +226,12 @@ export function Combobox({
             return
           }
 
+          if (filteredOptions.length === 0) {
+            setIsOpen(false)
+            return
+          }
+
+          setHighlightedIndex(resolvedHighlightedIndex >= 0 ? resolvedHighlightedIndex : 0)
           setIsOpen((current) => !current)
           inputRef.current?.focus()
         }}
@@ -197,40 +239,34 @@ export function Combobox({
         <ChevronDown size={16} />
       </button>
 
-      {isOpen ? (
+      {shouldShowPopup ? (
         <div className="app-field-popup absolute z-50 mt-2 min-w-full">
           <div className="max-h-72 overflow-y-auto" role="listbox">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option, index) => {
-                const isSelected = matchedOption?.value === option.value
-                const isHighlighted = highlightedOption?.value === option.value
+            {filteredOptions.map((option, index) => {
+              const isSelected = matchedOption?.value === option.value
+              const isHighlighted = highlightedOption?.value === option.value
 
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "app-field-item flex w-full items-center justify-between text-left",
-                      isHighlighted && "bg-accent text-foreground"
-                    )}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    onClick={() => selectOption(option)}
-                  >
-                    <span className="truncate">{option.label}</span>
-                    {isSelected ? (
-                      <span className="text-primary">
-                        <Check size={15} />
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })
-            ) : (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                {emptyMessage}
-              </div>
-            )}
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cn(
+                    "app-field-item flex w-full items-center justify-between text-left",
+                    isHighlighted && "bg-accent text-foreground"
+                  )}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onClick={() => selectOption(option)}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {isSelected ? (
+                    <span className="text-primary">
+                      <Check size={15} />
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
           </div>
         </div>
       ) : null}

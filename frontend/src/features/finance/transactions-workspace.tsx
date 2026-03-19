@@ -320,7 +320,6 @@ export function TransactionsWorkspace({
                       categoryId: matchedCategory?.value || "",
                     }))
                   }
-                  emptyMessage="Digite para criar uma nova categoria."
                   placeholder="Digite para buscar ou criar"
                 />
               </div>
