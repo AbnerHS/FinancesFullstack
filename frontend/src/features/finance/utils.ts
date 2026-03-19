@@ -90,7 +90,7 @@ export function computeVariation(items: Array<{ balance: number }>) {
     return null
   }
 
-  const previous = Number(items[items.length - 2]?.balance || 0)
+  const previous = Number(items[0]?.balance || 0)
   const current = Number(items[items.length - 1]?.balance || 0)
 
   if (previous === 0) {

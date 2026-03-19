@@ -62,14 +62,24 @@ const emptyForm = (periodId: string): TransactionFormValues => ({
   recurringGroupId: null,
 })
 
-export function TransactionsWorkspace({ panel, shared }: TransactionWorkspaceProps) {
-  const [form, setForm] = useState<TransactionFormValues>(() => emptyForm(panel.period.id))
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+export function TransactionsWorkspace({
+  panel,
+  shared,
+}: TransactionWorkspaceProps) {
+  const [form, setForm] = useState<TransactionFormValues>(() =>
+    emptyForm(panel.period.id)
+  )
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
   const [formError, setFormError] = useState<string | null>(null)
 
-  const { createTransaction, createRecurringTransaction, updateTransaction, deleteTransaction } =
-    useTransactionMutations(panel.period.id, shared.periods)
+  const {
+    createTransaction,
+    createRecurringTransaction,
+    updateTransaction,
+    deleteTransaction,
+  } = useTransactionMutations(panel.period.id, shared.periods)
   const transactionLinking = useTransactionLinking(panel.period.id)
   const invoiceManager = usePeriodInvoiceManager({
     creditCards: shared.creditCards,
@@ -83,7 +93,8 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   })
 
   const groupedTransactions = useMemo(
-    () => buildTransactionGroups(reorder.transactions, shared.responsibleOptions),
+    () =>
+      buildTransactionGroups(reorder.transactions, shared.responsibleOptions),
     [reorder.transactions, shared.responsibleOptions]
   )
   const categoryOptions = useMemo(
@@ -97,7 +108,10 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
   const mutationError = useMemo(() => {
     if (createTransaction.error) {
-      return getErrorMessage(createTransaction.error, "Não foi possível salvar a transação.")
+      return getErrorMessage(
+        createTransaction.error,
+        "Não foi possível salvar a transação."
+      )
     }
     if (createRecurringTransaction.error) {
       return getErrorMessage(
@@ -106,10 +120,16 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
       )
     }
     if (updateTransaction.error) {
-      return getErrorMessage(updateTransaction.error, "Não foi possível atualizar a transação.")
+      return getErrorMessage(
+        updateTransaction.error,
+        "Não foi possível atualizar a transação."
+      )
     }
     if (deleteTransaction.error) {
-      return getErrorMessage(deleteTransaction.error, "Não foi possível remover a transação.")
+      return getErrorMessage(
+        deleteTransaction.error,
+        "Não foi possível remover a transação."
+      )
     }
     return null
   }, [
@@ -143,7 +163,11 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
       type: form.type,
       periodId: panel.period.id,
       responsibleUserId: form.responsibleUserId || null,
-      category: categoryName ? (form.categoryId ? { id: form.categoryId } : { name: categoryName }) : null,
+      category: categoryName
+        ? form.categoryId
+          ? { id: form.categoryId }
+          : { name: categoryName }
+        : null,
     }
 
     if (editingTransaction?.id) {
@@ -174,15 +198,15 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   }
 
   return (
-    <Card className="border-border bg-card/90 p-5 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <Card className="border-border bg-card/90 p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl xl:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
         <div>
           <p className="app-eyebrow">{panel.label}</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Receitas, despesas e leitura rápida do período selecionado.
           </p>
         </div>
-        <div className="grid gap-2 text-right text-sm">
+        <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-1 xl:text-right">
           <span className="text-emerald-500 dark:text-emerald-400">
             Receitas: {formatCurrency(panel.stats.incomes)}
           </span>
@@ -190,11 +214,10 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
             Despesas: {formatCurrency(panel.stats.expenses)}
           </span>
           <span
-            className={`font-semibold ${
-              panel.stats.balance > 0
-                ? "text-emerald-500 dark:text-emerald-400"
-                : "text-rose-500 dark:text-rose-400"
-            }`}
+            className={`font-semibold ${panel.stats.balance > 0
+              ? "text-emerald-500 dark:text-emerald-400"
+              : "text-rose-500 dark:text-rose-400"
+              }`}
           >
             Saldo: {formatCurrency(panel.stats.balance)}
           </span>
@@ -202,7 +225,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
       </div>
 
       <div className="mt-6 space-y-5">
-        <Card className="border-border bg-secondary/55 p-4">
+        <Card className="border-border bg-secondary/55 p-3 sm:p-4">
           <form
             className="space-y-1"
             onSubmit={async (event) => {
@@ -211,18 +234,23 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                 await submit()
               } catch (error) {
                 setFormError(
-                  error instanceof Error ? error.message : "Não foi possível salvar a transação."
+                  error instanceof Error
+                    ? error.message
+                    : "Não foi possível salvar a transação."
                 )
               }
             }}
           >
-            <div className="grid gap-3 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-2 xl:col-span-1">
                 <Label>Descrição</Label>
                 <Input
                   value={form.description}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, description: event.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
                   }
                   placeholder="Ex.: Supermercado"
                 />
@@ -232,7 +260,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                 <Label>Valor</Label>
                 <CurrencyInput
                   value={form.amount}
-                  onValueChange={(amount) => setForm((current) => ({ ...current, amount }))}
+                  onValueChange={(amount) =>
+                    setForm((current) => ({ ...current, amount }))
+                  }
                 />
               </div>
 
@@ -255,7 +285,10 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
               <div className="space-y-2">
                 <Label>Categoria</Label>
                 <Combobox
+                  allowCustomValue
                   options={categoryOptions}
+                  preventSubmitOnEnter
+                  selectFirstFilteredOptionOnEnter
                   value={form.categoryName}
                   onValueChange={(nextName, matchedCategory) =>
                     setForm((current) => ({
@@ -270,13 +303,21 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
               </div>
             </div>
 
-            <div className={`grid gap-3 ${editingTransaction ? "grid-cols-3" : "xl:grid-cols-[minmax(0,1fr)_26rem_minmax(0,1fr)]"}`}>
+            <div
+              className={`grid gap-3 ${editingTransaction
+                ? "md:grid-cols-2 xl:grid-cols-3"
+                : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
+                }`}
+            >
               <div className="flex flex-col gap-2">
                 <Label>Responsável</Label>
                 <Select
                   value={form.responsibleUserId}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, responsibleUserId: event.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      responsibleUserId: event.target.value,
+                    }))
                   }
                 >
                   <option value="">Geral</option>
@@ -289,10 +330,10 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
               </div>
 
               {!editingTransaction ? (
-                <div className="flex items-end space-y-2">
-                  <div className="w-full rounded-xl border border-border bg-card/90 px-3">
-                    <div className="flex items-center gap-3">
-                      <Label>Recorrente</Label>
+                <div className="flex items-end">
+                  <div className="w-full rounded-xl border border-border bg-card/90 px-3 py-3 xl:py-0">
+                    <div className="flex items-center gap-3 xl:flex-nowrap flex-wrap">
+                      <Label className="tracking-widest text-[11px]">Recorrente</Label>
                       <div className="flex min-h-11 items-center">
                         <Switch
                           checked={form.isRecurring}
@@ -301,7 +342,8 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                               ...current,
                               isRecurring: !current.isRecurring,
                               numberOfPeriods:
-                                !current.isRecurring && current.numberOfPeriods < 2
+                                !current.isRecurring &&
+                                  current.numberOfPeriods < 2
                                   ? 2
                                   : current.numberOfPeriods,
                             }))
@@ -310,9 +352,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                       </div>
                       {form.isRecurring ? (
                         <div className="flex flex-row items-center gap-2">
-                          <Label>Períodos</Label>
+                          <Label className="text-[10px] tracking-widest">Períodos</Label>
                           <Input
-                            className="h-8"
+                            className="h-8 xl:w-full w-20"
                             type="number"
                             min={2}
                             disabled={!form.isRecurring}
@@ -320,7 +362,8 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                             onChange={(event) =>
                               setForm((current) => ({
                                 ...current,
-                                numberOfPeriods: Number(event.target.value) || 2,
+                                numberOfPeriods:
+                                  Number(event.target.value) || 2,
                               }))
                             }
                           />
@@ -330,7 +373,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                   </div>
                 </div>
               ) : editingTransaction.recurringGroupId ? (
-                <div className="space-y-2">
+                <div>
                   <Label>Aplicar edição</Label>
                   <Select
                     value={editingScope}
@@ -370,7 +413,12 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                         : "Adicionar Transação"}
                 </Button>
                 {editingTransaction ? (
-                  <Button type="button" variant="outline" className="h-11" onClick={resetComposer}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11"
+                    onClick={resetComposer}
+                  >
                     Cancelar
                   </Button>
                 ) : null}
@@ -381,18 +429,22 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
           </form>
         </Card>
 
-        <Card className="border-border bg-secondary/40 p-4">
+        <Card className="border-border bg-secondary/40 p-3 sm:p-4">
           <h4 className="app-eyebrow">Transações por responsável</h4>
           <div className="mt-3 space-y-4">
             {panel.transactionsLoading ? (
-              <p className="text-sm text-muted-foreground">Carregando transações...</p>
+              <p className="text-sm text-muted-foreground">
+                Carregando transações...
+              </p>
             ) : groupedTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma transação cadastrada.</p>
+              <p className="text-sm text-muted-foreground">
+                Nenhuma transação cadastrada.
+              </p>
             ) : (
               groupedTransactions.map((group) => (
                 <div key={group.id} className="space-y-2">
                   <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
                       {group.label}
                     </p>
                   </div>
@@ -401,28 +453,33 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                     <div
                       key={transaction.id}
                       draggable={!reorder.reorderPending}
-                      onDragStart={(event) => reorder.startDrag(transaction, event)}
+                      onDragStart={(event) =>
+                        reorder.startDrag(transaction, event)
+                      }
                       onDragEnd={reorder.endDrag}
-                      onDragOver={(event) => reorder.dragOver(transaction, event)}
-                      onDrop={(event) => reorder.dropOnEntry(transaction, event)}
-                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card/95 px-4 py-3 transition ${
-                        reorder.dragOverId === transaction.id
-                          ? "border-primary ring-2 ring-primary/15"
-                          : "border-border"
-                      }`}
+                      onDragOver={(event) =>
+                        reorder.dragOver(transaction, event)
+                      }
+                      onDrop={(event) =>
+                        reorder.dropOnEntry(transaction, event)
+                      }
+                      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 transition sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${reorder.dragOverId === transaction.id
+                        ? "border-primary ring-2 ring-primary/15"
+                        : "border-border"
+                        }`}
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="rounded-lg border border-border bg-secondary/60 p-2 text-muted-foreground">
+                        <div className="text-muted-foreground">
                           <GripVertical size={14} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-foreground">
                             {transaction.description}{" "}
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
                               {transaction.category?.name || "Sem categoria"}
                             </span>
                             {transaction.recurringGroupId ? (
-                              <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                              <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
                                 Recorrente
                               </span>
                             ) : null}
@@ -430,13 +487,12 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
                         <span
-                          className={`text-sm font-semibold ${
-                            transaction.type === "REVENUE"
-                              ? "text-emerald-500 dark:text-emerald-400"
-                              : "text-rose-500 dark:text-rose-400"
-                          }`}
+                          className={`text-sm font-semibold ${transaction.type === "REVENUE"
+                            ? "text-emerald-500 dark:text-emerald-400"
+                            : "text-rose-500 dark:text-rose-400"
+                            }`}
                         >
                           {formatCurrency(transaction.amount)}
                         </span>
@@ -445,11 +501,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                           variant="ghost"
                           size="sm"
                           className={
-                            transaction.type === "EXPENSE" && transaction.isClearedByInvoice
+                            transaction.type === "EXPENSE" &&
+                              transaction.isClearedByInvoice
                               ? "text-emerald-500 dark:text-emerald-400"
                               : undefined
                           }
-                          onClick={() => transactionLinking.openPaymentModal(transaction)}
+                          onClick={() =>
+                            transactionLinking.openPaymentModal(transaction)
+                          }
                           disabled={transaction.type !== "EXPENSE"}
                         >
                           <CheckCircle2 size={14} />
@@ -464,19 +523,24 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                             setForm({
                               description: transaction.description,
                               amount: String(
-                                Number(transaction.amount || 0).toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })
+                                Number(transaction.amount || 0).toLocaleString(
+                                  "pt-BR",
+                                  {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  }
+                                )
                               ),
                               type: transaction.type,
                               periodId: panel.period.id,
-                              responsibleUserId: transaction.responsibleUserId || "",
+                              responsibleUserId:
+                                transaction.responsibleUserId || "",
                               categoryId: transaction.category?.id || "",
                               categoryName: transaction.category?.name || "",
                               isRecurring: false,
                               numberOfPeriods: 2,
-                              recurringGroupId: transaction.recurringGroupId || null,
+                              recurringGroupId:
+                                transaction.recurringGroupId || null,
                             })
                           }}
                         >
@@ -486,7 +550,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteTransaction.mutate(transaction.id)}
+                          onClick={() =>
+                            deleteTransaction.mutate(transaction.id)
+                          }
                           disabled={deleteTransaction.isPending}
                         >
                           <Trash2 size={14} />
@@ -569,7 +635,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
           ) : null}
           <div className="mt-3 space-y-2">
             {panel.invoicesLoading ? (
-              <p className="text-sm text-muted-foreground">Carregando faturas...</p>
+              <p className="text-sm text-muted-foreground">
+                Carregando faturas...
+              </p>
             ) : panel.invoices.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-4">
                 <p className="text-sm text-muted-foreground">Nenhuma fatura registrada.</p>
@@ -657,7 +725,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
         {transactionLinking.paymentModalEntry ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+              <h3 className="text-sm font-bold tracking-wider text-foreground uppercase">
                 Vincular a fatura
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -683,7 +751,8 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
 
                     return (
                       <option key={invoice.id} value={invoice.id}>
-                        {card?.name || "Fatura"} - {formatCurrency(invoice.amount)}
+                        {card?.name || "Fatura"} -{" "}
+                        {formatCurrency(invoice.amount)}
                       </option>
                     )
                   })}
@@ -714,7 +783,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                       )
                       transactionLinking.closePaymentModal()
                     }}
-                    disabled={transactionLinking.unlinkTransactionFromInvoice.isPending}
+                    disabled={
+                      transactionLinking.unlinkTransactionFromInvoice.isPending
+                    }
                   >
                     {transactionLinking.unlinkTransactionFromInvoice.isPending
                       ? "Desvinculando..."
@@ -730,7 +801,9 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => transactionLinking.linkTransactionToInvoice.mutate()}
+                  onClick={() =>
+                    transactionLinking.linkTransactionToInvoice.mutate()
+                  }
                   disabled={
                     transactionLinking.linkTransactionToInvoice.isPending ||
                     panel.invoices.length === 0
