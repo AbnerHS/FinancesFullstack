@@ -14,11 +14,17 @@ import {
   useCategoryManager,
   useCreditCardManager,
   useInvoiceManager,
-  usePartnerManager,
+  usePlanCollaborationManager,
   usePeriodsManager,
   usePlanManager,
 } from "@/features/finance/hooks.ts"
-import type { CreditCard, Period, Plan, TransactionCategory } from "@/features/finance/types.ts"
+import type {
+  CreditCard,
+  Period,
+  Plan,
+  PlanParticipant,
+  TransactionCategory,
+} from "@/features/finance/types.ts"
 import { formatMonthYear } from "@/features/finance/utils.ts"
 
 export function PlanManager({
@@ -83,7 +89,9 @@ export function PlanManager({
                   ) : null}
                 </div>
                 <p className={`mt-2 text-sm ${isActive ? "text-white/80" : "text-muted-foreground"}`}>
-                  {plan.partnerId ? "Compartilhado com parceiro" : "Plano individual"}
+                  {plan.partnerIds.length > 0
+                    ? `Compartilhado com ${plan.partnerIds.length} ${plan.partnerIds.length === 1 ? "parceiro" : "parceiros"}`
+                    : "Plano individual"}
                 </p>
               </button>
             )
@@ -634,43 +642,156 @@ export function DashboardPlanQuickCreate({
   )
 }
 
-export function PlanPartnerManager({ activePlan }: { activePlan: Plan | null }) {
-  const { selectableUsers, selectedPartnerId, setSelectedPartnerId, savePartner, hasChanges } =
-    usePartnerManager(activePlan)
+export function PlanParticipantsManager({
+  activePlan,
+  participants,
+  isPlanOwner,
+}: {
+  activePlan: Plan | null
+  participants: PlanParticipant[]
+  isPlanOwner: boolean
+}) {
+  const { inviteLink, inviteLinkLoading, rotateInviteLink, revokeInviteLink, removeParticipant, inviteErrorMessage } =
+    usePlanCollaborationManager({ activePlan, isPlanOwner })
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
 
   if (!activePlan) {
     return null
   }
 
+  const partnerCount = participants.filter((participant) => participant.role === "PARTNER").length
+  const inviteUrl =
+    inviteLink?.active && inviteLink.inviteToken
+      ? `${window.location.origin}/invite/${inviteLink.inviteToken}`
+      : ""
+
   return (
-    <Card className="border-border bg-secondary/60 p-5">
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
-        <Users size={16} /> Parceiro do Plano
-      </h3>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <Card className="border-border bg-secondary/60 p-5">
+        <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
+          <Users size={16} /> Convite por link
+        </h3>
 
-      <Select value={selectedPartnerId} onChange={(event) => setSelectedPartnerId(event.target.value)}>
-        <option value="">Sem parceiro</option>
-        {selectableUsers.map((user) => (
-          <option key={user.id} value={user.id}>
-            {user.name} ({user.email})
-          </option>
-        ))}
-      </Select>
+        {isPlanOwner ? (
+          <>
+            <div className="space-y-2">
+              <Label>Link ativo</Label>
+              <Input
+                readOnly
+                value={inviteUrl}
+                placeholder={inviteLinkLoading ? "Carregando link..." : "Nenhum link ativo"}
+              />
+            </div>
 
-      <Button
-        type="button"
-        onClick={() => savePartner.mutate()}
-        disabled={savePartner.isPending || !hasChanges}
-        className="mt-3 h-11 w-full"
-      >
-        {savePartner.isPending ? "Salvando..." : "Salvar parceiro"}
-      </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!inviteUrl) {
+                    rotateInviteLink.mutate()
+                    return
+                  }
 
-      <div className="mt-2">
-        <FormError
-          message={savePartner.isError ? (savePartner.error as Error).message : null}
-        />
-      </div>
-    </Card>
+                  try {
+                    await navigator.clipboard.writeText(inviteUrl)
+                    setCopyFeedback("Link copiado para a área de transferência.")
+                  } catch {
+                    setCopyFeedback("Não foi possível copiar automaticamente.")
+                  }
+                }}
+                disabled={rotateInviteLink.isPending || inviteLinkLoading}
+              >
+                {inviteUrl ? "Copiar link" : rotateInviteLink.isPending ? "Gerando..." : "Gerar link"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => rotateInviteLink.mutate()}
+                disabled={rotateInviteLink.isPending || !activePlan}
+              >
+                {rotateInviteLink.isPending ? "Rotacionando..." : inviteUrl ? "Rotacionar link" : "Gerar novo link"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => revokeInviteLink.mutate()}
+                disabled={revokeInviteLink.isPending || !inviteUrl}
+              >
+                {revokeInviteLink.isPending ? "Revogando..." : "Revogar link"}
+              </Button>
+            </div>
+
+            {copyFeedback ? (
+              <p className="mt-3 text-xs text-muted-foreground">{copyFeedback}</p>
+            ) : null}
+          </>
+        ) : (
+          <div className="rounded-[1.25rem] border border-border bg-card/80 p-4 text-sm text-muted-foreground">
+            Somente o owner do plano pode gerar, rotacionar ou revogar links de convite.
+          </div>
+        )}
+
+        <div className="mt-3">
+          <FormError message={inviteErrorMessage} />
+        </div>
+      </Card>
+
+      <Card className="border-border bg-secondary/60 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Participantes atuais</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {partnerCount === 0
+                ? "Este plano ainda não possui parceiros adicionais."
+                : `${partnerCount} ${partnerCount === 1 ? "parceiro ativo" : "parceiros ativos"}`}
+            </p>
+          </div>
+          <div className="rounded-full bg-accent px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            {participants.length} pessoas
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {participants.map((participant) => (
+            <div
+              key={participant.userId}
+              className="rounded-[1.25rem] border border-border bg-card/90 px-4 py-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{participant.name}</p>
+                  <p className="text-xs text-muted-foreground">{participant.email}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary/12 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+                    {participant.role === "OWNER" ? "Owner" : "Partner"}
+                  </span>
+
+                  {isPlanOwner && participant.role === "PARTNER" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!window.confirm(`Remover ${participant.name} deste plano?`)) {
+                          return
+                        }
+                        removeParticipant.mutate(participant.userId)
+                      }}
+                      disabled={removeParticipant.isPending}
+                    >
+                      {removeParticipant.isPending ? "Removendo..." : "Remover"}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
   )
 }

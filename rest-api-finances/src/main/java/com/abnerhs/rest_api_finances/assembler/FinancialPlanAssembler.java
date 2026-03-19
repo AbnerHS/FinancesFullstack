@@ -24,6 +24,9 @@ public class FinancialPlanAssembler implements SimpleRepresentationModelAssemble
         resource.add(linkTo(methodOn(FinancialPlanController.class)
                 .getPeriodsByPlan(dto.id())).withRel("periods"));
 
+        resource.add(linkTo(methodOn(FinancialPlanController.class)
+                .getParticipants(dto.id())).withRel("participants"));
+
         resource.add(linkTo(methodOn(UserController.class).getById(dto.ownerId()))
                 .withRel("owner"));
     }

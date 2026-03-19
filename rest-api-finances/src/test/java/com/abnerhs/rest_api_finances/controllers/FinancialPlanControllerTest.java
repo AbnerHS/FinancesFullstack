@@ -4,6 +4,8 @@ import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
 import com.abnerhs.rest_api_finances.config.JwtAuthenticationFilter;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanInviteLinkResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanParticipantResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.exception.handler.CustomEntityResponseHandler;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
@@ -118,5 +120,50 @@ class FinancialPlanControllerTest {
         mockMvc.perform(get("/api/plans/{id}/periods", plan.id()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$._embedded.periods[0].id").value(period.id().toString()));
+    }
+
+    @Test
+    void shouldManageParticipantsAndInviteEndpoints() throws Exception {
+        FinancialPlanResponseDTO plan = TestDataFactory.financialPlanResponse();
+        FinancialPlanInviteLinkResponseDTO inviteLink = TestDataFactory.financialPlanInviteLinkResponse();
+        List<FinancialPlanParticipantResponseDTO> participants = List.of(
+                TestDataFactory.ownerParticipantResponse(),
+                TestDataFactory.partnerParticipantResponse()
+        );
+
+        when(service.getParticipants(plan.id())).thenReturn(participants);
+        when(service.getInviteLink(plan.id())).thenReturn(inviteLink);
+        when(service.rotateInviteLink(plan.id())).thenReturn(inviteLink);
+        when(service.resolveInvitation("invite-token")).thenReturn(TestDataFactory.financialPlanInvitationResponse());
+        when(service.acceptInvitation("invite-token")).thenReturn(TestDataFactory.financialPlanInvitationResponse());
+        doNothing().when(service).revokeInviteLink(plan.id());
+        doNothing().when(service).removeParticipant(plan.id(), TestDataFactory.partnerUser().getId());
+
+        mockMvc.perform(get("/api/plans/{id}/participants", plan.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].role").value("OWNER"))
+                .andExpect(jsonPath("$[1].role").value("PARTNER"));
+
+        mockMvc.perform(get("/api/plans/{id}/invite-link", plan.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inviteToken").value("invite-token"));
+
+        mockMvc.perform(put("/api/plans/{id}/invite-link", plan.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(true));
+
+        mockMvc.perform(delete("/api/plans/{id}/invite-link", plan.id()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/plans/invitations/{token}", "invite-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.planName").value("Plano Casa"));
+
+        mockMvc.perform(post("/api/plans/invitations/{token}/accept", "invite-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owner").value(false));
+
+        mockMvc.perform(delete("/api/plans/{id}/participants/{userId}", plan.id(), TestDataFactory.partnerUser().getId()))
+                .andExpect(status().isNoContent());
     }
 }

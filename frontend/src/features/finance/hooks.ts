@@ -21,6 +21,7 @@ import type {
   Invoice,
   Period,
   Plan,
+  PlanInviteLink,
   ResponsibleOption,
   Transaction,
 } from "@/features/finance/types.ts"
@@ -192,46 +193,19 @@ export function useDashboard() {
     })),
   })
 
-  const peopleQueries = useQueries({
-    queries: [
-      {
-        queryKey: financeKeys.userById(activePlan?.ownerId),
-        queryFn: () => userService.getById(activePlan?.ownerId),
-        enabled: Boolean(activePlan?.ownerId),
-        staleTime: 1000 * 60 * 10,
-      },
-      {
-        queryKey: financeKeys.userById(activePlan?.partnerId),
-        queryFn: () => userService.getById(activePlan?.partnerId),
-        enabled: Boolean(activePlan?.partnerId),
-        staleTime: 1000 * 60 * 10,
-      },
-    ],
+  const { data: participants = [] } = useQuery({
+    queryKey: financeKeys.participants(activePlan?.id),
+    queryFn: () => planService.getParticipants(activePlan?.id),
+    enabled: Boolean(activePlan?.id),
+    staleTime: 1000 * 60 * 5,
   })
 
-  const ownerUser = peopleQueries[0]?.data ?? null
-  const partnerUser = peopleQueries[1]?.data ?? null
-
   const responsibleOptions = useMemo<ResponsibleOption[]>(() => {
-    if (!activePlan) {
-      return []
-    }
-
-    const options: ResponsibleOption[] = []
-    if (activePlan.ownerId) {
-      options.push({
-        id: activePlan.ownerId,
-        label: ownerUser?.name || "Dono",
-      })
-    }
-    if (activePlan.partnerId) {
-      options.push({
-        id: activePlan.partnerId,
-        label: partnerUser?.name || "Parceiro",
-      })
-    }
-    return options
-  }, [activePlan, ownerUser?.name, partnerUser?.name])
+    return participants.map((participant) => ({
+      id: participant.userId,
+      label: participant.name || (participant.role === "OWNER" ? "Owner" : "Parceiro"),
+    }))
+  }, [participants])
 
   const categorySpendingQueries = useQueries({
     queries: selectedPeriods.map((period) => ({
@@ -308,6 +282,7 @@ export function useDashboard() {
   const variation = useMemo(() => computeVariation(comparisonData), [comparisonData])
   const { data: creditCards = [] } = useCreditCards()
   const { data: transactionCategories = [] } = useTransactionCategories()
+  const isPlanOwner = Boolean(activePlan?.ownerId && user?.id && activePlan.ownerId === user.id)
 
   return {
     plans,
@@ -328,10 +303,10 @@ export function useDashboard() {
     variation,
     creditCards,
     transactionCategories,
+    participants,
+    isPlanOwner,
     responsibleOptions,
     userId: user?.id ?? null,
-    ownerUser,
-    partnerUser,
     buildCategoryChartData: (responsibleFilter: string) =>
       buildCategoryChartData({
         categorySpending,
@@ -651,8 +626,6 @@ export function usePlanManager({
       if (mode === "edit" && activePlan?.id) {
         return planService.update(activePlan.id, {
           name,
-          ownerId: activePlan.ownerId,
-          partnerId: activePlan.partnerId || null,
         })
       }
 
@@ -660,7 +633,7 @@ export function usePlanManager({
         throw new Error("Usuário não identificado.")
       }
 
-      const createdPlan = await planService.create({ name, ownerId: userId, partnerId: null })
+      const createdPlan = await planService.create({ name })
 
       if (createYearPeriods) {
         if (!Number.isInteger(periodsYear) || periodsYear < 2000) {
@@ -753,56 +726,75 @@ export function usePeriodsManager(activePlan: Plan | null) {
   }
 }
 
-export function usePartnerManager(activePlan: Plan | null) {
+export function usePlanCollaborationManager({
+  activePlan,
+  isPlanOwner,
+}: {
+  activePlan: Plan | null
+  isPlanOwner: boolean
+}) {
   const queryClient = useQueryClient()
-  const [partnerDraftByPlanId, setPartnerDraftByPlanId] = useState<Record<string, string>>({})
-
-  const { data: users = [] } = useQuery({
-    queryKey: financeKeys.users,
-    queryFn: userService.getAll,
-    staleTime: 1000 * 60 * 5,
+  const { data: inviteLink = null, isLoading: inviteLinkLoading } = useQuery({
+    queryKey: financeKeys.inviteLink(activePlan?.id),
+    queryFn: () => planService.getInviteLink(activePlan?.id),
+    enabled: Boolean(activePlan?.id && isPlanOwner),
+    staleTime: 1000 * 60,
   })
 
-  const activePlanId = activePlan?.id || ""
-  const selectedPartnerId = activePlanId
-    ? partnerDraftByPlanId[activePlanId] ?? activePlan?.partnerId ?? ""
-    : ""
-  const persistedPartnerId = activePlan?.partnerId ?? ""
+  const invalidatePlanCollaboration = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
+      queryClient.invalidateQueries({ queryKey: financeKeys.participants(activePlan?.id) }),
+      queryClient.invalidateQueries({ queryKey: financeKeys.inviteLink(activePlan?.id) }),
+    ])
+  }
 
-  const selectableUsers = useMemo(
-    () => users.filter((user) => user.id !== activePlan?.ownerId),
-    [activePlan?.ownerId, users]
-  )
-
-  const savePartner = useMutation({
+  const rotateInviteLink = useMutation({
     mutationFn: async () => {
       if (!activePlan?.id) {
         throw new Error("Plano inválido.")
       }
 
-      return planService.update(activePlan.id, {
-        name: activePlan.name,
-        ownerId: activePlan.ownerId,
-        partnerId: selectedPartnerId || null,
-      })
+      return planService.rotateInviteLink(activePlan.id)
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: financeKeys.plans })
-      setPartnerDraftByPlanId((current) => {
-        const next = { ...current }
-        delete next[activePlanId]
-        return next
-      })
+    onSuccess: invalidatePlanCollaboration,
+  })
+
+  const revokeInviteLink = useMutation({
+    mutationFn: async () => {
+      if (!activePlan?.id) {
+        throw new Error("Plano invÃ¡lido.")
+      }
+
+      await planService.revokeInviteLink(activePlan.id)
     },
+    onSuccess: invalidatePlanCollaboration,
+  })
+
+  const removeParticipant = useMutation({
+    mutationFn: async (userId: string) => {
+      if (!activePlan?.id) {
+        throw new Error("Plano invÃ¡lido.")
+      }
+
+      await planService.removeParticipant(activePlan.id, userId)
+    },
+    onSuccess: invalidatePlanCollaboration,
   })
 
   return {
-    selectableUsers,
-    selectedPartnerId,
-    hasChanges: selectedPartnerId !== persistedPartnerId,
-    setSelectedPartnerId: (value: string) =>
-      setPartnerDraftByPlanId((current) => ({ ...current, [activePlanId]: value })),
-    savePartner,
+    inviteLink: inviteLink as PlanInviteLink | null,
+    inviteLinkLoading,
+    rotateInviteLink,
+    revokeInviteLink,
+    removeParticipant,
+    inviteErrorMessage: rotateInviteLink.error
+      ? getErrorMessage(rotateInviteLink.error, "NÃ£o foi possÃ­vel gerar o link de convite.")
+      : revokeInviteLink.error
+        ? getErrorMessage(revokeInviteLink.error, "NÃ£o foi possÃ­vel revogar o link de convite.")
+        : removeParticipant.error
+          ? getErrorMessage(removeParticipant.error, "NÃ£o foi possÃ­vel remover o participante.")
+          : null,
   }
 }
 

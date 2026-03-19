@@ -28,8 +28,8 @@ const routeMeta: Record<string, { title: string; description: string }> = {
     description: "Centralize cartões, faturas e recorte das despesas ligadas ao crédito.",
   },
   "/partner": {
-    title: "Parceiro do Plano",
-    description: "Defina o parceiro e mantenha a atribuição de responsabilidades consistente.",
+    title: "Participantes do Plano",
+    description: "Gerencie parceiros, convites por link e a composição do plano compartilhado.",
   },
 }
 

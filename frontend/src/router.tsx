@@ -12,6 +12,7 @@ import { SignUpForm } from "@/features/auth/sign-up-form.tsx"
 import { AppLayout } from "@/layouts/app-layout.tsx"
 import { CardsPage } from "@/pages/cards-page.tsx"
 import { DashboardPage } from "@/pages/dashboard-page.tsx"
+import { InvitePage } from "@/pages/invite-page.tsx"
 import { PartnerPage } from "@/pages/partner-page.tsx"
 import { PeriodsPage } from "@/pages/periods-page.tsx"
 import { PlansPage } from "@/pages/plans-page.tsx"
@@ -32,6 +33,12 @@ const authCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/auth/google/callback",
   component: GoogleAuthCallback,
+})
+
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/invite/$token",
+  component: InvitePage,
 })
 
 const appRoute = createRoute({
@@ -91,6 +98,7 @@ const partnerRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   authCallbackRoute,
+  inviteRoute,
   publicRoute.addChildren([loginRoute, signUpRoute]),
   appRoute.addChildren([
     dashboardRoute,
