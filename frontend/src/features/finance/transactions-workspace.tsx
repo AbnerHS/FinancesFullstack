@@ -1,5 +1,5 @@
 import { ArrowRight, CheckCircle2, GripVertical, Pencil, Plus, Trash2, TrendingDown, TrendingUp, X } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -67,6 +67,7 @@ export function TransactionsWorkspace({
   panel,
   shared,
 }: TransactionWorkspaceProps) {
+  const composerRef = useRef<HTMLDivElement | null>(null)
   const [form, setForm] = useState<TransactionFormValues>(() =>
     emptyForm(panel.period.id)
   )
@@ -145,6 +146,22 @@ export function TransactionsWorkspace({
     setEditingScope("SINGLE")
     setFormError(null)
     setForm(emptyForm(panel.period.id))
+  }
+
+  const scrollToComposerOnMobile = () => {
+    if (
+      typeof window === "undefined" ||
+      !window.matchMedia("(max-width: 1279px)").matches
+    ) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      composerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      })
+    })
   }
 
   const submit = async () => {
@@ -230,7 +247,8 @@ export function TransactionsWorkspace({
       </div>
 
       <div className="mt-6 space-y-5">
-        <Card className="border-border bg-secondary/55 p-3 sm:p-4">
+        <div ref={composerRef}>
+          <Card className="border-border bg-secondary/55 p-3 sm:p-4">
           <form
             className="space-y-1"
             onSubmit={async (event) => {
@@ -432,7 +450,8 @@ export function TransactionsWorkspace({
 
             <FormError message={formError || mutationError} />
           </form>
-        </Card>
+          </Card>
+        </div>
 
         <Card className="border-border bg-secondary/40 p-3 sm:p-4">
           <h4 className="app-eyebrow">Transações por responsável</h4>
@@ -547,6 +566,7 @@ export function TransactionsWorkspace({
                               recurringGroupId:
                                 transaction.recurringGroupId || null,
                             })
+                            scrollToComposerOnMobile()
                           }}
                         >
                           <Pencil size={14} />

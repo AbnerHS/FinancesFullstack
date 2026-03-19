@@ -3,7 +3,7 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
-  Users,
+  Users
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -14,13 +14,13 @@ import {
   DashboardPlanQuickCreate,
   PlanPartnerManager,
 } from "@/features/finance/managers.tsx"
+import MetricCard from "@/features/finance/metric-card"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
 import {
   formatCurrency,
   formatMonthYear,
   toneForBalance,
 } from "@/features/finance/utils.ts"
-import MetricCard from "@/features/finance/metric-card"
 
 export function DashboardPage() {
   const {
@@ -103,6 +103,23 @@ export function DashboardPage() {
     ? buildCategoryChartData(responsibleFilter)
     : categorySpending
 
+  const sortedPeriods = useMemo(
+    () =>
+      [...periods].sort((left, right) => {
+        const leftValue = left.year * 100 + left.month
+        const rightValue = right.year * 100 + right.month
+        return leftValue - rightValue
+      }),
+    [periods]
+  )
+
+  const selectedPeriodsLabel =
+    selectedPeriodIds.length === 0
+      ? "Nenhum mês selecionado"
+      : selectedPeriodIds.length === 1
+        ? "1 mês selecionado"
+        : `${selectedPeriodIds.length} meses selecionados`
+
   if (plansLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -171,29 +188,55 @@ export function DashboardPage() {
           </div>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {periodsLoading ? (
-            <p className="text-sm text-muted-foreground">
-              Carregando períodos...
-            </p>
-          ) : (
-            periods.map((period) => {
-              const selected = selectedPeriodIds.includes(period.id)
-              return (
-                <button
-                  key={period.id}
-                  type="button"
-                  onClick={() => togglePeriodId(period.id)}
-                  className={`rounded-full border px-4 py-2 text-sm transition ${selected
-                    ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
-                    : "border-border bg-secondary/70 text-foreground hover:border-primary/40 hover:bg-accent/70"
-                    }`}
-                >
-                  {formatMonthYear(period)}
-                </button>
-              )
-            })
-          )}
+        <div className="mt-5 rounded-[1.5rem] border border-border bg-secondary/35 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="app-eyebrow">Meses em foco</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedPeriodsLabel}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 -mx-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:px-0">
+            <div className="flex gap-3 sm:flex-wrap">
+              {periodsLoading ? (
+                <p className="text-sm text-muted-foreground">
+                  Carregando períodos...
+                </p>
+              ) : (
+                sortedPeriods.map((period) => {
+                  const selected = selectedPeriodIds.includes(period.id)
+
+                  return (
+                    <button
+                      key={period.id}
+                      type="button"
+                      onClick={() => togglePeriodId(period.id)}
+                      className={`min-w-[10.5rem] shrink-0 snap-start rounded-[1.25rem] border px-4 py-3 text-left transition sm:min-w-0 ${selected
+                        ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
+                        : "border-border bg-card/80 text-foreground hover:border-primary/40 hover:bg-accent/70"
+                        }`}
+                    >
+                      <p className="mt-2 text-sm font-semibold">
+                        {formatMonthYear(period)}
+                      </p>
+                      <p
+                        className={`mt-2 text-xs ${selected
+                          ? "text-primary-foreground/80"
+                          : "text-muted-foreground"
+                          }`}
+                      >
+                        {selected
+                          ? "Selecionado para comparação"
+                          : "Toque para incluir"}
+                      </p>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -263,7 +306,7 @@ export function DashboardPage() {
 
           {periods.length > 0 && filteredPanels.length === 0 ? (
             <div className="flex min-w-0 items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
-              Selecione ao menos um perÃ­odo para ativar o workspace.
+              Selecione ao menos um período para ativar o workspace.
             </div>
           ) : null}
         </div>
@@ -335,8 +378,6 @@ export function DashboardPage() {
     </div>
   )
 }
-
-
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
