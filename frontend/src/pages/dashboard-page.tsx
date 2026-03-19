@@ -21,7 +21,11 @@ import {
   PlanPartnerManager,
 } from "@/features/finance/managers.tsx"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
-import { formatCurrency, formatMonthYear, toneForBalance } from "@/features/finance/utils.ts"
+import {
+  formatCurrency,
+  formatMonthYear,
+  toneForBalance,
+} from "@/features/finance/utils.ts"
 
 export function DashboardPage() {
   const {
@@ -59,10 +63,19 @@ export function DashboardPage() {
       )
       const incomes = transactions
         .filter((transaction) => transaction.type === "REVENUE")
-        .reduce((total, transaction) => total + Number(transaction.amount || 0), 0)
+        .reduce(
+          (total, transaction) => total + Number(transaction.amount || 0),
+          0
+        )
       const expenses = transactions
-        .filter((transaction) => transaction.type === "EXPENSE" && !transaction.isClearedByInvoice)
-        .reduce((total, transaction) => total + Number(transaction.amount || 0), 0)
+        .filter(
+          (transaction) =>
+            transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
+        )
+        .reduce(
+          (total, transaction) => total + Number(transaction.amount || 0),
+          0
+        )
 
       return {
         ...panel,
@@ -96,7 +109,11 @@ export function DashboardPage() {
     : categorySpending
 
   if (plansLoading) {
-    return <div className="flex min-h-[50vh] items-center justify-center">Carregando dashboard...</div>
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        Carregando dashboard...
+      </div>
+    )
   }
 
   return (
@@ -111,7 +128,9 @@ export function DashboardPage() {
               value={selectedPlanId || ""}
               onChange={(event) => setSelectedPlanId(event.target.value)}
             >
-              {plans.length === 0 ? <option value="">Nenhum plano ainda</option> : null}
+              {plans.length === 0 ? (
+                <option value="">Nenhum plano ainda</option>
+              ) : null}
               {plans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
                   {plan.name}
@@ -147,16 +166,21 @@ export function DashboardPage() {
 
         {plans.length === 0 ? (
           <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-secondary/50 px-5 py-4">
-            <p className="font-semibold text-foreground">Seu dashboard começa por um plano financeiro.</p>
+            <p className="font-semibold text-foreground">
+              Seu dashboard começa por um plano financeiro.
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Crie seu primeiro plano para liberar períodos, transações, categorias e cartões.
+              Crie seu primeiro plano para liberar períodos, transações,
+              categorias e cartões.
             </p>
           </div>
         ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {periodsLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando períodos...</p>
+            <p className="text-sm text-muted-foreground">
+              Carregando períodos...
+            </p>
           ) : (
             periods.map((period) => {
               const selected = selectedPeriodIds.includes(period.id)
@@ -182,20 +206,30 @@ export function DashboardPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Receitas"
-          value={formatCurrency(responsibleFilter ? filteredMetrics.incomes : combinedStats.incomes)}
+          value={formatCurrency(
+            responsibleFilter ? filteredMetrics.incomes : combinedStats.incomes
+          )}
           tone="positive"
           icon={<TrendingUp size={18} />}
         />
         <MetricCard
           title="Despesas"
-          value={formatCurrency(responsibleFilter ? filteredMetrics.expenses : combinedStats.expenses)}
+          value={formatCurrency(
+            responsibleFilter
+              ? filteredMetrics.expenses
+              : combinedStats.expenses
+          )}
           tone="negative"
           icon={<TrendingDown size={18} />}
         />
         <MetricCard
           title="Saldo"
-          value={formatCurrency(responsibleFilter ? filteredMetrics.balance : combinedStats.balance)}
-          tone={toneForBalance(responsibleFilter ? filteredMetrics.balance : combinedStats.balance)}
+          value={formatCurrency(
+            responsibleFilter ? filteredMetrics.balance : combinedStats.balance
+          )}
+          tone={toneForBalance(
+            responsibleFilter ? filteredMetrics.balance : combinedStats.balance
+          )}
           icon={<ArrowRight size={18} />}
         />
         <MetricCard
@@ -208,13 +242,37 @@ export function DashboardPage() {
 
       <section className="space-y-5">
         <div>
-          <h3 className="font-serif text-3xl font-semibold text-foreground">Transações</h3>
+          <h3 className="font-serif text-3xl font-semibold text-foreground">
+            Transações
+          </h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Painéis de transações, faturas e manutenção estrutural do dashboard.
           </p>
         </div>
 
-        <div className="overflow-x-auto pb-4">
+        <div className="grid gap-5 xl:hidden">
+          {filteredPanels.map((panel) => (
+            <div key={panel.period.id} className="min-w-0">
+              <TransactionsWorkspace
+                panel={panel}
+                shared={{
+                  creditCards,
+                  periods,
+                  transactionCategories,
+                  responsibleOptions,
+                }}
+              />
+            </div>
+          ))}
+
+          {periods.length > 0 && filteredPanels.length === 0 ? (
+            <div className="flex min-w-0 items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
+              Selecione ao menos um perÃ­odo para ativar o workspace.
+            </div>
+          ) : null}
+        </div>
+
+        <div className="hidden overflow-x-auto pb-4 xl:block">
           <div className="flex gap-5">
             {filteredPanels.map((panel) => (
               <div key={panel.period.id} className="min-w-[50rem] flex-1">
@@ -276,7 +334,10 @@ export function DashboardPage() {
         </section>
       </div>
 
-      <DashboardCharts comparisonData={comparisonData} categoryData={categoryData} />
+      <DashboardCharts
+        comparisonData={comparisonData}
+        categoryData={categoryData}
+      />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
         <section className="app-panel">
@@ -296,10 +357,22 @@ export function DashboardPage() {
             </div>
           </div>
           <dl className="mt-6 space-y-4">
-            <InfoRow label="Plano ativo" value={activePlan?.name || "Sem plano"} />
-            <InfoRow label="Períodos disponíveis" value={String(periods.length)} />
-            <InfoRow label="Cartões cadastrados" value={String(creditCards.length)} />
-            <InfoRow label="Lançamentos visíveis" value={String(allTransactions.length)} />
+            <InfoRow
+              label="Plano ativo"
+              value={activePlan?.name || "Sem plano"}
+            />
+            <InfoRow
+              label="Períodos disponíveis"
+              value={String(periods.length)}
+            />
+            <InfoRow
+              label="Cartões cadastrados"
+              value={String(creditCards.length)}
+            />
+            <InfoRow
+              label="Lançamentos visíveis"
+              value={String(allTransactions.length)}
+            />
           </dl>
         </section>
       </section>
@@ -327,9 +400,15 @@ function MetricCard({
 
   const classes =
     normalizedTone === "positive"
-      ? { value: "text-emerald-500 dark:text-emerald-400", icon: "bg-emerald-500/12 text-emerald-500 dark:text-emerald-400" }
+      ? {
+          value: "text-emerald-500 dark:text-emerald-400",
+          icon: "bg-emerald-500/12 text-emerald-500 dark:text-emerald-400",
+        }
       : normalizedTone === "negative"
-        ? { value: "text-rose-500 dark:text-rose-400", icon: "bg-rose-500/12 text-rose-500 dark:text-rose-400" }
+        ? {
+            value: "text-rose-500 dark:text-rose-400",
+            icon: "bg-rose-500/12 text-rose-500 dark:text-rose-400",
+          }
         : { value: "text-foreground", icon: "bg-primary/12 text-primary" }
 
   return (
@@ -337,7 +416,9 @@ function MetricCard({
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="app-eyebrow">{title}</p>
-          <p className={`mt-2 text-2xl font-semibold ${classes.value}`}>{value}</p>
+          <p className={`mt-2 text-2xl font-semibold ${classes.value}`}>
+            {value}
+          </p>
         </div>
         <div className={`rounded-full p-3 ${classes.icon}`}>{icon}</div>
       </div>
