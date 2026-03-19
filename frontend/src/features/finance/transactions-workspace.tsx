@@ -1,4 +1,4 @@
-import { CheckCircle2, GripVertical, Pencil, Plus, Trash2 } from "lucide-react"
+import { CheckCircle2, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -10,13 +10,18 @@ import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
-import { useTransactionLinking, useTransactionMutations } from "@/features/finance/hooks.ts"
+import {
+  usePeriodInvoiceManager,
+  useTransactionLinking,
+  useTransactionMutations,
+} from "@/features/finance/hooks.ts"
 import {
   buildTransactionGroups,
   useTransactionReorder,
 } from "@/features/finance/transaction-workspace-utils.ts"
 import type {
   CreditCard,
+  Invoice,
   Period,
   ResponsibleOption,
   Transaction,
@@ -31,7 +36,7 @@ type TransactionWorkspaceProps = {
     period: Period
     label: string
     transactions: Transaction[]
-    invoices: Array<{ id: string; amount: number | string; creditCardId: string }>
+    invoices: Invoice[]
     stats: { incomes: number; expenses: number; balance: number }
     transactionsLoading: boolean
     invoicesLoading: boolean
@@ -66,6 +71,11 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
   const { createTransaction, createRecurringTransaction, updateTransaction, deleteTransaction } =
     useTransactionMutations(panel.period.id, shared.periods)
   const transactionLinking = useTransactionLinking(panel.period.id)
+  const invoiceManager = usePeriodInvoiceManager({
+    creditCards: shared.creditCards,
+    invoices: panel.invoices,
+    periodId: panel.period.id,
+  })
 
   const reorder = useTransactionReorder({
     activePeriodId: panel.period.id,
@@ -491,29 +501,152 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
         </Card>
 
         <Card className="border-border bg-secondary/40 p-4">
-          <h4 className="app-eyebrow">Faturas do período</h4>
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="app-eyebrow">Faturas do período</h4>
+            {panel.invoices.length > 0 && !invoiceManager.isCreateOpen ? (
+              <Button type="button" variant="outline" size="sm" onClick={invoiceManager.startCreate}>
+                <Plus size={14} />
+                Nova fatura
+              </Button>
+            ) : null}
+          </div>
+          {invoiceManager.isCreateOpen ? (
+            <div className="mt-3 rounded-xl border border-border bg-card/90 p-4">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <div className="space-y-2">
+                  <Label>Cartão</Label>
+                  <Select
+                    value={invoiceManager.createForm.creditCardId}
+                    onChange={(event) =>
+                      invoiceManager.setCreateForm((current) => ({
+                        ...current,
+                        creditCardId: event.target.value,
+                      }))
+                    }
+                  >
+                    {shared.creditCards.length === 0 ? <option value="">Sem cartões</option> : null}
+                    {shared.creditCards.length > 0 ? <option value="">Selecione o cartão</option> : null}
+                    {shared.creditCards.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor</Label>
+                  <CurrencyInput
+                    value={invoiceManager.createForm.amount}
+                    onValueChange={(amount) =>
+                      invoiceManager.setCreateForm((current) => ({ ...current, amount }))
+                    }
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="button"
+                    className="h-11"
+                    onClick={() => invoiceManager.createInvoice.mutate()}
+                    disabled={invoiceManager.createInvoice.isPending}
+                  >
+                    <Plus size={14} />
+                    {invoiceManager.createInvoice.isPending ? "Criando..." : "Criar"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11"
+                    onClick={invoiceManager.cancelCreate}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3">
+                <FormError message={invoiceManager.createErrorMessage} />
+              </div>
+            </div>
+          ) : null}
           <div className="mt-3 space-y-2">
             {panel.invoicesLoading ? (
               <p className="text-sm text-muted-foreground">Carregando faturas...</p>
             ) : panel.invoices.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma fatura registrada.</p>
+              <div className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-4">
+                <p className="text-sm text-muted-foreground">Nenhuma fatura registrada.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={invoiceManager.startCreate}
+                >
+                  <Plus size={14} />
+                  Criar fatura neste mês
+                </Button>
+              </div>
             ) : (
               panel.invoices.map((invoice) => {
                 const card = shared.creditCards.find((item) => item.id === invoice.creditCardId)
+                const isEditing = invoiceManager.editingInvoiceId === invoice.id
+
                 return (
                   <div
                     key={invoice.id}
-                    className="flex items-center justify-between rounded-xl border border-border bg-card/90 px-4 py-3"
+                    className="rounded-xl border border-border bg-card/90 px-4 py-3"
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {card?.name || "Cartão"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Fatura vinculada ao período</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {card?.name || "Cartão"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Fatura vinculada ao período</p>
+                      </div>
+                      {isEditing ? (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <div className="w-full min-w-40 sm:w-44">
+                            <CurrencyInput
+                              value={invoiceManager.editingAmount}
+                              onValueChange={invoiceManager.setEditingAmount}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => invoiceManager.updateInvoice.mutate()}
+                            disabled={invoiceManager.updateInvoice.isPending}
+                          >
+                            {invoiceManager.updateInvoice.isPending ? "Salvando..." : "Salvar"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={invoiceManager.cancelEdit}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
+                            {formatCurrency(invoice.amount)}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => invoiceManager.startEdit(invoice)}
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
-                      {formatCurrency(invoice.amount)}
-                    </p>
+                    {isEditing ? (
+                      <div className="mt-3">
+                        <FormError message={invoiceManager.updateErrorMessage} />
+                      </div>
+                    ) : null}
                   </div>
                 )
               })
