@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 
 import { authService } from "@/features/auth/auth-service.ts"
+import { consumePostAuthRedirect } from "@/features/auth/post-auth-redirect.ts"
 import type { GoogleLoginInput, LoginInput, SignUpInput } from "@/features/auth/types.ts"
 import { useAuthStore } from "@/stores/auth-store.ts"
 
@@ -12,6 +13,13 @@ function useAuthSuccessHandler() {
   return async (data: Awaited<ReturnType<typeof authService.login>>) => {
     setAccessToken({ accessToken: data.accessToken })
     setUser({ user: data.user })
+
+    const postAuthRedirect = consumePostAuthRedirect()
+    if (postAuthRedirect) {
+      window.location.replace(postAuthRedirect)
+      return
+    }
+
     await navigate({ to: "/" })
   }
 }

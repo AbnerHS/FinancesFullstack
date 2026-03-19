@@ -28,7 +28,7 @@ const navItems = [
   { to: "/plans", label: "Planos", description: "Estrutura financeira", icon: FolderKanban },
   { to: "/periods", label: "Períodos", description: "Comparação mensal", icon: WalletCards },
   { to: "/cards", label: "Cartões", description: "Cartões e faturas", icon: CreditCard },
-  { to: "/partner", label: "Parceiro", description: "Participantes do plano", icon: Users },
+  { to: "/partner", label: "Participantes", description: "Parceiros e convites", icon: Users },
 ]
 
 export function MobileSidebarButton({ onClick }: { onClick: () => void }) {

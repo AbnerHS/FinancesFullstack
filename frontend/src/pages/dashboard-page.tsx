@@ -10,17 +10,14 @@ import { useMemo, useState } from "react"
 import { Select } from "@/components/ui/select.tsx"
 import { DashboardCharts } from "@/features/finance/charts.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
-import {
-  DashboardPlanQuickCreate,
-  PlanPartnerManager,
-} from "@/features/finance/managers.tsx"
-import MetricCard from "@/features/finance/metric-card"
+import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
 import {
   formatCurrency,
   formatMonthYear,
   toneForBalance,
 } from "@/features/finance/utils.ts"
+import MetricCard from "@/features/finance/metric-card"
 
 export function DashboardPage() {
   const {
@@ -39,6 +36,7 @@ export function DashboardPage() {
     creditCards,
     transactionCategories,
     responsibleOptions,
+    participants,
     userId,
     allTransactions,
     variation,
@@ -338,11 +336,7 @@ export function DashboardPage() {
 
       <DashboardCharts comparisonData={comparisonData} categoryData={categoryData} />
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-        <section className="app-panel">
-          <PlanPartnerManager activePlan={activePlan} />
-        </section>
-
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)]">
         <section className="app-panel">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -371,6 +365,10 @@ export function DashboardPage() {
             <InfoRow
               label="Lançamentos visíveis"
               value={String(allTransactions.length)}
+            />
+            <InfoRow
+              label="Participantes"
+              value={String(participants.length)}
             />
           </dl>
         </section>

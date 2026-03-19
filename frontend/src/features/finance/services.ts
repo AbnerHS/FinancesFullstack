@@ -9,6 +9,9 @@ import type {
   Invoice,
   Period,
   Plan,
+  PlanInvitation,
+  PlanInviteLink,
+  PlanParticipant,
   Transaction,
   TransactionCategory,
   User,
@@ -17,10 +20,12 @@ import type {
 export const financeKeys = {
   plans: ["plans-me"] as const,
   periods: (planId?: string | null) => ["plan-periods", planId] as const,
+  participants: (planId?: string | null) => ["plan-participants", planId] as const,
+  inviteLink: (planId?: string | null) => ["plan-invite-link", planId] as const,
+  invitation: (token?: string | null) => ["plan-invitation", token] as const,
   cards: ["credit-cards-me"] as const,
   categories: ["transaction-categories"] as const,
   users: ["users-all"] as const,
-  userById: (id?: string | null) => ["user", id] as const,
   periodTransactionsRoot: ["period-transactions"] as const,
   periodTransactions: (periodId?: string | null) => ["period-transactions", periodId] as const,
   periodInvoices: (periodId?: string | null) => ["period-invoices", periodId] as const,
@@ -33,7 +38,7 @@ function embedded<T, Key extends string>(data: EmbeddedCollection<T, Key>, key: 
 }
 
 export const planService = {
-  async create(payload: { name: string; ownerId: string; partnerId: string | null }) {
+  async create(payload: { name: string }) {
     const { data } = await http.post<Plan>("/plans", payload)
     return data
   },
@@ -41,7 +46,7 @@ export const planService = {
     const { data } = await http.get<EmbeddedCollection<Plan, "plans">>("/users/me/plans")
     return embedded(data, "plans")
   },
-  async update(id: string, payload: { name: string; ownerId: string; partnerId: string | null }) {
+  async update(id: string, payload: { name: string }) {
     const { data } = await http.put<Plan>(`/plans/${id}`, payload)
     return data
   },
@@ -56,6 +61,40 @@ export const planService = {
 
     const { data } = await http.get<EmbeddedCollection<Period, "periods">>(periodsPath)
     return embedded(data, "periods")
+  },
+  async getParticipants(planId?: string | null) {
+    if (!planId) {
+      return []
+    }
+
+    const { data } = await http.get<PlanParticipant[]>(`/plans/${planId}/participants`)
+    return data ?? []
+  },
+  async getInviteLink(planId?: string | null) {
+    if (!planId) {
+      return null
+    }
+
+    const { data } = await http.get<PlanInviteLink>(`/plans/${planId}/invite-link`)
+    return data
+  },
+  async rotateInviteLink(planId: string) {
+    const { data } = await http.put<PlanInviteLink>(`/plans/${planId}/invite-link`)
+    return data
+  },
+  async revokeInviteLink(planId: string) {
+    await http.delete(`/plans/${planId}/invite-link`)
+  },
+  async removeParticipant(planId: string, userId: string) {
+    await http.delete(`/plans/${planId}/participants/${userId}`)
+  },
+  async resolveInvitation(token: string) {
+    const { data } = await http.get<PlanInvitation>(`/plans/invitations/${token}`)
+    return data
+  },
+  async acceptInvitation(token: string) {
+    const { data } = await http.post<PlanInvitation>(`/plans/invitations/${token}/accept`)
+    return data
   },
 }
 
@@ -176,14 +215,6 @@ export const userService = {
   async getAll() {
     const { data } = await http.get<EmbeddedCollection<User, "users">>("/users")
     return embedded(data, "users")
-  },
-  async getById(id?: string | null) {
-    if (!id) {
-      return null
-    }
-
-    const { data } = await http.get<User>(`/users/${id}`)
-    return data
   },
   async updateMe(payload: { name: string; email: string }) {
     const { data } = await http.patch<User>("/users/me", payload)

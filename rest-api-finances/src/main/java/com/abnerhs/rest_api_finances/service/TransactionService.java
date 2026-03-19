@@ -11,6 +11,7 @@ import com.abnerhs.rest_api_finances.model.FinancialPeriod;
 import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.model.Transaction;
 import com.abnerhs.rest_api_finances.model.TransactionCategory;
+import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
@@ -50,9 +51,13 @@ public class TransactionService {
     @Autowired
     private TransactionCategoryRepository transactionCategoryRepository;
 
+    @Autowired
+    private FinancialPlanService financialPlanService;
+
     @Transactional
     public TransactionResponseDTO create(TransactionRequestDTO dto) {
         Transaction transaction = mapper.toEntity(dto);
+        validateResponsibleUser(transaction);
         transaction.setTransactionCategory(resolveCategory(dto.category()));
         transaction.setOrder(getNextOrder(transaction.getPeriod().getId()));
         return mapper.toDto(repository.save(transaction));
@@ -81,6 +86,7 @@ public class TransactionService {
 
             Transaction transaction = mapper.toEntity(dto);
             transaction.setPeriod(period);
+            validateResponsibleUser(transaction);
             transaction.setRecurringGroupId(recurringGroupId);
             transaction.setTransactionCategory(resolveCategory(dto.category()));
             transaction.setOrder(getNextOrder(period.getId()));
@@ -126,6 +132,7 @@ public class TransactionService {
         Transaction entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         mapper.updateEntityFromDto(dto, entity);
+        validateResponsibleUser(entity);
         entity.setTransactionCategory(resolveCategory(dto.category()));
         return mapper.toDto(repository.save(entity));
     }
@@ -163,6 +170,8 @@ public class TransactionService {
                 case "isClearedByInvoice" -> transaction.setClearedByInvoice((Boolean) value);
             }
         });
+
+        validateResponsibleUser(transaction);
 
         return mapper.toDto(repository.save(transaction));
     }
@@ -214,5 +223,21 @@ public class TransactionService {
         String name = Objects.toString(nameValue, null);
 
         return new TransactionCategoryDTO(id, name);
+    }
+
+    private void validateResponsibleUser(Transaction transaction) {
+        User responsibleUser = transaction.getResponsibleUser();
+        if (responsibleUser == null) {
+            return;
+        }
+
+        FinancialPlan plan = transaction.getPeriod() != null ? transaction.getPeriod().getFinancialPlan() : null;
+        if (plan == null) {
+            return;
+        }
+
+        if (!financialPlanService.planHasParticipant(plan, responsibleUser.getId())) {
+            throw new IllegalArgumentException("O responsável precisa participar do plano.");
+        }
     }
 }

@@ -1,47 +1,77 @@
 import { Users } from "lucide-react"
 
+import { Select } from "@/components/ui/select.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
-import { PlanPartnerManager } from "@/features/finance/managers.tsx"
+import { PlanParticipantsManager } from "@/features/finance/managers.tsx"
 
 export function PartnerPage() {
-  const { activePlan, responsibleOptions } = useDashboard()
+  const {
+    plans,
+    activePlan,
+    participants,
+    isPlanOwner,
+    selectedPlanId,
+    setSelectedPlanId,
+  } = useDashboard()
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <section>
-        <PlanPartnerManager activePlan={activePlan} />
-      </section>
-
+    <div className="space-y-6">
       <section className="app-panel">
-        <div className="flex items-center justify-between gap-3">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div>
             <p className="app-eyebrow">Participantes</p>
             <h2 className="font-serif text-3xl font-semibold text-foreground">
-              Responsáveis do plano
+              Colaboração do plano
             </h2>
-          </div>
-          <div className="rounded-full bg-accent p-3 text-primary">
-            <Users size={18} />
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-3">
-          {responsibleOptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              O plano ativo ainda não possui participantes adicionais.
+            <p className="mt-2 text-sm text-muted-foreground">
+              Gere links, acompanhe quem faz parte do plano e mantenha a composição atualizada.
             </p>
-          ) : (
-            responsibleOptions.map((option) => (
-              <div
-                key={option.id}
-                className="rounded-[1.25rem] border border-border bg-secondary/60 px-4 py-3"
-              >
-                <p className="text-sm font-semibold text-foreground">{option.label}</p>
-              </div>
-            ))
-          )}
+          </div>
+
+          <div>
+            <label className="app-label">Plano ativo</label>
+            <Select
+              className="mt-2"
+              disabled={plans.length === 0}
+              value={selectedPlanId || activePlan?.id || ""}
+              onChange={(event) => setSelectedPlanId(event.target.value)}
+            >
+              {plans.length === 0 ? <option value="">Nenhum plano ainda</option> : null}
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       </section>
+
+      {!activePlan ? (
+        <section className="app-panel">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="app-eyebrow">Sem plano</p>
+              <h3 className="font-serif text-2xl font-semibold text-foreground">
+                Nenhum plano selecionado
+              </h3>
+            </div>
+            <div className="rounded-full bg-accent p-3 text-primary">
+              <Users size={18} />
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm text-muted-foreground">
+            Selecione um plano para visualizar participantes e gerenciar convites.
+          </p>
+        </section>
+      ) : (
+        <PlanParticipantsManager
+          activePlan={activePlan}
+          participants={participants}
+          isPlanOwner={isPlanOwner}
+        />
+      )}
     </div>
   )
 }
