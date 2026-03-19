@@ -29,21 +29,76 @@ import {
   buildComparisonChartData,
   calculateStats,
   computeVariation,
+  findDefaultPeriod,
   formatMonthYear,
   parseCurrencyInput,
+  sortPeriods,
 } from "@/features/finance/utils.ts"
 
-function arraysEqual(a: string[], b: string[]) {
-  if (a.length !== b.length) {
-    return false
-  }
-
-  return a.every((value, index) => value === b[index])
+type PeriodRange = {
+  startPeriodId: string | null
+  endPeriodId: string | null
 }
 
-function orderByPeriods(ids: string[], periods: Period[]) {
-  const orderMap = new Map(periods.map((period, index) => [period.id, index]))
-  return [...ids].sort((a, b) => (orderMap.get(a) ?? 0) - (orderMap.get(b) ?? 0))
+const EMPTY_PERIOD_RANGE: PeriodRange = {
+  startPeriodId: null,
+  endPeriodId: null,
+}
+
+function rangesEqual(left: PeriodRange, right: PeriodRange) {
+  return (
+    left.startPeriodId === right.startPeriodId &&
+    left.endPeriodId === right.endPeriodId
+  )
+}
+
+function buildLegacyPeriodRange(ids: string[]) {
+  return {
+    startPeriodId: ids[0] ?? null,
+    endPeriodId: ids.length > 0 ? ids[ids.length - 1] : null,
+  }
+}
+
+function normalizePeriodRange(
+  range: PeriodRange,
+  periods: Period[],
+  fallbackPeriodId: string | null
+) {
+  if (periods.length === 0 || !fallbackPeriodId) {
+    return EMPTY_PERIOD_RANGE
+  }
+
+  const periodIds = periods.map((period) => period.id)
+  const startCandidate =
+    range.startPeriodId && periodIds.includes(range.startPeriodId)
+      ? range.startPeriodId
+      : null
+  const endCandidate =
+    range.endPeriodId && periodIds.includes(range.endPeriodId)
+      ? range.endPeriodId
+      : null
+
+  const nextStartPeriodId = startCandidate ?? endCandidate ?? fallbackPeriodId
+  const nextEndPeriodId = endCandidate ?? startCandidate ?? fallbackPeriodId
+  const startIndex = periodIds.indexOf(nextStartPeriodId)
+  const endIndex = periodIds.indexOf(nextEndPeriodId)
+
+  if (startIndex === -1 || endIndex === -1) {
+    return {
+      startPeriodId: fallbackPeriodId,
+      endPeriodId: fallbackPeriodId,
+    }
+  }
+
+  return startIndex <= endIndex
+    ? {
+        startPeriodId: nextStartPeriodId,
+        endPeriodId: nextEndPeriodId,
+      }
+    : {
+        startPeriodId: nextEndPeriodId,
+        endPeriodId: nextStartPeriodId,
+      }
 }
 
 export function usePlans() {
@@ -79,9 +134,18 @@ export function useDashboard() {
   const user = useAuthStore((state) => state.user)
   const isAuthenticated = Boolean(user?.id)
   const selectedPlanId = useDashboardStore((state) => state.selectedPlanId)
-  const selectedPeriodIds = useDashboardStore((state) => state.selectedPeriodIds)
+  const selectedStartPeriodId = useDashboardStore(
+    (state) => state.selectedStartPeriodId
+  )
+  const selectedEndPeriodId = useDashboardStore((state) => state.selectedEndPeriodId)
+  const legacySelectedPeriodIds = useDashboardStore(
+    (state) => state.selectedPeriodIds
+  )
   const setSelectedPlanId = useDashboardStore((state) => state.setSelectedPlanId)
-  const setSelectedPeriodIds = useDashboardStore((state) => state.setSelectedPeriodIds)
+  const setSelectedPeriodRange = useDashboardStore(
+    (state) => state.setSelectedPeriodRange
+  )
+  const clearSelections = useDashboardStore((state) => state.clearSelections)
 
   const activePlan = useMemo(
     () => (isAuthenticated ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null : null),
@@ -93,14 +157,22 @@ export function useDashboard() {
       return
     }
 
-    if (selectedPlanId !== null) {
-      setSelectedPlanId(null)
+    if (
+      selectedPlanId !== null ||
+      selectedStartPeriodId !== null ||
+      selectedEndPeriodId !== null ||
+      legacySelectedPeriodIds.length > 0
+    ) {
+      clearSelections()
     }
-
-    if (selectedPeriodIds.length > 0) {
-      setSelectedPeriodIds([])
-    }
-  }, [isAuthenticated, selectedPeriodIds, selectedPlanId, setSelectedPeriodIds, setSelectedPlanId])
+  }, [
+    clearSelections,
+    isAuthenticated,
+    legacySelectedPeriodIds.length,
+    selectedEndPeriodId,
+    selectedPlanId,
+    selectedStartPeriodId,
+  ])
 
   useEffect(() => {
     if (!isAuthenticated || plansLoading || !activePlan) {
@@ -117,59 +189,137 @@ export function useDashboard() {
     isLoading: periodsLoading,
     isFetched: periodsFetched,
   } = usePeriods(activePlan)
+  const sortedPeriods = useMemo(() => sortPeriods(periods), [periods])
+  const legacyPeriodRange = useMemo(
+    () => buildLegacyPeriodRange(legacySelectedPeriodIds),
+    [legacySelectedPeriodIds]
+  )
 
   useEffect(() => {
     if (!isAuthenticated || !activePlan || !periodsFetched || periodsLoading) {
       return
     }
 
-    if (periods.length === 0) {
-      if (selectedPeriodIds.length > 0) {
-        setSelectedPeriodIds([])
+    if (sortedPeriods.length === 0) {
+      if (
+        selectedStartPeriodId !== null ||
+        selectedEndPeriodId !== null
+      ) {
+        setSelectedPeriodRange(EMPTY_PERIOD_RANGE)
       }
       return
     }
 
-    const validIds = new Set(periods.map((period) => period.id))
-    const filtered = selectedPeriodIds.filter((id) => validIds.has(id))
-    const fallback = filtered.length > 0 ? filtered : [periods[0].id]
-    const ordered = orderByPeriods(fallback, periods)
+    const defaultPeriodId = findDefaultPeriod(sortedPeriods)?.id ?? null
+    const requestedRange =
+      selectedStartPeriodId || selectedEndPeriodId
+        ? {
+            startPeriodId: selectedStartPeriodId,
+            endPeriodId: selectedEndPeriodId,
+          }
+        : legacyPeriodRange
+    const normalizedRange = normalizePeriodRange(
+      requestedRange,
+      sortedPeriods,
+      defaultPeriodId
+    )
 
-    if (!arraysEqual(ordered, selectedPeriodIds)) {
-      setSelectedPeriodIds(ordered)
+    if (
+      !rangesEqual(normalizedRange, {
+        startPeriodId: selectedStartPeriodId,
+        endPeriodId: selectedEndPeriodId,
+      })
+    ) {
+      setSelectedPeriodRange(normalizedRange)
     }
   }, [
     activePlan,
     isAuthenticated,
-    periods,
+    legacyPeriodRange,
     periodsFetched,
     periodsLoading,
-    selectedPeriodIds,
-    setSelectedPeriodIds,
+    selectedEndPeriodId,
+    selectedStartPeriodId,
+    setSelectedPeriodRange,
+    sortedPeriods,
   ])
 
-  const togglePeriodId = useCallback(
-    (periodId: string) => {
-      setSelectedPeriodIds((current) => {
-        const exists = current.includes(periodId)
-        const next = exists ? current.filter((id) => id !== periodId) : [...current, periodId]
-
-        if (next.length === 0 && periods.length > 0) {
-          return [periods[0].id]
-        }
-
-        return orderByPeriods(next, periods)
-      })
-    },
-    [periods, setSelectedPeriodIds]
+  const periodIndexMap = useMemo(
+    () => new Map(sortedPeriods.map((period, index) => [period.id, index])),
+    [sortedPeriods]
   )
 
-  const selectedPeriods = useMemo(
-    () =>
-      selectedPeriodIds
-        .map((id) => periods.find((period) => period.id === id))
-        .filter((period): period is Period => Boolean(period)),
-    [periods, selectedPeriodIds]
+  const setSelectedStartPeriodId = useCallback(
+    (periodId: string) => {
+      if (!periodIndexMap.has(periodId)) {
+        return
+      }
+
+      setSelectedPeriodRange((current) => {
+        const currentEndPeriodId =
+          current.endPeriodId && periodIndexMap.has(current.endPeriodId)
+            ? current.endPeriodId
+            : periodId
+
+        return {
+          startPeriodId: periodId,
+          endPeriodId:
+            (periodIndexMap.get(periodId) ?? 0) >
+            (periodIndexMap.get(currentEndPeriodId) ?? 0)
+              ? periodId
+              : currentEndPeriodId,
+        }
+      })
+    },
+    [periodIndexMap, setSelectedPeriodRange]
+  )
+
+  const setSelectedEndPeriodId = useCallback(
+    (periodId: string) => {
+      if (!periodIndexMap.has(periodId)) {
+        return
+      }
+
+      setSelectedPeriodRange((current) => {
+        const currentStartPeriodId =
+          current.startPeriodId && periodIndexMap.has(current.startPeriodId)
+            ? current.startPeriodId
+            : periodId
+
+        return {
+          startPeriodId:
+            (periodIndexMap.get(periodId) ?? 0) <
+            (periodIndexMap.get(currentStartPeriodId) ?? 0)
+              ? periodId
+              : currentStartPeriodId,
+          endPeriodId: periodId,
+        }
+      })
+    },
+    [periodIndexMap, setSelectedPeriodRange]
+  )
+
+  const selectedPeriods = useMemo(() => {
+    if (!selectedStartPeriodId || !selectedEndPeriodId) {
+      return []
+    }
+
+    const startIndex = sortedPeriods.findIndex(
+      (period) => period.id === selectedStartPeriodId
+    )
+    const endIndex = sortedPeriods.findIndex(
+      (period) => period.id === selectedEndPeriodId
+    )
+
+    if (startIndex === -1 || endIndex === -1) {
+      return []
+    }
+
+    return sortedPeriods.slice(startIndex, endIndex + 1)
+  }, [selectedEndPeriodId, selectedStartPeriodId, sortedPeriods])
+  const selectedPeriodIds = useMemo(
+    () => selectedPeriods.map((period) => period.id),
+    [selectedPeriods]
   )
 
   const transactionQueries = useQueries({
@@ -312,14 +462,17 @@ export function useDashboard() {
   return {
     plans,
     plansLoading,
-    periods,
+    periods: sortedPeriods,
     periodsLoading,
     selectedPlanId,
     activePlan,
     selectedPeriodIds,
+    selectedStartPeriodId,
+    selectedEndPeriodId,
     setSelectedPlanId,
     selectedPeriods,
-    togglePeriodId,
+    setSelectedStartPeriodId,
+    setSelectedEndPeriodId,
     periodPanels,
     combinedStats,
     categorySpending,

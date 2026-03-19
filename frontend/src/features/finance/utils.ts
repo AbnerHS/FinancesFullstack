@@ -23,6 +23,48 @@ export function formatMonthYear(period: Period | null | undefined) {
   return `${month}/${period.year}`
 }
 
+export function comparePeriods(left: Period, right: Period) {
+  return left.year * 100 + left.month - (right.year * 100 + right.month)
+}
+
+export function sortPeriods(periods: Period[]) {
+  return [...periods].sort(comparePeriods)
+}
+
+export function findDefaultPeriod(periods: Period[]) {
+  if (periods.length === 0) {
+    return null
+  }
+
+  const today = new Date()
+  const currentMonth = today.getMonth() + 1
+  const currentYear = today.getFullYear()
+
+  return (
+    periods.find(
+      (period) => period.month === currentMonth && period.year === currentYear
+    ) ?? periods[periods.length - 1]
+  )
+}
+
+export function formatPeriodRange(
+  startPeriod: Period | null | undefined,
+  endPeriod: Period | null | undefined
+) {
+  const startLabel = formatMonthYear(startPeriod)
+  const endLabel = formatMonthYear(endPeriod)
+
+  if (!startLabel && !endLabel) {
+    return "Nenhum mês selecionado"
+  }
+
+  if (!startLabel || !endLabel || startLabel === endLabel) {
+    return startLabel || endLabel
+  }
+
+  return `${startLabel} até ${endLabel}`
+}
+
 export function formatCurrencyInput(value: string) {
   const digits = String(value || "").replace(/\D/g, "")
   if (!digits) {
