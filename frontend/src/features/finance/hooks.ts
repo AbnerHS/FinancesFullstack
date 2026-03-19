@@ -18,6 +18,7 @@ import {
 } from "@/features/finance/services.ts"
 import type {
   CreditCard,
+  Invoice,
   Period,
   Plan,
   ResponsibleOption,
@@ -482,6 +483,139 @@ export function useInvoiceManager({
     createInvoice,
     errorMessage: createInvoice.error
       ? getErrorMessage(createInvoice.error, "Não foi possível criar a fatura.")
+      : null,
+  }
+}
+
+export function usePeriodInvoiceManager({
+  creditCards,
+  invoices,
+  periodId,
+}: {
+  creditCards: CreditCard[]
+  invoices: Invoice[]
+  periodId: string
+}) {
+  const queryClient = useQueryClient()
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    creditCardId: creditCards[0]?.id || "",
+    amount: "",
+  })
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
+  const [editingAmount, setEditingAmount] = useState("")
+
+  useEffect(() => {
+    setCreateForm((current) => ({
+      ...current,
+      creditCardId: creditCards.some((card) => card.id === current.creditCardId)
+        ? current.creditCardId
+        : creditCards[0]?.id || "",
+    }))
+  }, [creditCards])
+
+  const invalidatePeriodInvoices = async () => {
+    await queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoices(periodId) })
+  }
+
+  const createInvoice = useMutation({
+    mutationFn: async () => {
+      if (!createForm.creditCardId) {
+        throw new Error("Selecione um cartão.")
+      }
+
+      const amountNumber = parseCurrencyInput(createForm.amount)
+      if (Number.isNaN(amountNumber) || amountNumber <= 0) {
+        throw new Error("Informe um valor válido.")
+      }
+
+      return invoiceService.create({
+        creditCardId: createForm.creditCardId,
+        periodId,
+        amount: amountNumber,
+      })
+    },
+    onSuccess: async () => {
+      setCreateForm((current) => ({ ...current, amount: "" }))
+      setIsCreateOpen(false)
+      await invalidatePeriodInvoices()
+    },
+  })
+
+  const updateInvoice = useMutation({
+    mutationFn: async () => {
+      if (!editingInvoiceId) {
+        throw new Error("Fatura inválida.")
+      }
+
+      const invoice = invoices.find((item) => item.id === editingInvoiceId)
+      if (!invoice) {
+        throw new Error("Fatura não encontrada.")
+      }
+
+      const amountNumber = parseCurrencyInput(editingAmount)
+      if (Number.isNaN(amountNumber) || amountNumber <= 0) {
+        throw new Error("Informe um valor válido.")
+      }
+
+      return invoiceService.update(editingInvoiceId, {
+        creditCardId: invoice.creditCardId,
+        periodId: invoice.periodId,
+        amount: amountNumber,
+      })
+    },
+    onSuccess: async () => {
+      setEditingInvoiceId(null)
+      setEditingAmount("")
+      await invalidatePeriodInvoices()
+    },
+  })
+
+  const startCreate = () => {
+    setEditingInvoiceId(null)
+    setEditingAmount("")
+    setIsCreateOpen(true)
+  }
+
+  const cancelCreate = () => {
+    setCreateForm((current) => ({ ...current, amount: "" }))
+    setIsCreateOpen(false)
+  }
+
+  const startEdit = (invoice: Invoice) => {
+    setIsCreateOpen(false)
+    setEditingInvoiceId(invoice.id)
+    setEditingAmount(
+      Number(invoice.amount || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    )
+  }
+
+  const cancelEdit = () => {
+    setEditingInvoiceId(null)
+    setEditingAmount("")
+  }
+
+  return {
+    isCreateOpen,
+    createForm,
+    setCreateForm,
+    startCreate,
+    cancelCreate,
+    createInvoice,
+    editingInvoiceId,
+    editingAmount,
+    setEditingAmount,
+    startEdit,
+    cancelEdit,
+    updateInvoice,
+    createErrorMessage: createInvoice.error
+      ? getErrorMessage(createInvoice.error, "Não foi possível criar a fatura.")
+      : null,
+    updateErrorMessage: updateInvoice.error
+      ? getErrorMessage(updateInvoice.error, "Não foi possível atualizar a fatura.")
       : null,
   }
 }

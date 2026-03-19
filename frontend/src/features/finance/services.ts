@@ -114,6 +114,10 @@ export const invoiceService = {
     const { data } = await http.post<Invoice>("/credit-card-invoices", payload)
     return data
   },
+  async update(id: string, payload: { creditCardId: string; periodId: string; amount: number }) {
+    const { data } = await http.put<Invoice>(`/credit-card-invoices/${id}`, payload)
+    return data
+  },
 }
 
 export const transactionCategoryService = {
