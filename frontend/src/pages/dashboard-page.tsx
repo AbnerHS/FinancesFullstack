@@ -1,4 +1,3 @@
-import type { ReactNode } from "react"
 import {
   ArrowRight,
   Sparkles,
@@ -8,7 +7,6 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
-import { Card } from "@/components/ui/card.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { DashboardCharts } from "@/features/finance/charts.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
@@ -22,6 +20,7 @@ import {
   formatMonthYear,
   toneForBalance,
 } from "@/features/finance/utils.ts"
+import MetricCard from "@/features/finance/metric-card"
 
 export function DashboardPage() {
   const {
@@ -185,11 +184,10 @@ export function DashboardPage() {
                   key={period.id}
                   type="button"
                   onClick={() => togglePeriodId(period.id)}
-                  className={`rounded-full border px-4 py-2 text-sm transition ${
-                    selected
-                      ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
-                      : "border-border bg-secondary/70 text-foreground hover:border-primary/40 hover:bg-accent/70"
-                  }`}
+                  className={`rounded-full border px-4 py-2 text-sm transition ${selected
+                    ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
+                    : "border-border bg-secondary/70 text-foreground hover:border-primary/40 hover:bg-accent/70"
+                    }`}
                 >
                   {formatMonthYear(period)}
                 </button>
@@ -199,42 +197,44 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          title="Receitas"
-          value={formatCurrency(
-            responsibleFilter ? filteredMetrics.incomes : combinedStats.incomes
-          )}
-          tone="positive"
-          icon={<TrendingUp size={18} />}
-        />
-        <MetricCard
-          title="Despesas"
-          value={formatCurrency(
-            responsibleFilter
-              ? filteredMetrics.expenses
-              : combinedStats.expenses
-          )}
-          tone="negative"
-          icon={<TrendingDown size={18} />}
-        />
-        <MetricCard
-          title="Saldo"
-          value={formatCurrency(
-            responsibleFilter ? filteredMetrics.balance : combinedStats.balance
-          )}
-          tone={toneForBalance(
-            responsibleFilter ? filteredMetrics.balance : combinedStats.balance
-          )}
-          icon={<ArrowRight size={18} />}
-        />
-        <MetricCard
-          title="Variação"
-          value={variation === null ? "--" : `${variation.toFixed(1)}%`}
-          tone={variation !== null && variation < 0 ? "negative" : "positive"}
-          icon={<Sparkles size={18} />}
-        />
-      </section>
+      {selectedPeriodIds.length > 1 && (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            title="Receitas"
+            value={formatCurrency(
+              responsibleFilter ? filteredMetrics.incomes : combinedStats.incomes
+            )}
+            tone="positive"
+            icon={<TrendingUp size={18} />}
+          />
+          <MetricCard
+            title="Despesas"
+            value={formatCurrency(
+              responsibleFilter
+                ? filteredMetrics.expenses
+                : combinedStats.expenses
+            )}
+            tone="negative"
+            icon={<TrendingDown size={18} />}
+          />
+          <MetricCard
+            title="Saldo"
+            value={formatCurrency(
+              responsibleFilter ? filteredMetrics.balance : combinedStats.balance
+            )}
+            tone={toneForBalance(
+              responsibleFilter ? filteredMetrics.balance : combinedStats.balance
+            )}
+            icon={<ArrowRight size={18} />}
+          />
+          <MetricCard
+            title="Variação"
+            value={variation === null ? "--" : `${variation.toFixed(1)}%`}
+            tone={variation !== null && variation < 0 ? "negative" : "positive"}
+            icon={<Sparkles size={18} />}
+          />
+        </section>
+      )}
 
       <section className="space-y-5">
         <div>
@@ -336,51 +336,7 @@ export function DashboardPage() {
   )
 }
 
-function MetricCard({
-  title,
-  value,
-  tone,
-  icon,
-}: {
-  title: string
-  value: string
-  tone: "positive" | "negative" | "REVENUE" | "EXPENSE" | "NEUTRAL"
-  icon: ReactNode
-}) {
-  const normalizedTone =
-    tone === "negative" || tone === "EXPENSE"
-      ? "negative"
-      : tone === "positive" || tone === "REVENUE"
-        ? "positive"
-        : "neutral"
 
-  const classes =
-    normalizedTone === "positive"
-      ? {
-          value: "text-emerald-500 dark:text-emerald-400",
-          icon: "bg-emerald-500/12 text-emerald-500 dark:text-emerald-400",
-        }
-      : normalizedTone === "negative"
-        ? {
-            value: "text-rose-500 dark:text-rose-400",
-            icon: "bg-rose-500/12 text-rose-500 dark:text-rose-400",
-          }
-        : { value: "text-foreground", icon: "bg-primary/12 text-primary" }
-
-  return (
-    <Card className="app-panel">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="app-eyebrow">{title}</p>
-          <p className={`mt-2 text-2xl font-semibold ${classes.value}`}>
-            {value}
-          </p>
-        </div>
-        <div className={`rounded-full p-3 ${classes.icon}`}>{icon}</div>
-      </div>
-    </Card>
-  )
-}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (

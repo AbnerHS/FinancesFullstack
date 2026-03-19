@@ -1,4 +1,4 @@
-import { CheckCircle2, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react"
+import { ArrowRight, CheckCircle2, GripVertical, Pencil, Plus, Trash2, TrendingDown, TrendingUp, X } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -28,8 +28,9 @@ import type {
   TransactionCategory,
   TransactionFormValues,
 } from "@/features/finance/types.ts"
-import { formatCurrency, parseCurrencyInput } from "@/features/finance/utils.ts"
+import { formatCurrency, parseCurrencyInput, toneForBalance } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
+import MetricCard from "./metric-card"
 
 type TransactionWorkspaceProps = {
   panel: {
@@ -201,26 +202,30 @@ export function TransactionsWorkspace({
     <Card className="border-border bg-card/90 p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl xl:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
         <div>
-          <p className="app-eyebrow">{panel.label}</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Receitas, despesas e leitura rápida do período selecionado.
-          </p>
+          <p className="app-eyebrow font-bold">{panel.label}</p>
         </div>
-        <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-1 xl:text-right">
-          <span className="text-emerald-500 dark:text-emerald-400">
-            Receitas: {formatCurrency(panel.stats.incomes)}
-          </span>
-          <span className="text-rose-500 dark:text-rose-400">
-            Despesas: {formatCurrency(panel.stats.expenses)}
-          </span>
-          <span
-            className={`font-semibold ${panel.stats.balance > 0
-              ? "text-emerald-500 dark:text-emerald-400"
-              : "text-rose-500 dark:text-rose-400"
-              }`}
-          >
-            Saldo: {formatCurrency(panel.stats.balance)}
-          </span>
+        <div className="grid xl:grid-cols-3 items-end gap-2">
+          <MetricCard
+            title="Receitas"
+            value={formatCurrency(panel.stats.incomes)}
+            tone="positive"
+            icon={<TrendingUp size={18} />}
+            size="sm"
+          />
+          <MetricCard
+            title="Despesas"
+            value={formatCurrency(panel.stats.expenses)}
+            tone="negative"
+            icon={<TrendingDown size={18} />}
+            size="sm"
+          />
+          <MetricCard
+            title="Saldo"
+            value={formatCurrency(panel.stats.balance)}
+            tone={toneForBalance(panel.stats.balance)}
+            icon={<ArrowRight size={18} />}
+            size="sm"
+          />
         </div>
       </div>
 
@@ -568,7 +573,7 @@ export function TransactionsWorkspace({
 
         <Card className="border-border bg-secondary/40 p-4">
           <div className="flex items-center justify-between gap-3">
-            <h4 className="app-eyebrow">Faturas do período</h4>
+            <h4 className="app-eyebrow">Faturas</h4>
             {panel.invoices.length > 0 && !invoiceManager.isCreateOpen ? (
               <Button type="button" variant="outline" size="sm" onClick={invoiceManager.startCreate}>
                 <Plus size={14} />
@@ -667,7 +672,6 @@ export function TransactionsWorkspace({
                         <p className="text-sm font-semibold text-foreground">
                           {card?.name || "Cartão"}
                         </p>
-                        <p className="text-xs text-muted-foreground">Fatura vinculada ao período</p>
                       </div>
                       {isEditing ? (
                         <div className="flex flex-wrap items-center justify-end gap-2">
