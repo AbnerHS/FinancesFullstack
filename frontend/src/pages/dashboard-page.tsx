@@ -1,7 +1,6 @@
 import type { ReactNode } from "react"
 import {
   ArrowRight,
-  CreditCard,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -14,10 +13,7 @@ import { Select } from "@/components/ui/select.tsx"
 import { DashboardCharts } from "@/features/finance/charts.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
 import {
-  CategoryManager,
-  CreditCardsManager,
   DashboardPlanQuickCreate,
-  InvoiceManager,
   PlanPartnerManager,
 } from "@/features/finance/managers.tsx"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
@@ -238,43 +234,6 @@ export function DashboardPage() {
           </div>
         </div>
       </section>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <CategoryManager categories={transactionCategories} />
-
-        <section className="app-panel">
-          <div className="grid gap-6 xl:grid-cols-2">
-            <div>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="app-eyebrow">Cartões</p>
-                  <h3 className="font-serif text-2xl font-semibold text-foreground">
-                    Cartões e faturas
-                  </h3>
-                </div>
-                <div className="rounded-full bg-primary/12 p-3 text-primary">
-                  <CreditCard size={18} />
-                </div>
-              </div>
-              <CreditCardsManager creditCards={creditCards} userId={userId} />
-            </div>
-
-            <div>
-              <div className="mb-4">
-                <p className="app-eyebrow">Faturas</p>
-                <h3 className="font-serif text-2xl font-semibold text-foreground">
-                  Registro integrado
-                </h3>
-              </div>
-              <InvoiceManager
-                creditCards={creditCards}
-                periods={periods}
-                selectedPeriodIds={selectedPeriodIds}
-              />
-            </div>
-          </div>
-        </section>
-      </div>
 
       <DashboardCharts comparisonData={comparisonData} categoryData={categoryData} />
 

@@ -506,14 +506,14 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
             {panel.invoices.length > 0 && !invoiceManager.isCreateOpen ? (
               <Button type="button" variant="outline" size="sm" onClick={invoiceManager.startCreate}>
                 <Plus size={14} />
-                Nova fatura
+                Nova Fatura
               </Button>
             ) : null}
           </div>
           {invoiceManager.isCreateOpen ? (
             <div className="mt-3 rounded-xl border border-border bg-card/90 p-4">
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                <div className="space-y-2">
+                <div>
                   <Label>Cartão</Label>
                   <Select
                     value={invoiceManager.createForm.creditCardId}
@@ -533,7 +533,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                     ))}
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div>
                   <Label>Valor</Label>
                   <CurrencyInput
                     value={invoiceManager.createForm.amount}
@@ -611,7 +611,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                           </div>
                           <Button
                             type="button"
-                            size="sm"
+                            className="h-11"
                             onClick={() => invoiceManager.updateInvoice.mutate()}
                             disabled={invoiceManager.updateInvoice.isPending}
                           >
@@ -620,7 +620,7 @@ export function TransactionsWorkspace({ panel, shared }: TransactionWorkspacePro
                           <Button
                             type="button"
                             variant="outline"
-                            size="sm"
+                            className="h-11"
                             onClick={invoiceManager.cancelEdit}
                           >
                             <X size={14} />
