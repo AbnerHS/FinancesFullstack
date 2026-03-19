@@ -3,7 +3,7 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
-  Users
+  Users,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -28,8 +28,11 @@ export function DashboardPage() {
     selectedPlanId,
     activePlan,
     selectedPeriodIds,
+    selectedStartPeriodId,
+    selectedEndPeriodId,
     setSelectedPlanId,
-    togglePeriodId,
+    setSelectedStartPeriodId,
+    setSelectedEndPeriodId,
     periodPanels,
     combinedStats,
     categorySpending,
@@ -101,22 +104,12 @@ export function DashboardPage() {
     ? buildCategoryChartData(responsibleFilter)
     : categorySpending
 
-  const sortedPeriods = useMemo(
-    () =>
-      [...periods].sort((left, right) => {
-        const leftValue = left.year * 100 + left.month
-        const rightValue = right.year * 100 + right.month
-        return leftValue - rightValue
-      }),
-    [periods]
-  )
-
   const selectedPeriodsLabel =
     selectedPeriodIds.length === 0
-      ? "Nenhum mês selecionado"
+      ? "Nenhum mês disponível"
       : selectedPeriodIds.length === 1
-        ? "1 mês selecionado"
-        : `${selectedPeriodIds.length} meses selecionados`
+        ? "1 mês no intervalo"
+        : `${selectedPeriodIds.length} meses no intervalo`
 
   if (plansLoading) {
     return (
@@ -187,52 +180,59 @@ export function DashboardPage() {
         ) : null}
 
         <div className="mt-5 rounded-[1.5rem] border border-border bg-secondary/35 p-3 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="app-eyebrow">Meses em foco</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {selectedPeriodsLabel}
-              </p>
-            </div>
-          </div>
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
+              <div>
+                <label className="app-label">Mês inicial</label>
+                <Select
+                  className="mt-2"
+                  disabled={periodsLoading || periods.length === 0}
+                  value={selectedStartPeriodId || ""}
+                  onChange={(event) =>
+                    setSelectedStartPeriodId(event.target.value)
+                  }
+                >
+                  {periods.length === 0 ? (
+                    <option value="">Sem períodos</option>
+                  ) : null}
+                  {periods.map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {formatMonthYear(period)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-          <div className="mt-4 -mx-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:px-0">
-            <div className="flex gap-3 sm:flex-wrap">
-              {periodsLoading ? (
-                <p className="text-sm text-muted-foreground">
-                  Carregando períodos...
+              <div>
+                <label className="app-label">Mês final</label>
+                <Select
+                  className="mt-2"
+                  disabled={periodsLoading || periods.length === 0}
+                  value={selectedEndPeriodId || ""}
+                  onChange={(event) =>
+                    setSelectedEndPeriodId(event.target.value)
+                  }
+                >
+                  {periods.length === 0 ? (
+                    <option value="">Sem períodos</option>
+                  ) : null}
+                  {periods.map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {formatMonthYear(period)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="rounded-[1.25rem] border border-border bg-card/80 px-4 py-1">
+                
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {periodsLoading ? "Carregando períodos..." : selectedPeriodsLabel}
                 </p>
-              ) : (
-                sortedPeriods.map((period) => {
-                  const selected = selectedPeriodIds.includes(period.id)
-
-                  return (
-                    <button
-                      key={period.id}
-                      type="button"
-                      onClick={() => togglePeriodId(period.id)}
-                      className={`min-w-[10.5rem] shrink-0 snap-start rounded-[1.25rem] border px-4 py-3 text-left transition sm:min-w-0 ${selected
-                        ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
-                        : "border-border bg-card/80 text-foreground hover:border-primary/40 hover:bg-accent/70"
-                        }`}
-                    >
-                      <p className="mt-2 text-sm font-semibold">
-                        {formatMonthYear(period)}
-                      </p>
-                      <p
-                        className={`mt-2 text-xs ${selected
-                          ? "text-primary-foreground/80"
-                          : "text-muted-foreground"
-                          }`}
-                      >
-                        {selected
-                          ? "Selecionado para comparação"
-                          : "Toque para incluir"}
-                      </p>
-                    </button>
-                  )
-                })
-              )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  O workspace acompanha todos os meses dentro desse intervalo.
+                </p>
+              </div>
             </div>
           </div>
         </div>

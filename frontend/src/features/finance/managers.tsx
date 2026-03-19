@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Plus, Tags, Users } from "lucide-react"
 
@@ -25,7 +25,7 @@ import type {
   PlanParticipant,
   TransactionCategory,
 } from "@/features/finance/types.ts"
-import { formatMonthYear } from "@/features/finance/utils.ts"
+import { formatMonthYear, formatPeriodRange } from "@/features/finance/utils.ts"
 
 export function PlanManager({
   plans,
@@ -183,14 +183,29 @@ export function PeriodsManager({
   activePlan,
   periods,
   selectedPeriodIds,
-  onTogglePeriodId,
+  selectedStartPeriodId,
+  selectedEndPeriodId,
+  onSelectStartPeriodId,
+  onSelectEndPeriodId,
 }: {
   activePlan: Plan | null
   periods: Period[]
   selectedPeriodIds: string[]
-  onTogglePeriodId: (periodId: string) => void
+  selectedStartPeriodId: string | null
+  selectedEndPeriodId: string | null
+  onSelectStartPeriodId: (periodId: string) => void
+  onSelectEndPeriodId: (periodId: string) => void
 }) {
   const { draft, setDraft, saveMutation, errorMessage } = usePeriodsManager(activePlan)
+  const selectedStartPeriod = useMemo(
+    () => periods.find((period) => period.id === selectedStartPeriodId) || null,
+    [periods, selectedStartPeriodId]
+  )
+  const selectedEndPeriod = useMemo(
+    () => periods.find((period) => period.id === selectedEndPeriodId) || null,
+    [periods, selectedEndPeriodId]
+  )
+  const rangeLabel = formatPeriodRange(selectedStartPeriod, selectedEndPeriod)
   const months = [
     "Janeiro",
     "Fevereiro",
@@ -216,33 +231,78 @@ export function PeriodsManager({
           </h2>
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/70 px-4 py-2 text-sm text-muted-foreground">
-          {selectedPeriodIds.length} períodos em comparação
+          {selectedPeriodIds.length} períodos no intervalo
         </div>
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_22rem]">
-        <div className="grid gap-3 md:grid-cols-2">
-          {periods.map((period) => {
-            const selected = selectedPeriodIds.includes(period.id)
-            return (
-              <button
-                key={period.id}
-                type="button"
-                onClick={() => onTogglePeriodId(period.id)}
-                className={`rounded-[1.5rem] border p-5 text-left transition ${
-                  selected
-                    ? "border-primary/20 bg-accent/80"
-                    : "border-border bg-secondary/60 hover:border-primary/40"
-                }`}
+        <Card className="border-border bg-secondary/60 p-5">
+          <p className="app-eyebrow">Intervalo ativo</p>
+          <h3 className="mt-2 text-xl font-semibold text-foreground">
+            {rangeLabel}
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Escolha o mês inicial e o mês final para definir os painéis e comparações do dashboard.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Mês inicial</Label>
+              <Select
+                disabled={periods.length === 0}
+                value={selectedStartPeriodId || ""}
+                onChange={(event) => onSelectStartPeriodId(event.target.value)}
               >
-                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Período</p>
-                <h3 className="mt-2 text-lg font-semibold text-foreground">
-                  {formatMonthYear(period)}
-                </h3>
-              </button>
-            )
-          })}
-        </div>
+                {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+                {periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {formatMonthYear(period)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mês final</Label>
+              <Select
+                disabled={periods.length === 0}
+                value={selectedEndPeriodId || ""}
+                onChange={(event) => onSelectEndPeriodId(event.target.value)}
+              >
+                {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+                {periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {formatMonthYear(period)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {periods.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Crie um período para começar a trabalhar por mês.
+              </p>
+            ) : (
+              periods.map((period) => {
+                const selected = selectedPeriodIds.includes(period.id)
+                return (
+                  <span
+                    key={period.id}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                      selected
+                        ? "border-primary/20 bg-primary/10 text-primary"
+                        : "border-border bg-card/80 text-muted-foreground"
+                    }`}
+                  >
+                    {formatMonthYear(period)}
+                  </span>
+                )
+              })
+            )}
+          </div>
+        </Card>
 
         <Card className="border-border bg-secondary/60 p-5">
           <form
