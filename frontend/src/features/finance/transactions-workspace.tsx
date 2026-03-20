@@ -23,6 +23,8 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Save,
+  SendHorizonal,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -139,11 +141,10 @@ function TransactionRowContent({
 
       <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
         <span
-          className={`text-sm font-semibold ${
-            transaction.type === "REVENUE"
-              ? "text-emerald-500 dark:text-emerald-400"
-              : "text-rose-500 dark:text-rose-400"
-          }`}
+          className={`text-sm font-semibold ${transaction.type === "REVENUE"
+            ? "text-emerald-500 dark:text-emerald-400"
+            : "text-rose-500 dark:text-rose-400"
+            }`}
         >
           {formatCurrency(transaction.amount)}
         </span>
@@ -239,13 +240,12 @@ function SortableTransactionRow({
         transform: CSS.Transform.toString(transform),
         transition: isDragging ? undefined : transition,
       }}
-      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
-        isDragging
-          ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
-          : isDragOver
-            ? "border-primary ring-2 ring-primary/15"
-            : "border-border"
-      }`}
+      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${isDragging
+        ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
+        : isDragOver
+          ? "border-primary ring-2 ring-primary/15"
+          : "border-border"
+        }`}
     >
       <TransactionRowContent
         transaction={transaction}
@@ -270,6 +270,7 @@ export function TransactionsWorkspace({
   shared,
 }: TransactionWorkspaceProps) {
   const composerRef = useRef<HTMLDivElement | null>(null)
+  const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [form, setForm] = useState<TransactionFormValues>(() =>
     emptyForm(panel.period.id)
   )
@@ -364,11 +365,28 @@ export function TransactionsWorkspace({
     setForm(emptyForm(panel.period.id))
   }
 
+  const isMobileTransactionsViewport = () =>
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 1279px)").matches
+
+  const openComposerOnMobile = () => {
+    if (!isMobileTransactionsViewport()) {
+      return
+    }
+
+    setIsComposerOpen(true)
+  }
+
+  const closeComposerOnMobile = () => {
+    if (!isMobileTransactionsViewport()) {
+      return
+    }
+
+    setIsComposerOpen(false)
+  }
+
   const scrollToComposerOnMobile = () => {
-    if (
-      typeof window === "undefined" ||
-      !window.matchMedia("(max-width: 1279px)").matches
-    ) {
+    if (!isMobileTransactionsViewport()) {
       return
     }
 
@@ -380,7 +398,14 @@ export function TransactionsWorkspace({
     })
   }
 
+  const startCreateTransaction = () => {
+    resetComposer()
+    openComposerOnMobile()
+    scrollToComposerOnMobile()
+  }
+
   const startEditing = (transaction: Transaction) => {
+    openComposerOnMobile()
     setEditingTransaction(transaction)
     setEditingScope("SINGLE")
     setForm({
@@ -452,13 +477,14 @@ export function TransactionsWorkspace({
     }
 
     resetComposer()
+    closeComposerOnMobile()
   }
 
   return (
     <Card className="border-border bg-card/90 p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl xl:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
         <div>
-          <p className="app-eyebrow font-bold">{panel.label}</p>
+          <p className="app-eyebrow font-bold text-primary text-[13px]">{panel.label}</p>
         </div>
         <div className="grid items-end gap-2 xl:grid-cols-3">
           <MetricCard
@@ -486,7 +512,19 @@ export function TransactionsWorkspace({
       </div>
 
       <div className="mt-6 space-y-5">
-        <div ref={composerRef}>
+        {!isComposerOpen ? (
+          <div className="xl:hidden">
+            <Button type="button" className="w-full" onClick={startCreateTransaction}>
+              Nova Transação
+              <Plus size={16} />
+            </Button>
+          </div>
+        ) : null}
+
+        <div
+          ref={composerRef}
+          className={`${isComposerOpen ? "block" : "hidden"} xl:block`}
+        >
           <Card className="border-border bg-secondary/55 p-3 sm:p-4">
             <form
               className="space-y-1"
@@ -565,11 +603,10 @@ export function TransactionsWorkspace({
               </div>
 
               <div
-                className={`grid gap-3 ${
-                  editingTransaction
-                    ? "md:grid-cols-2 xl:grid-cols-3"
-                    : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
-                }`}
+                className={`grid gap-3 ${editingTransaction
+                  ? "md:grid-cols-2 xl:grid-cols-3"
+                  : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
+                  }`}
               >
                 <div className="flex flex-col gap-2">
                   <Label>Responsável</Label>
@@ -592,8 +629,8 @@ export function TransactionsWorkspace({
                 </div>
                 {!editingTransaction ? (
                   <div className="flex items-end">
-                    <div className="w-full rounded-xl border border-border bg-card/90 px-3 py-3 xl:py-0">
-                      <div className="flex flex-wrap items-center gap-3 xl:flex-nowrap">
+                    <div className="w-full rounded-xl border border-border bg-card/90 px-3">
+                      <div className="flex flex-wrap items-center gap-x-3 xl:flex-nowrap">
                         <Label className="tracking-widest text-[11px]">
                           Recorrente
                         </Label>
@@ -606,7 +643,7 @@ export function TransactionsWorkspace({
                                 isRecurring: !current.isRecurring,
                                 numberOfPeriods:
                                   !current.isRecurring &&
-                                  current.numberOfPeriods < 2
+                                    current.numberOfPeriods < 2
                                     ? 2
                                     : current.numberOfPeriods,
                               }))
@@ -614,9 +651,9 @@ export function TransactionsWorkspace({
                           />
                         </div>
                         {form.isRecurring ? (
-                          <div className="flex flex-row items-center gap-2">
+                          <div className="flex flex-row items-center gap-2 py-2 xl:py-0">
                             <Label className="text-[10px] tracking-widest">
-                              Períodos
+                              Meses
                             </Label>
                             <Input
                               className="h-8 w-20 xl:w-full"
@@ -666,25 +703,28 @@ export function TransactionsWorkspace({
                       updateTransaction.isPending
                     }
                   >
-                    {!editingTransaction ? <Plus size={16} /> : null}
                     {editingTransaction
                       ? updateTransaction.isPending
                         ? "Salvando..."
-                        : "Salvar Edição"
+                        : "Salvar"
                       : form.isRecurring
                         ? createRecurringTransaction.isPending
                           ? "Criando..."
                           : "Criar Recorrência"
                         : createTransaction.isPending
                           ? "Criando..."
-                          : "Adicionar Transação"}
+                          : "Enviar"}
+                    {editingTransaction ? <Save size={16} /> : <SendHorizonal size={16} />}
                   </Button>
-                  {editingTransaction ? (
+                  {editingTransaction || isComposerOpen ? (
                     <Button
                       type="button"
                       variant="outline"
                       className="h-11"
-                      onClick={resetComposer}
+                      onClick={() => {
+                        resetComposer()
+                        closeComposerOnMobile()
+                      }}
                     >
                       Cancelar
                     </Button>
@@ -767,8 +807,8 @@ export function TransactionsWorkspace({
                 size="sm"
                 onClick={invoiceManager.startCreate}
               >
-                <Plus size={14} />
                 Nova Fatura
+                <Plus size={14} />
               </Button>
             ) : null}
           </div>
@@ -818,10 +858,10 @@ export function TransactionsWorkspace({
                     onClick={() => invoiceManager.createInvoice.mutate()}
                     disabled={invoiceManager.createInvoice.isPending}
                   >
-                    <Plus size={14} />
                     {invoiceManager.createInvoice.isPending
-                      ? "Criando..."
-                      : "Criar"}
+                      ? "Enviando..."
+                      : "Enviar"}
+                      <SendHorizonal size={14} />
                   </Button>
                   <Button
                     type="button"
@@ -855,8 +895,8 @@ export function TransactionsWorkspace({
                   className="mt-3"
                   onClick={invoiceManager.startCreate}
                 >
-                  <Plus size={14} />
                   Criar fatura neste mês
+                  <Plus size={14} />
                 </Button>
               </div>
             ) : (
@@ -896,6 +936,7 @@ export function TransactionsWorkspace({
                             {invoiceManager.updateInvoice.isPending
                               ? "Salvando..."
                               : "Salvar"}
+                              <Save size={14} />
                           </Button>
                           <Button
                             type="button"

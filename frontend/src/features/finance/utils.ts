@@ -5,6 +5,29 @@ import type {
   TransactionType,
 } from "@/features/finance/types.ts"
 
+export const MONTH_LABELS = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+] as const
+
+export function formatMonthLabel(month: number | null | undefined) {
+  if (!month || month < 1 || month > 12) {
+    return ""
+  }
+
+  return MONTH_LABELS[month - 1]
+}
+
 export function formatCurrency(value: number | string | null | undefined) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -18,9 +41,7 @@ export function formatMonthYear(period: Period | null | undefined) {
     return ""
   }
 
-  const date = new Date(period.year, period.month - 1, 1)
-  const month = date.toLocaleString("pt-BR", { month: "long" })
-  return `${month}/${period.year}`
+  return `${formatMonthLabel(period.month).toLowerCase()}/${period.year}`
 }
 
 export function comparePeriods(left: Period, right: Period) {
@@ -78,7 +99,10 @@ export function formatCurrencyInput(value: string) {
 }
 
 export function parseCurrencyInput(value: string) {
-  const normalized = String(value || "").trim().replace(/\./g, "").replace(",", ".")
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\./g, "")
+    .replace(",", ".")
   if (!normalized) {
     return Number.NaN
   }
@@ -119,7 +143,10 @@ export function buildCategoryChartData({
     .filter((transaction) => transaction.type === "EXPENSE")
     .forEach((transaction) => {
       const label = transaction.category?.name || "Sem categoria"
-      totals.set(label, (totals.get(label) ?? 0) + Number(transaction.amount || 0))
+      totals.set(
+        label,
+        (totals.get(label) ?? 0) + Number(transaction.amount || 0)
+      )
     })
 
   return [...totals.entries()]
@@ -142,13 +169,19 @@ export function computeVariation(items: Array<{ balance: number }>) {
   return ((current - previous) / Math.abs(previous)) * 100
 }
 
-export function calculateStats(transactions: Transaction[], invoicesAmount: number) {
+export function calculateStats(
+  transactions: Transaction[],
+  invoicesAmount: number
+) {
   const incomes = transactions
     .filter((transaction) => transaction.type === "REVENUE")
     .reduce((total, transaction) => total + Number(transaction.amount || 0), 0)
 
   const expensesFromTransactions = transactions
-    .filter((transaction) => transaction.type === "EXPENSE" && !transaction.isClearedByInvoice)
+    .filter(
+      (transaction) =>
+        transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
+    )
     .reduce((total, transaction) => total + Number(transaction.amount || 0), 0)
 
   const expenses = expensesFromTransactions + invoicesAmount

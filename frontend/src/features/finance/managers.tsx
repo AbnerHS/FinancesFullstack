@@ -8,7 +8,6 @@ import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
-import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import {
   useCategoryManager,
@@ -17,6 +16,7 @@ import {
   usePlanCollaborationManager,
   usePeriodsManager,
   usePlanManager,
+  usePlanYearManager,
 } from "@/features/finance/hooks.ts"
 import type {
   CreditCard,
@@ -30,29 +30,45 @@ import { formatMonthYear, formatPeriodRange } from "@/features/finance/utils.ts"
 export function PlanManager({
   plans,
   activePlan,
+  periods,
   selectedPlanId,
   onSelectPlanId,
   userId,
 }: {
   plans: Plan[]
   activePlan: Plan | null
+  periods: Period[]
   selectedPlanId: string | null
   onSelectPlanId: (id: string | null) => void
   userId: string | null
 }) {
   const {
-    createYearPeriods,
     draft,
     mode,
-    periodsYear,
     setDraft,
-    setCreateYearPeriods,
-    setPeriodsYear,
     saveMutation,
     startCreate,
     startEdit,
     errorMessage,
   } = usePlanManager({ activePlan, userId, onSelectPlanId })
+  const {
+    addYearMutation,
+    draftYear,
+    errorMessage: addYearErrorMessage,
+    resetDraft,
+    suggestedYear,
+    setDraftYear,
+  } = usePlanYearManager(activePlan, periods)
+  const yearSummaries = useMemo(() => {
+    const monthCountByYear = periods.reduce((acc, period) => {
+      acc.set(period.year, (acc.get(period.year) ?? 0) + 1)
+      return acc
+    }, new Map<number, number>())
+
+    return [...monthCountByYear.entries()]
+      .sort(([leftYear], [rightYear]) => leftYear - rightYear)
+      .map(([year, monthCount]) => ({ year, monthCount }))
+  }, [periods])
 
   return (
     <section className="app-panel">
@@ -66,7 +82,7 @@ export function PlanManager({
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_24rem]">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="flex flex-col gap-3 md:grid-cols-2">
           {plans.map((plan) => {
             const isActive = plan.id === selectedPlanId
             return (
@@ -83,12 +99,14 @@ export function PlanManager({
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-semibold">{plan.name}</h3>
                   {isActive ? (
-                    <span className="rounded-full bg-white/15 px-2 py-1 text-[11px] uppercase tracking-[0.22em]">
+                    <span className="rounded-full bg-white/15 px-2 py-1 text-[11px] tracking-[0.22em] uppercase">
                       Ativo
                     </span>
                   ) : null}
                 </div>
-                <p className={`mt-2 text-sm ${isActive ? "text-white/80" : "text-muted-foreground"}`}>
+                <p
+                  className={`mt-2 text-sm ${isActive ? "text-white/80" : "text-muted-foreground"}`}
+                >
                   {plan.partnerIds.length > 0
                     ? `Compartilhado com ${plan.partnerIds.length} ${plan.partnerIds.length === 1 ? "parceiro" : "parceiros"}`
                     : "Plano individual"}
@@ -98,82 +116,161 @@ export function PlanManager({
           })}
         </div>
 
-        <Card className="border-border bg-secondary/60 p-5">
-          <div className="flex gap-2 rounded-full bg-card/90 p-1">
-            <button
-              type="button"
-              className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
-                mode === "create" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-              }`}
-              onClick={startCreate}
-            >
-              Criar
-            </button>
-            <button
-              type="button"
-              className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
-                mode === "edit" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-              }`}
-              onClick={startEdit}
-              disabled={!activePlan}
-            >
-              Editar
-            </button>
-          </div>
-
-          <form
-            className="mt-5 space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              saveMutation.mutate()
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="plan-name">Nome do plano</Label>
-              <Input
-                id="plan-name"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Ex.: Casa e rotina"
-              />
+        <div className="space-y-6">
+          <Card className="border-border bg-secondary/60 p-5">
+            <div className="flex gap-2 rounded-full bg-card/90 p-1">
+              <button
+                type="button"
+                className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
+                  mode === "create"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground"
+                }`}
+                onClick={startCreate}
+              >
+                Criar
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
+                  mode === "edit"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground"
+                }`}
+                onClick={startEdit}
+                disabled={!activePlan}
+              >
+                Editar
+              </button>
             </div>
-            {mode === "create" ? (
-              <div className="rounded-[1.25rem] border border-border bg-card/80 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <Label>Criar 12 Períodos</Label>
+
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault()
+                saveMutation.mutate()
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="plan-name">Nome do plano</Label>
+                <Input
+                  id="plan-name"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Ex.: Casa e rotina"
+                />
+              </div>
+              {mode === "create" ? (
+                <div className="rounded-[1.25rem] border border-border bg-card/80 p-3 text-sm text-muted-foreground">
+                  O plano novo sempre nasce com Janeiro a Dezembro do ano atual
+                  para deixar o dashboard pronto para uso.
+                </div>
+              ) : null}
+              <Button
+                type="submit"
+                className="h-11 w-full"
+                disabled={saveMutation.isPending}
+              >
+                {mode === "create" ? <Plus size={16} /> : null}
+                {saveMutation.isPending
+                  ? "Salvando..."
+                  : mode === "edit"
+                    ? "Salvar nome"
+                    : "Criar Plano"}
+              </Button>
+              <FormError message={errorMessage} />
+            </form>
+          </Card>
+
+          <Card className="border-border bg-secondary/60 p-5">
+            <div>
+              <p className="app-eyebrow">Anos do plano</p>
+              <h3 className="mt-2 text-xl font-semibold text-foreground">
+                {activePlan
+                  ? `Expandir ${activePlan.name}`
+                  : "Selecione um plano"}
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {activePlan
+                  ? "Adicione um novo ano ao plano ativo. Apenas os meses ausentes serão criados."
+                  : "Escolha um plano para liberar a criação de um novo ano."}
+              </p>
+            </div>
+
+            {activePlan ? (
+              <>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {yearSummaries.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum ano encontrado ainda para este plano.
+                    </p>
+                  ) : (
+                    yearSummaries.map(({ year, monthCount }) => (
+                      <div
+                        key={year}
+                        className="rounded-[1rem] border border-border bg-card/80 px-3 py-2"
+                      >
+                        <div className="text-sm font-semibold text-foreground">
+                          {year}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {monthCount}/12 meses
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <form
+                  className="mt-5 space-y-4"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    addYearMutation.mutate()
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-year">Novo ano</Label>
+                    <Input
+                      id="plan-year"
+                      type="number"
+                      value={draftYear}
+                      onChange={(event) =>
+                        setDraftYear(
+                          Number(event.target.value) || suggestedYear
+                        )
+                      }
+                    />
                     <p className="text-xs text-muted-foreground">
-                      Gera Janeiro a Dezembro automaticamente.
+                      Sugestão automática: {suggestedYear}
                     </p>
                   </div>
-                  <Switch
-                    checked={createYearPeriods}
-                    onClick={() => setCreateYearPeriods(!createYearPeriods)}
-                  />
-                </div>
 
-                <div className="mt-3 space-y-2">
-                  <Label>Ano dos Períodos</Label>
-                  <Input
-                    disabled={!createYearPeriods}
-                    type="number"
-                    value={periodsYear}
-                    onChange={(event) => setPeriodsYear(Number(event.target.value) || periodsYear)}
-                  />
-                </div>
-              </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      className="h-11 flex-1"
+                      disabled={addYearMutation.isPending}
+                    >
+                      <Plus size={16} />
+                      {addYearMutation.isPending
+                        ? "Adicionando..."
+                        : "Adicionar Ano"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11"
+                      onClick={resetDraft}
+                    >
+                      Resetar
+                    </Button>
+                  </div>
+                  <FormError message={addYearErrorMessage} />
+                </form>
+              </>
             ) : null}
-            <Button type="submit" className="h-11 w-full" disabled={saveMutation.isPending}>
-              {mode === "create" ? <Plus size={16} /> : null}
-              {saveMutation.isPending
-                ? "Salvando..."
-                : mode === "edit"
-                  ? "Salvar nome"
-                  : "Criar Plano"}
-            </Button>
-            <FormError message={errorMessage} />
-          </form>
-        </Card>
+          </Card>
+        </div>
       </div>
     </section>
   )
@@ -196,7 +293,8 @@ export function PeriodsManager({
   onSelectStartPeriodId: (periodId: string) => void
   onSelectEndPeriodId: (periodId: string) => void
 }) {
-  const { draft, setDraft, saveMutation, errorMessage } = usePeriodsManager(activePlan)
+  const { draft, setDraft, saveMutation, errorMessage } =
+    usePeriodsManager(activePlan)
   const selectedStartPeriod = useMemo(
     () => periods.find((period) => period.id === selectedStartPeriodId) || null,
     [periods, selectedStartPeriodId]
@@ -242,7 +340,8 @@ export function PeriodsManager({
             {rangeLabel}
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Escolha o mês inicial e o mês final para definir os painéis e comparações do dashboard.
+            Escolha o mês inicial e o mês final para definir os painéis e
+            comparações do dashboard.
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -253,7 +352,9 @@ export function PeriodsManager({
                 value={selectedStartPeriodId || ""}
                 onChange={(event) => onSelectStartPeriodId(event.target.value)}
               >
-                {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+                {periods.length === 0 ? (
+                  <option value="">Sem períodos</option>
+                ) : null}
                 {periods.map((period) => (
                   <option key={period.id} value={period.id}>
                     {formatMonthYear(period)}
@@ -269,7 +370,9 @@ export function PeriodsManager({
                 value={selectedEndPeriodId || ""}
                 onChange={(event) => onSelectEndPeriodId(event.target.value)}
               >
-                {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+                {periods.length === 0 ? (
+                  <option value="">Sem períodos</option>
+                ) : null}
                 {periods.map((period) => (
                   <option key={period.id} value={period.id}>
                     {formatMonthYear(period)}
@@ -317,7 +420,10 @@ export function PeriodsManager({
               <Select
                 value={String(draft.month)}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, month: Number(event.target.value) }))
+                  setDraft((current) => ({
+                    ...current,
+                    month: Number(event.target.value),
+                  }))
                 }
               >
                 {months.map((month, index) => (
@@ -334,12 +440,19 @@ export function PeriodsManager({
                 type="number"
                 value={draft.year}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, year: Number(event.target.value) }))
+                  setDraft((current) => ({
+                    ...current,
+                    year: Number(event.target.value),
+                  }))
                 }
               />
             </div>
 
-            <Button type="submit" className="h-11 w-full" disabled={saveMutation.isPending}>
+            <Button
+              type="submit"
+              className="h-11 w-full"
+              disabled={saveMutation.isPending}
+            >
               <Plus size={16} />
               {saveMutation.isPending ? "Criando..." : "Criar Período"}
             </Button>
@@ -375,7 +488,12 @@ export function CreditCardsManager({
       <div className="mb-4 flex items-center justify-between">
         <h3 className="app-eyebrow">Cartões de Crédito</h3>
         {!isEditing ? (
-          <Button type="button" variant="outline" size="sm" onClick={startCreate}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={startCreate}
+          >
             <Plus size={16} />
             Novo Cartão
           </Button>
@@ -384,15 +502,24 @@ export function CreditCardsManager({
 
       <div className="mb-4 space-y-2">
         {creditCards.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum cartão cadastrado.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhum cartão cadastrado.
+          </p>
         ) : null}
         {creditCards.map((card) => (
           <div
             key={card.id}
             className="flex items-center justify-between rounded-[1rem] border border-border bg-card/90 px-3 py-2"
           >
-            <span className="text-sm font-medium text-foreground">{card.name}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(card)}>
+            <span className="text-sm font-medium text-foreground">
+              {card.name}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => startEdit(card)}
+            >
               Editar
             </Button>
           </div>
@@ -415,7 +542,11 @@ export function CreditCardsManager({
           />
         </div>
         <div className="flex gap-2">
-          <Button type="submit" className="h-11 flex-1" disabled={saveMutation.isPending}>
+          <Button
+            type="submit"
+            className="h-11 flex-1"
+            disabled={saveMutation.isPending}
+          >
             {!isEditing ? <Plus size={16} /> : null}
             {saveMutation.isPending
               ? "Salvando..."
@@ -424,13 +555,20 @@ export function CreditCardsManager({
                 : "Criar Cartão"}
           </Button>
           {isEditing ? (
-            <Button type="button" variant="outline" className="h-11" onClick={cancelEdit}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11"
+              onClick={cancelEdit}
+            >
               Cancelar
             </Button>
           ) : null}
         </div>
         {editingCard?.name ? (
-          <p className="text-xs text-muted-foreground">Editando: {editingCard.name}</p>
+          <p className="text-xs text-muted-foreground">
+            Editando: {editingCard.name}
+          </p>
         ) : null}
         <FormError message={errorMessage} />
       </form>
@@ -466,11 +604,18 @@ export function InvoiceManager({
         <Select
           value={form.creditCardId}
           onChange={(event) =>
-            setForm((current) => ({ ...current, creditCardId: event.target.value }))
+            setForm((current) => ({
+              ...current,
+              creditCardId: event.target.value,
+            }))
           }
         >
-          {creditCards.length === 0 ? <option value="">Sem cartões</option> : null}
-          {creditCards.length > 0 ? <option value="">Selecione o cartão</option> : null}
+          {creditCards.length === 0 ? (
+            <option value="">Sem cartões</option>
+          ) : null}
+          {creditCards.length > 0 ? (
+            <option value="">Selecione o cartão</option>
+          ) : null}
           {creditCards.map((card) => (
             <option key={card.id} value={card.id}>
               {card.name}
@@ -480,10 +625,14 @@ export function InvoiceManager({
 
         <Select
           value={form.periodId}
-          onChange={(event) => setForm((current) => ({ ...current, periodId: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, periodId: event.target.value }))
+          }
         >
           {periods.length === 0 ? <option value="">Sem períodos</option> : null}
-          {periods.length > 0 ? <option value="">Selecione o período</option> : null}
+          {periods.length > 0 ? (
+            <option value="">Selecione o período</option>
+          ) : null}
           {periods.map((period) => (
             <option key={period.id} value={period.id}>
               {formatMonthYear(period)}
@@ -498,7 +647,11 @@ export function InvoiceManager({
           }
         />
 
-        <Button type="submit" className="h-11 w-full" disabled={createInvoice.isPending}>
+        <Button
+          type="submit"
+          className="h-11 w-full"
+          disabled={createInvoice.isPending}
+        >
           <Plus size={16} />
           {createInvoice.isPending ? "Criando..." : "Criar Fatura"}
         </Button>
@@ -508,7 +661,11 @@ export function InvoiceManager({
   )
 }
 
-export function CategoryManager({ categories }: { categories: TransactionCategory[] }) {
+export function CategoryManager({
+  categories,
+}: {
+  categories: TransactionCategory[]
+}) {
   const { draft, setDraft, createMutation, errorMessage } = useCategoryManager()
 
   return (
@@ -528,7 +685,9 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
       <div className="mt-6 grid gap-4">
         <div className="flex flex-wrap gap-2">
           {categories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma categoria cadastrada.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhuma categoria cadastrada.
+            </p>
           ) : null}
           {categories.map((category) => (
             <span
@@ -554,7 +713,11 @@ export function CategoryManager({ categories }: { categories: TransactionCategor
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Ex.: Educação"
             />
-            <Button type="submit" className="mt-3 h-11 w-full" disabled={createMutation.isPending}>
+            <Button
+              type="submit"
+              className="mt-3 h-11 w-full"
+              disabled={createMutation.isPending}
+            >
               <Plus size={16} />
               {createMutation.isPending ? "Salvando..." : "Criar Categoria"}
             </Button>
@@ -580,17 +743,8 @@ export function DashboardPlanQuickCreate({
   userId: string | null
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const {
-    createYearPeriods,
-    draft,
-    periodsYear,
-    setDraft,
-    setCreateYearPeriods,
-    setPeriodsYear,
-    saveMutation,
-    errorMessage,
-    startCreate,
-  } = usePlanManager({ activePlan, userId, onSelectPlanId })
+  const { draft, setDraft, saveMutation, errorMessage, startCreate } =
+    usePlanManager({ activePlan, userId, onSelectPlanId })
 
   const openModal = () => {
     startCreate()
@@ -601,8 +755,8 @@ export function DashboardPlanQuickCreate({
     <>
       <div className="flex items-end">
         <Button type="button" className="h-11 w-full" onClick={openModal}>
-          <Plus size={16} />
           {hasPlans ? "Novo Plano" : "Criar Primeiro Plano"}
+          <Plus size={16} />
         </Button>
       </div>
 
@@ -612,17 +766,26 @@ export function DashboardPlanQuickCreate({
               <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="app-eyebrow">{hasPlans ? "Novo Plano" : "Bem-vindo"}</p>
+                    <p className="app-eyebrow">
+                      {hasPlans ? "Novo Plano" : "Bem-vindo"}
+                    </p>
                     <h3 className="mt-2 text-xl font-semibold text-foreground">
-                      {hasPlans ? "Crie outro espaço financeiro" : "Vamos montar seu primeiro plano"}
+                      {hasPlans
+                        ? "Crie outro espaço financeiro"
+                        : "Vamos montar seu primeiro plano"}
                     </h3>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {hasPlans
-                        ? "Você pode começar do zero e, se quiser, já criar todos os períodos do ano."
+                        ? "Você pode começar do zero, e o ano atual será preparado automaticamente."
                         : "Comece criando um plano para organizar suas transações, categorias, cartões e períodos."}
                     </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsOpen(false)}
+                  >
                     Fechar
                   </Button>
                 </div>
@@ -649,42 +812,27 @@ export function DashboardPlanQuickCreate({
                     />
                   </div>
 
-                  <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <Label>Gerar 12 Períodos</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Cria Janeiro a Dezembro automaticamente para você começar mais rápido.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={createYearPeriods}
-                        onClick={() => setCreateYearPeriods(!createYearPeriods)}
-                      />
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                      <Label>Ano</Label>
-                      <Input
-                        disabled={!createYearPeriods}
-                        type="number"
-                        value={periodsYear}
-                        onChange={(event) => setPeriodsYear(Number(event.target.value) || periodsYear)}
-                      />
-                    </div>
+                  <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4 text-sm text-muted-foreground">
+                    Janeiro a Dezembro do ano atual serão criados
+                    automaticamente assim que o plano for salvo.
                   </div>
 
                   {!hasPlans ? (
                     <div className="rounded-[1.25rem] border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-                      Dica: se este for seu primeiro plano, ativar os 12 períodos deixa o dashboard pronto
-                      para lançamentos e comparações mensais.
+                      Dica: seu primeiro plano já nasce com o ano atual completo
+                      para liberar o dashboard, os lançamentos e as comparações
+                      mensais.
                     </div>
                   ) : null}
 
                   <FormError message={errorMessage} />
 
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsOpen(false)}
+                    >
                       Cancelar
                     </Button>
                     <Button type="submit" disabled={saveMutation.isPending}>
@@ -711,15 +859,23 @@ export function PlanParticipantsManager({
   participants: PlanParticipant[]
   isPlanOwner: boolean
 }) {
-  const { inviteLink, inviteLinkLoading, rotateInviteLink, revokeInviteLink, removeParticipant, inviteErrorMessage } =
-    usePlanCollaborationManager({ activePlan, isPlanOwner })
+  const {
+    inviteLink,
+    inviteLinkLoading,
+    rotateInviteLink,
+    revokeInviteLink,
+    removeParticipant,
+    inviteErrorMessage,
+  } = usePlanCollaborationManager({ activePlan, isPlanOwner })
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
 
   if (!activePlan) {
     return null
   }
 
-  const partnerCount = participants.filter((participant) => participant.role === "PARTNER").length
+  const partnerCount = participants.filter(
+    (participant) => participant.role === "PARTNER"
+  ).length
   const inviteUrl =
     inviteLink?.active && inviteLink.inviteToken
       ? `${window.location.origin}/invite/${inviteLink.inviteToken}`
@@ -728,7 +884,7 @@ export function PlanParticipantsManager({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <Card className="border-border bg-secondary/60 p-5">
-        <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
+        <h3 className="mb-3 flex items-center gap-2 text-xs font-bold tracking-[0.28em] text-muted-foreground uppercase">
           <Users size={16} /> Convite por link
         </h3>
 
@@ -739,7 +895,9 @@ export function PlanParticipantsManager({
               <Input
                 readOnly
                 value={inviteUrl}
-                placeholder={inviteLinkLoading ? "Carregando link..." : "Nenhum link ativo"}
+                placeholder={
+                  inviteLinkLoading ? "Carregando link..." : "Nenhum link ativo"
+                }
               />
             </div>
 
@@ -754,14 +912,20 @@ export function PlanParticipantsManager({
 
                   try {
                     await navigator.clipboard.writeText(inviteUrl)
-                    setCopyFeedback("Link copiado para a área de transferência.")
+                    setCopyFeedback(
+                      "Link copiado para a área de transferência."
+                    )
                   } catch {
                     setCopyFeedback("Não foi possível copiar automaticamente.")
                   }
                 }}
                 disabled={rotateInviteLink.isPending || inviteLinkLoading}
               >
-                {inviteUrl ? "Copiar link" : rotateInviteLink.isPending ? "Gerando..." : "Gerar link"}
+                {inviteUrl
+                  ? "Copiar link"
+                  : rotateInviteLink.isPending
+                    ? "Gerando..."
+                    : "Gerar link"}
               </Button>
 
               <Button
@@ -770,7 +934,11 @@ export function PlanParticipantsManager({
                 onClick={() => rotateInviteLink.mutate()}
                 disabled={rotateInviteLink.isPending || !activePlan}
               >
-                {rotateInviteLink.isPending ? "Rotacionando..." : inviteUrl ? "Rotacionar link" : "Gerar novo link"}
+                {rotateInviteLink.isPending
+                  ? "Rotacionando..."
+                  : inviteUrl
+                    ? "Rotacionar link"
+                    : "Gerar novo link"}
               </Button>
 
               <Button
@@ -784,12 +952,15 @@ export function PlanParticipantsManager({
             </div>
 
             {copyFeedback ? (
-              <p className="mt-3 text-xs text-muted-foreground">{copyFeedback}</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {copyFeedback}
+              </p>
             ) : null}
           </>
         ) : (
           <div className="rounded-[1.25rem] border border-border bg-card/80 p-4 text-sm text-muted-foreground">
-            Somente o owner do plano pode gerar, rotacionar ou revogar links de convite.
+            Somente o owner do plano pode gerar, rotacionar ou revogar links de
+            convite.
           </div>
         )}
 
@@ -801,14 +972,16 @@ export function PlanParticipantsManager({
       <Card className="border-border bg-secondary/60 p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Participantes atuais</h3>
+            <h3 className="text-lg font-semibold text-foreground">
+              Participantes atuais
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {partnerCount === 0
                 ? "Este plano ainda não possui parceiros adicionais."
                 : `${partnerCount} ${partnerCount === 1 ? "parceiro ativo" : "parceiros ativos"}`}
             </p>
           </div>
-          <div className="rounded-full bg-accent px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          <div className="rounded-full bg-accent px-3 py-2 text-xs font-semibold tracking-[0.18em] text-primary uppercase">
             {participants.length} pessoas
           </div>
         </div>
@@ -821,12 +994,16 @@ export function PlanParticipantsManager({
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{participant.name}</p>
-                  <p className="text-xs text-muted-foreground">{participant.email}</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {participant.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {participant.email}
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-primary/12 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+                  <span className="rounded-full bg-primary/12 px-2.5 py-1 text-[11px] font-semibold tracking-[0.2em] text-primary uppercase">
                     {participant.role === "OWNER" ? "Owner" : "Partner"}
                   </span>
 
@@ -836,7 +1013,11 @@ export function PlanParticipantsManager({
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        if (!window.confirm(`Remover ${participant.name} deste plano?`)) {
+                        if (
+                          !window.confirm(
+                            `Remover ${participant.name} deste plano?`
+                          )
+                        ) {
                           return
                         }
                         removeParticipant.mutate(participant.userId)

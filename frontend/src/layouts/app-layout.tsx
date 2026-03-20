@@ -1,7 +1,10 @@
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 
-import { AppShellSidebar, MobileSidebarButton } from "@/components/app-shell-sidebar.tsx"
+import {
+  AppShellSidebar,
+  MobileSidebarButton,
+} from "@/components/app-shell-sidebar.tsx"
 import { ThemeToggle } from "@/components/theme-toggle.tsx"
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { useDashboardStore } from "@/features/finance/dashboard-store"
@@ -9,7 +12,8 @@ import { useDashboardStore } from "@/features/finance/dashboard-store"
 const routeMeta: Record<string, { title: string; description: string }> = {
   "/": {
     title: "Dashboard Financeiro",
-    description: "Acompanhe o plano, compare períodos e mantenha a operação central em uma visão só.",
+    description:
+      "Acompanhe o plano, compare períodos e mantenha a operação central em uma visão só.",
   },
   "/profile": {
     title: "Meu Perfil",
@@ -20,16 +24,18 @@ const routeMeta: Record<string, { title: string; description: string }> = {
     description: "Organize os planos e escolha o contexto ativo do produto.",
   },
   "/periods": {
-    title: "Períodos",
-    description: "Crie períodos, compare meses e prepare o fluxo financeiro de cada janela.",
+    title: "Planos Financeiros",
+    description: "A rota de períodos redireciona para a gestão do plano ativo.",
   },
   "/cards": {
     title: "Cartões e Faturas",
-    description: "Centralize cartões, faturas e recorte das despesas ligadas ao crédito.",
+    description:
+      "Centralize cartões, faturas e recorte das despesas ligadas ao crédito.",
   },
   "/partner": {
     title: "Participantes do Plano",
-    description: "Gerencie parceiros, convites por link e a composição do plano compartilhado.",
+    description:
+      "Gerencie parceiros, convites por link e a composição do plano compartilhado.",
   },
 }
 
@@ -66,7 +72,9 @@ export function AppLayout() {
             <div className="flex items-start gap-3">
               <MobileSidebarButton onClick={() => setSidebarOpen(true)} />
               <div className="space-y-1">
-                <h1 className="font-serif text-2xl font-semibold text-foreground">{meta.title}</h1>
+                <h1 className="font-serif text-2xl font-semibold text-foreground">
+                  {meta.title}
+                </h1>
               </div>
             </div>
             <div className="hidden items-center gap-3 md:flex">

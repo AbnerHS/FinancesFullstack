@@ -16,6 +16,7 @@ import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
 import {
   formatCurrency,
+  formatMonthLabel,
   formatMonthYear,
   toneForBalance,
 } from "@/features/finance/utils.ts"
@@ -112,6 +113,82 @@ export function DashboardPage() {
   const categoryData = responsibleFilter
     ? buildCategoryChartData(responsibleFilter)
     : categorySpending
+  const selectedStartPeriod = useMemo(
+    () => periods.find((period) => period.id === selectedStartPeriodId) || null,
+    [periods, selectedStartPeriodId]
+  )
+  const selectedEndPeriod = useMemo(
+    () => periods.find((period) => period.id === selectedEndPeriodId) || null,
+    [periods, selectedEndPeriodId]
+  )
+  const availableYears = useMemo(
+    () =>
+      [...new Set(periods.map((period) => period.year))].sort(
+        (left, right) => left - right
+      ),
+    [periods]
+  )
+  const startMonthOptions = useMemo(
+    () =>
+      selectedStartPeriod
+        ? periods
+            .filter((period) => period.year === selectedStartPeriod.year)
+            .map((period) => ({ id: period.id, month: period.month }))
+        : [],
+    [periods, selectedStartPeriod]
+  )
+  const endMonthOptions = useMemo(
+    () =>
+      selectedEndPeriod
+        ? periods
+            .filter((period) => period.year === selectedEndPeriod.year)
+            .map((period) => ({ id: period.id, month: period.month }))
+        : [],
+    [periods, selectedEndPeriod]
+  )
+
+  const selectPeriodForYear = (
+    year: number,
+    currentPeriodId: string | null,
+    fallbackPeriodId: string | null,
+    setter: (periodId: string) => void
+  ) => {
+    const yearPeriods = periods.filter((period) => period.year === year)
+    if (yearPeriods.length === 0) {
+      return
+    }
+
+    const currentPeriod =
+      periods.find((period) => period.id === currentPeriodId) ||
+      periods.find((period) => period.id === fallbackPeriodId) ||
+      null
+    const preferredMonth = currentPeriod?.month ?? yearPeriods[0]?.month
+    const nextPeriod =
+      yearPeriods.find((period) => period.month === preferredMonth) ||
+      yearPeriods[0]
+
+    if (nextPeriod) {
+      setter(nextPeriod.id)
+    }
+  }
+
+  const selectPeriodForMonth = (
+    month: number,
+    currentYear: number | null,
+    setter: (periodId: string) => void
+  ) => {
+    if (!currentYear) {
+      return
+    }
+
+    const nextPeriod = periods.find(
+      (period) => period.year === currentYear && period.month === month
+    )
+
+    if (nextPeriod) {
+      setter(nextPeriod.id)
+    }
+  }
 
   useLayoutEffect(() => {
     transactionPanelRefs.current = transactionPanelRefs.current.slice(
@@ -258,54 +335,138 @@ export function DashboardPage() {
         <div className="mt-5 rounded-[1.5rem] border border-border bg-secondary/35 p-3 sm:p-4">
           <div className="flex flex-col gap-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
-              <div>
-                <label className="app-label">Mês inicial</label>
-                <Select
-                  className="mt-2"
-                  disabled={periodsLoading || periods.length === 0}
-                  value={selectedStartPeriodId || ""}
-                  onChange={(event) =>
-                    setSelectedStartPeriodId(event.target.value)
-                  }
-                >
-                  {periods.length === 0 ? (
-                    <option value="">Sem períodos</option>
-                  ) : null}
-                  {periods.map((period) => (
-                    <option key={period.id} value={period.id}>
-                      {formatMonthYear(period)}
-                    </option>
-                  ))}
-                </Select>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="app-label">Ano inicial</label>
+                  <Select
+                    className="mt-2"
+                    disabled={periodsLoading || availableYears.length === 0}
+                    value={
+                      selectedStartPeriod?.year
+                        ? String(selectedStartPeriod.year)
+                        : ""
+                    }
+                    onChange={(event) =>
+                      selectPeriodForYear(
+                        Number(event.target.value),
+                        selectedStartPeriodId,
+                        selectedEndPeriodId,
+                        setSelectedStartPeriodId
+                      )
+                    }
+                  >
+                    {availableYears.length === 0 ? (
+                      <option value="">Sem períodos</option>
+                    ) : null}
+                    {availableYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="app-label">Mês inicial</label>
+                  <Select
+                    className="mt-2"
+                    disabled={periodsLoading || startMonthOptions.length === 0}
+                    value={
+                      selectedStartPeriod?.month
+                        ? String(selectedStartPeriod.month)
+                        : ""
+                    }
+                    onChange={(event) =>
+                      selectPeriodForMonth(
+                        Number(event.target.value),
+                        selectedStartPeriod?.year ?? null,
+                        setSelectedStartPeriodId
+                      )
+                    }
+                  >
+                    {startMonthOptions.length === 0 ? (
+                      <option value="">Sem meses</option>
+                    ) : null}
+                    {startMonthOptions.map((option) => (
+                      <option key={option.id} value={option.month}>
+                        {formatMonthLabel(option.month)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <label className="app-label">Mês final</label>
-                <Select
-                  className="mt-2"
-                  disabled={periodsLoading || periods.length === 0}
-                  value={selectedEndPeriodId || ""}
-                  onChange={(event) =>
-                    setSelectedEndPeriodId(event.target.value)
-                  }
-                >
-                  {periods.length === 0 ? (
-                    <option value="">Sem períodos</option>
-                  ) : null}
-                  {periods.map((period) => (
-                    <option key={period.id} value={period.id}>
-                      {formatMonthYear(period)}
-                    </option>
-                  ))}
-                </Select>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="app-label">Ano final</label>
+                  <Select
+                    className="mt-2"
+                    disabled={periodsLoading || availableYears.length === 0}
+                    value={
+                      selectedEndPeriod?.year
+                        ? String(selectedEndPeriod.year)
+                        : ""
+                    }
+                    onChange={(event) =>
+                      selectPeriodForYear(
+                        Number(event.target.value),
+                        selectedEndPeriodId,
+                        selectedStartPeriodId,
+                        setSelectedEndPeriodId
+                      )
+                    }
+                  >
+                    {availableYears.length === 0 ? (
+                      <option value="">Sem períodos</option>
+                    ) : null}
+                    {availableYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="app-label">Mês final</label>
+                  <Select
+                    className="mt-2"
+                    disabled={periodsLoading || endMonthOptions.length === 0}
+                    value={
+                      selectedEndPeriod?.month
+                        ? String(selectedEndPeriod.month)
+                        : ""
+                    }
+                    onChange={(event) =>
+                      selectPeriodForMonth(
+                        Number(event.target.value),
+                        selectedEndPeriod?.year ?? null,
+                        setSelectedEndPeriodId
+                      )
+                    }
+                  >
+                    {endMonthOptions.length === 0 ? (
+                      <option value="">Sem meses</option>
+                    ) : null}
+                    {endMonthOptions.map((option) => (
+                      <option key={option.id} value={option.month}>
+                        {formatMonthLabel(option.month)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
 
               <div className="rounded-[1.25rem] border border-border bg-card/80 px-4 py-1">
                 <p className="mt-2 text-sm font-semibold text-foreground">
-                  {periodsLoading ? "Carregando períodos..." : selectedPeriodsLabel}
+                  {periodsLoading
+                    ? "Carregando períodos..."
+                    : selectedPeriodsLabel}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  O workspace acompanha todos os meses dentro desse intervalo.
+                  O workspace acompanha todos os meses entre{" "}
+                  {formatMonthYear(selectedStartPeriod) || "--"} e{" "}
+                  {formatMonthYear(selectedEndPeriod) || "--"}.
                 </p>
               </div>
             </div>
@@ -318,7 +479,9 @@ export function DashboardPage() {
           <MetricCard
             title="Receitas"
             value={formatCurrency(
-              responsibleFilter ? filteredMetrics.incomes : combinedStats.incomes
+              responsibleFilter
+                ? filteredMetrics.incomes
+                : combinedStats.incomes
             )}
             tone="positive"
             icon={<TrendingUp size={18} />}
@@ -336,10 +499,14 @@ export function DashboardPage() {
           <MetricCard
             title="Saldo"
             value={formatCurrency(
-              responsibleFilter ? filteredMetrics.balance : combinedStats.balance
+              responsibleFilter
+                ? filteredMetrics.balance
+                : combinedStats.balance
             )}
             tone={toneForBalance(
-              responsibleFilter ? filteredMetrics.balance : combinedStats.balance
+              responsibleFilter
+                ? filteredMetrics.balance
+                : combinedStats.balance
             )}
             icon={<ArrowRight size={18} />}
           />
@@ -359,8 +526,9 @@ export function DashboardPage() {
               <h3 className="font-serif text-3xl font-semibold text-foreground">
                 Transações
               </h3>
-              <p className="mt-2 text-sm text-muted-foreground xl:block hidden">
-                Painéis de transações, faturas e manutenção estrutural do dashboard.
+              <p className="mt-2 hidden text-sm text-muted-foreground xl:block">
+                Painéis de transações, faturas e manutenção estrutural do
+                dashboard.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -429,7 +597,10 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <DashboardCharts comparisonData={comparisonData} categoryData={categoryData} />
+      <DashboardCharts
+        comparisonData={comparisonData}
+        categoryData={categoryData}
+      />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)]">
         <section className="app-panel">
