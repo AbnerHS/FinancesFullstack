@@ -509,10 +509,28 @@ export function useDashboard() {
         )
       })
     })
+
+    const creditCardInvoicesTotal = periodPanels.reduce(
+      (total, panel) =>
+        total +
+        panel.invoices.reduce(
+          (invoiceTotal, invoice) => invoiceTotal + Number(invoice.amount || 0),
+          0
+        ),
+      0
+    )
+
+    if (creditCardInvoicesTotal > 0) {
+      totals.set(
+        "Cartão de Crédito",
+        (totals.get("Cartão de Crédito") ?? 0) + creditCardInvoicesTotal
+      )
+    }
+
     return [...totals.entries()]
       .map(([category, totalAmount]) => ({ category, totalAmount }))
       .sort((a, b) => b.totalAmount - a.totalAmount)
-  }, [categorySpendingQueries])
+  }, [categorySpendingQueries, periodPanels])
 
   const allTransactions = useMemo(
     () => periodPanels.flatMap((panel) => panel.transactions),

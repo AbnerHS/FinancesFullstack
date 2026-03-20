@@ -35,6 +35,10 @@ import { useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
 import { Combobox } from "@/components/ui/combobox.tsx"
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogState,
+} from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
@@ -141,10 +145,11 @@ function TransactionRowContent({
 
       <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
         <span
-          className={`text-sm font-semibold ${transaction.type === "REVENUE"
-            ? "text-emerald-500 dark:text-emerald-400"
-            : "text-rose-500 dark:text-rose-400"
-            }`}
+          className={`text-sm font-semibold ${
+            transaction.type === "REVENUE"
+              ? "text-emerald-500 dark:text-emerald-400"
+              : "text-rose-500 dark:text-rose-400"
+          }`}
         >
           {formatCurrency(transaction.amount)}
         </span>
@@ -240,12 +245,13 @@ function SortableTransactionRow({
         transform: CSS.Transform.toString(transform),
         transition: isDragging ? undefined : transition,
       }}
-      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${isDragging
-        ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
-        : isDragOver
-          ? "border-primary ring-2 ring-primary/15"
-          : "border-border"
-        }`}
+      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
+        isDragging
+          ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
+          : isDragOver
+            ? "border-primary ring-2 ring-primary/15"
+            : "border-border"
+      }`}
     >
       <TransactionRowContent
         transaction={transaction}
@@ -278,6 +284,8 @@ export function TransactionsWorkspace({
     useState<Transaction | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
   const [formError, setFormError] = useState<string | null>(null)
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
 
   const {
     createTransaction,
@@ -484,7 +492,9 @@ export function TransactionsWorkspace({
     <Card className="border-border bg-card/90 p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl xl:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
         <div>
-          <p className="app-eyebrow font-bold text-primary text-[13px]">{panel.label}</p>
+          <p className="app-eyebrow text-[13px] font-bold text-primary">
+            {panel.label}
+          </p>
         </div>
         <div className="grid items-end gap-2 xl:grid-cols-3">
           <MetricCard
@@ -514,7 +524,11 @@ export function TransactionsWorkspace({
       <div className="mt-6 space-y-5">
         {!isComposerOpen ? (
           <div className="xl:hidden">
-            <Button type="button" className="w-full" onClick={startCreateTransaction}>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={startCreateTransaction}
+            >
               Nova Transação
               <Plus size={16} />
             </Button>
@@ -573,7 +587,8 @@ export function TransactionsWorkspace({
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        type: event.target.value as TransactionFormValues["type"],
+                        type: event.target
+                          .value as TransactionFormValues["type"],
                       }))
                     }
                   >
@@ -603,10 +618,11 @@ export function TransactionsWorkspace({
               </div>
 
               <div
-                className={`grid gap-3 ${editingTransaction
-                  ? "md:grid-cols-2 xl:grid-cols-3"
-                  : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
-                  }`}
+                className={`grid gap-3 ${
+                  editingTransaction
+                    ? "md:grid-cols-2 xl:grid-cols-3"
+                    : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
+                }`}
               >
                 <div className="flex flex-col gap-2">
                   <Label>Responsável</Label>
@@ -631,7 +647,7 @@ export function TransactionsWorkspace({
                   <div className="flex items-end">
                     <div className="w-full rounded-xl border border-border bg-card/90 px-3">
                       <div className="flex flex-wrap items-center gap-x-3 xl:flex-nowrap">
-                        <Label className="tracking-widest text-[11px]">
+                        <Label className="text-[11px] tracking-widest">
                           Recorrente
                         </Label>
                         <div className="flex min-h-11 items-center">
@@ -643,7 +659,7 @@ export function TransactionsWorkspace({
                                 isRecurring: !current.isRecurring,
                                 numberOfPeriods:
                                   !current.isRecurring &&
-                                    current.numberOfPeriods < 2
+                                  current.numberOfPeriods < 2
                                     ? 2
                                     : current.numberOfPeriods,
                               }))
@@ -714,7 +730,11 @@ export function TransactionsWorkspace({
                         : createTransaction.isPending
                           ? "Criando..."
                           : "Enviar"}
-                    {editingTransaction ? <Save size={16} /> : <SendHorizonal size={16} />}
+                    {editingTransaction ? (
+                      <Save size={16} />
+                    ) : (
+                      <SendHorizonal size={16} />
+                    )}
                   </Button>
                   {editingTransaction || isComposerOpen ? (
                     <Button
@@ -761,7 +781,7 @@ export function TransactionsWorkspace({
                 {groupedTransactions.map((group) => (
                   <div key={group.id} className="space-y-2">
                     <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
                         {group.label}
                       </p>
                     </div>
@@ -785,17 +805,28 @@ export function TransactionsWorkspace({
                             transactionLinking.openPaymentModal(entry)
                           }
                           onEdit={startEditing}
-                          onDelete={(entry) => deleteTransaction.mutate(entry.id)}
+                          onDelete={(entry) =>
+                            setConfirmationDialog({
+                              confirmLabel: "Excluir Transação",
+                              description: `A transação "${entry.description}" será removida deste mês.`,
+                              title: "Excluir transação?",
+                              onConfirm: () =>
+                                deleteTransaction.mutate(entry.id),
+                            })
+                          }
                         />
                       ))}
                     </SortableContext>
                   </div>
                 ))}
-
               </DndContext>
             )}
           </div>
         </Card>
+        <ConfirmationDialog
+          onClose={() => setConfirmationDialog(null)}
+          state={confirmationDialog}
+        />
 
         <Card className="border-border bg-secondary/40 p-4">
           <div className="flex items-center justify-between gap-3">
@@ -861,7 +892,7 @@ export function TransactionsWorkspace({
                     {invoiceManager.createInvoice.isPending
                       ? "Enviando..."
                       : "Enviar"}
-                      <SendHorizonal size={14} />
+                    <SendHorizonal size={14} />
                   </Button>
                   <Button
                     type="button"
@@ -930,13 +961,15 @@ export function TransactionsWorkspace({
                           <Button
                             type="button"
                             className="h-11"
-                            onClick={() => invoiceManager.updateInvoice.mutate()}
+                            onClick={() =>
+                              invoiceManager.updateInvoice.mutate()
+                            }
                             disabled={invoiceManager.updateInvoice.isPending}
                           >
                             {invoiceManager.updateInvoice.isPending
                               ? "Salvando..."
                               : "Salvar"}
-                              <Save size={14} />
+                            <Save size={14} />
                           </Button>
                           <Button
                             type="button"
@@ -965,7 +998,9 @@ export function TransactionsWorkspace({
                     </div>
                     {isEditing ? (
                       <div className="mt-3">
-                        <FormError message={invoiceManager.updateErrorMessage} />
+                        <FormError
+                          message={invoiceManager.updateErrorMessage}
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -978,7 +1013,7 @@ export function TransactionsWorkspace({
         {transactionLinking.paymentModalEntry ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+              <h3 className="text-sm font-bold tracking-wider text-foreground uppercase">
                 Vincular a fatura
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">

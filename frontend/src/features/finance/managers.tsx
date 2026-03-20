@@ -146,7 +146,7 @@ export function PlanManager({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_24rem]">
+      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem_24rem]">
         <div className="flex flex-col gap-3 md:grid-cols-2">
           {plans.map((plan) => {
             const isActive = plan.id === selectedPlanId
@@ -155,11 +155,10 @@ export function PlanManager({
                 key={plan.id}
                 type="button"
                 onClick={() => onSelectPlanId(plan.id)}
-                className={`rounded-[1.5rem] border p-5 text-left transition ${
-                  isActive
-                    ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_22px_48px_rgba(37,99,235,0.20)]"
-                    : "border-border bg-secondary/70 text-foreground hover:border-primary/40"
-                }`}
+                className={`rounded-[1.5rem] border p-5 text-left transition ${isActive
+                  ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_22px_48px_rgba(37,99,235,0.20)]"
+                  : "border-border bg-secondary/70 text-foreground hover:border-primary/40"
+                  }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="font-semibold">{plan.name}</h3>
@@ -181,222 +180,219 @@ export function PlanManager({
           })}
         </div>
 
-        <div className="space-y-6">
-          <Card className="border-border bg-secondary/60 p-5">
-            <div className="flex gap-2 rounded-full bg-card/90 p-1">
-              <button
-                type="button"
-                className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
-                  mode === "create"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground"
-                }`}
-                onClick={startCreate}
-              >
-                Criar
-              </button>
-              <button
-                type="button"
-                className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${
-                  mode === "edit"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground"
-                }`}
-                onClick={startEdit}
-                disabled={!activePlan}
-              >
-                Editar
-              </button>
-            </div>
+        <Card className="border-border bg-secondary/60 p-5">
+          <div>
+            <p className="app-eyebrow">Anos do plano</p>
+            <h3 className="mt-2 text-xl font-semibold text-foreground">
+              {activePlan
+                ? `Expandir ${activePlan.name}`
+                : "Selecione um plano"}
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {activePlan
+                ? "Adicione um novo ano ao plano ativo. Apenas os meses ausentes serão criados."
+                : "Escolha um plano para liberar a criação de um novo ano."}
+            </p>
+          </div>
 
-            <form
-              className="mt-5 space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                saveMutation.mutate()
-              }}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="plan-name">Nome do plano</Label>
-                <Input
-                  id="plan-name"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Ex.: Casa e rotina"
-                />
+          {activePlan ? (
+            <>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {yearSummaries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum ano encontrado ainda para este plano.
+                  </p>
+                ) : (
+                  yearSummaries.map(({ year, monthCount }) => (
+                    <div
+                      key={year}
+                      className="rounded-[1rem] border border-border bg-card/80 px-3 py-2 w-full"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {year}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {monthCount}/12 meses
+                          </div>
+                        </div>
+
+                        {isPlanOwner ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-rose-600 hover:text-rose-700"
+                            disabled={deleteYearMutation.isPending}
+                            onClick={() =>
+                              setConfirmationDialog({
+                                confirmLabel: "Excluir Ano",
+                                description: `Todos os meses de ${year} serão removidos do plano "${activePlan.name}".`,
+                                title: `Excluir o ano ${year}?`,
+                                onConfirm: () =>
+                                  deleteYearMutation.mutate(year),
+                              })
+                            }
+                          >
+                            <Trash2 size={14} />
+                            Excluir
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-              {mode === "create" ? (
-                <div className="rounded-[1.25rem] border border-border bg-card/80 p-3 text-sm text-muted-foreground">
-                  O plano novo sempre nasce com Janeiro a Dezembro do ano atual
-                  para deixar o dashboard pronto para uso.
-                </div>
-              ) : null}
-              <Button
-                type="submit"
-                className="h-11 w-full"
-                disabled={saveMutation.isPending}
-              >
-                {mode === "create" ? <Plus size={16} /> : null}
-                {saveMutation.isPending
-                  ? "Salvando..."
-                  : mode === "edit"
-                    ? "Salvar nome"
-                    : "Criar Plano"}
-              </Button>
-              <FormError message={errorMessage} />
 
-              {activePlan && isPlanOwner ? (
-                <div className="rounded-[1.25rem] border border-rose-200/70 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
-                  <p className="text-sm font-medium text-foreground">
-                    Excluir plano
+              <form
+                className="mt-5 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  addYearMutation.mutate()
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="plan-year">Novo ano</Label>
+                  <Input
+                    id="plan-year"
+                    type="number"
+                    value={draftYear}
+                    onChange={(event) =>
+                      setDraftYear(
+                        Number(event.target.value) || suggestedYear
+                      )
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sugestão automática: {suggestedYear}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Remove o plano ativo e todos os dados vinculados que o
-                    backend permitir excluir.
-                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    className="h-11 flex-1"
+                    disabled={addYearMutation.isPending}
+                  >
+                    <Plus size={16} />
+                    {addYearMutation.isPending
+                      ? "Adicionando..."
+                      : "Adicionar Ano"}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    className="mt-3 h-11 w-full border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/40 dark:text-rose-300"
-                    disabled={deletePlanMutation.isPending}
-                    onClick={() =>
-                      setConfirmationDialog({
-                        confirmLabel: "Excluir Plano",
-                        description: `O plano "${activePlan.name}" será removido. Esta ação não pode ser desfeita.`,
-                        title: "Excluir plano ativo?",
-                        onConfirm: () => deletePlanMutation.mutate(),
-                      })
-                    }
+                    className="h-11"
+                    onClick={resetDraft}
                   >
-                    <Trash2 size={16} />
-                    {deletePlanMutation.isPending
-                      ? "Excluindo..."
-                      : "Excluir Plano"}
+                    Resetar
                   </Button>
-                  <div className="mt-3">
-                    <FormError message={deletePlanErrorMessage} />
-                  </div>
                 </div>
-              ) : null}
-            </form>
-          </Card>
+                <FormError message={addYearErrorMessage} />
+                <FormError message={deleteYearErrorMessage} />
+              </form>
+            </>
+          ) : null}
+        </Card>
 
-          <Card className="border-border bg-secondary/60 p-5">
-            <div>
-              <p className="app-eyebrow">Anos do plano</p>
-              <h3 className="mt-2 text-xl font-semibold text-foreground">
-                {activePlan
-                  ? `Expandir ${activePlan.name}`
-                  : "Selecione um plano"}
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {activePlan
-                  ? "Adicione um novo ano ao plano ativo. Apenas os meses ausentes serão criados."
-                  : "Escolha um plano para liberar a criação de um novo ano."}
-              </p>
+        <Card className="border-border bg-secondary/60 p-5">
+          <div className="flex gap-2 rounded-full bg-card/90 p-1">
+            <button
+              type="button"
+              className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${mode === "create"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground"
+                }`}
+              onClick={startCreate}
+            >
+              Criar
+            </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-full px-4 py-2 text-sm font-medium ${mode === "edit"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground"
+                }`}
+              onClick={startEdit}
+              disabled={!activePlan}
+            >
+              Editar
+            </button>
+          </div>
+
+          <form
+            className="mt-5 space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              saveMutation.mutate()
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="plan-name">Nome do plano</Label>
+              <Input
+                id="plan-name"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="Ex.: Casa e rotina"
+              />
             </div>
-
-            {activePlan ? (
-              <>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {yearSummaries.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum ano encontrado ainda para este plano.
-                    </p>
-                  ) : (
-                    yearSummaries.map(({ year, monthCount }) => (
-                      <div
-                        key={year}
-                        className="rounded-[1rem] border border-border bg-card/80 px-3 py-2"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-foreground">
-                              {year}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {monthCount}/12 meses
-                            </div>
-                          </div>
-
-                          {isPlanOwner ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 px-2 text-rose-600 hover:text-rose-700"
-                              disabled={deleteYearMutation.isPending}
-                              onClick={() =>
-                                setConfirmationDialog({
-                                  confirmLabel: "Excluir Ano",
-                                  description: `Todos os meses de ${year} serão removidos do plano "${activePlan.name}".`,
-                                  title: `Excluir o ano ${year}?`,
-                                  onConfirm: () =>
-                                    deleteYearMutation.mutate(year),
-                                })
-                              }
-                            >
-                              <Trash2 size={14} />
-                              Excluir
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <form
-                  className="mt-5 space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    addYearMutation.mutate()
-                  }}
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="plan-year">Novo ano</Label>
-                    <Input
-                      id="plan-year"
-                      type="number"
-                      value={draftYear}
-                      onChange={(event) =>
-                        setDraftYear(
-                          Number(event.target.value) || suggestedYear
-                        )
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Sugestão automática: {suggestedYear}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      className="h-11 flex-1"
-                      disabled={addYearMutation.isPending}
-                    >
-                      <Plus size={16} />
-                      {addYearMutation.isPending
-                        ? "Adicionando..."
-                        : "Adicionar Ano"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11"
-                      onClick={resetDraft}
-                    >
-                      Resetar
-                    </Button>
-                  </div>
-                  <FormError message={addYearErrorMessage} />
-                  <FormError message={deleteYearErrorMessage} />
-                </form>
-              </>
+            {mode === "create" ? (
+              <div className="rounded-[1.25rem] border border-border bg-card/80 p-3 text-sm text-muted-foreground">
+                O plano novo sempre nasce com Janeiro a Dezembro do ano atual
+                para deixar o dashboard pronto para uso.
+              </div>
             ) : null}
-          </Card>
-        </div>
+            <Button
+              type="submit"
+              className="h-11 w-full"
+              disabled={saveMutation.isPending}
+            >
+              {mode === "create" ? <Plus size={16} /> : null}
+              {saveMutation.isPending
+                ? "Salvando..."
+                : mode === "edit"
+                  ? "Salvar nome"
+                  : "Criar Plano"}
+            </Button>
+            <FormError message={errorMessage} />
+
+            {activePlan && isPlanOwner ? (
+              <div className="rounded-[1.25rem] border border-rose-200/70 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
+                <p className="text-sm font-medium text-foreground">
+                  Excluir plano
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Remove o plano ativo e todos os dados vinculados que o
+                  backend permitir excluir.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 h-11 w-full border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/40 dark:text-rose-300"
+                  disabled={deletePlanMutation.isPending}
+                  onClick={() =>
+                    setConfirmationDialog({
+                      confirmLabel: "Excluir Plano",
+                      description: `O plano "${activePlan.name}" será removido. Esta ação não pode ser desfeita.`,
+                      title: "Excluir plano ativo?",
+                      onConfirm: () => deletePlanMutation.mutate(),
+                    })
+                  }
+                >
+                  <Trash2 size={16} />
+                  {deletePlanMutation.isPending
+                    ? "Excluindo..."
+                    : "Excluir Plano"}
+                </Button>
+                <div className="mt-3">
+                  <FormError message={deletePlanErrorMessage} />
+                </div>
+              </div>
+            ) : null}
+          </form>
+        </Card>
+
       </div>
       <ConfirmationDialog
         onClose={() => setConfirmationDialog(null)}
@@ -523,11 +519,10 @@ export function PeriodsManager({
                 return (
                   <span
                     key={period.id}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                      selected
-                        ? "border-primary/20 bg-primary/10 text-primary"
-                        : "border-border bg-card/80 text-muted-foreground"
-                    }`}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${selected
+                      ? "border-primary/20 bg-primary/10 text-primary"
+                      : "border-border bg-card/80 text-muted-foreground"
+                      }`}
                   >
                     {formatMonthYear(period)}
                   </span>
@@ -892,89 +887,89 @@ export function DashboardPlanQuickCreate({
 
       {isOpen
         ? createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-              <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="app-eyebrow">
-                      {hasPlans ? "Novo Plano" : "Bem-vindo"}
-                    </p>
-                    <h3 className="mt-2 text-xl font-semibold text-foreground">
-                      {hasPlans
-                        ? "Crie outro espaço financeiro"
-                        : "Vamos montar seu primeiro plano"}
-                    </h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {hasPlans
-                        ? "Você pode começar do zero, e o ano atual será preparado automaticamente."
-                        : "Comece criando um plano para organizar suas transações, categorias, cartões e períodos."}
-                    </p>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="app-eyebrow">
+                    {hasPlans ? "Novo Plano" : "Bem-vindo"}
+                  </p>
+                  <h3 className="mt-2 text-xl font-semibold text-foreground">
+                    {hasPlans
+                      ? "Crie outro espaço financeiro"
+                      : "Vamos montar seu primeiro plano"}
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {hasPlans
+                      ? "Você pode começar do zero, e o ano atual será preparado automaticamente."
+                      : "Comece criando um plano para organizar suas transações, categorias, cartões e períodos."}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Fechar
+                </Button>
+              </div>
+
+              <form
+                className="mt-5 space-y-4"
+                onSubmit={async (event) => {
+                  event.preventDefault()
+                  try {
+                    await saveMutation.mutateAsync()
+                    setIsOpen(false)
+                  } catch {
+                    // O hook ja expoe a mensagem de erro para o formulario.
+                  }
+                }}
+              >
+                <div className="space-y-2">
+                  <Label>Nome do plano</Label>
+                  <Input
+                    autoFocus
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    placeholder="Ex.: Casa 2026"
+                  />
+                </div>
+
+                <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4 text-sm text-muted-foreground">
+                  Janeiro a Dezembro do ano atual serão criados
+                  automaticamente assim que o plano for salvo.
+                </div>
+
+                {!hasPlans ? (
+                  <div className="rounded-[1.25rem] border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                    Dica: seu primeiro plano já nasce com o ano atual completo
+                    para liberar o dashboard, os lançamentos e as comparações
+                    mensais.
                   </div>
+                ) : null}
+
+                <FormError message={errorMessage} />
+
+                <div className="flex justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
                     onClick={() => setIsOpen(false)}
                   >
-                    Fechar
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={saveMutation.isPending}>
+                    <Plus size={16} />
+                    {saveMutation.isPending ? "Criando..." : "Criar Plano"}
                   </Button>
                 </div>
-
-                <form
-                  className="mt-5 space-y-4"
-                  onSubmit={async (event) => {
-                    event.preventDefault()
-                    try {
-                      await saveMutation.mutateAsync()
-                      setIsOpen(false)
-                    } catch {
-                      // O hook ja expoe a mensagem de erro para o formulario.
-                    }
-                  }}
-                >
-                  <div className="space-y-2">
-                    <Label>Nome do plano</Label>
-                    <Input
-                      autoFocus
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      placeholder="Ex.: Casa 2026"
-                    />
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4 text-sm text-muted-foreground">
-                    Janeiro a Dezembro do ano atual serão criados
-                    automaticamente assim que o plano for salvo.
-                  </div>
-
-                  {!hasPlans ? (
-                    <div className="rounded-[1.25rem] border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-                      Dica: seu primeiro plano já nasce com o ano atual completo
-                      para liberar o dashboard, os lançamentos e as comparações
-                      mensais.
-                    </div>
-                  ) : null}
-
-                  <FormError message={errorMessage} />
-
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={saveMutation.isPending}>
-                      <Plus size={16} />
-                      {saveMutation.isPending ? "Criando..." : "Criar Plano"}
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </div>,
-            document.body
-          )
+              </form>
+            </div>
+          </div>,
+          document.body
+        )
         : null}
     </>
   )
