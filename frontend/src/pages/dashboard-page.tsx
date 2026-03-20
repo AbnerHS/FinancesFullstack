@@ -1,11 +1,13 @@
 import {
+  ChevronLeft,
+  ChevronRight,
   ArrowRight,
   Sparkles,
   TrendingDown,
   TrendingUp,
   Users,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Select } from "@/components/ui/select.tsx"
 import { DashboardCharts } from "@/features/finance/charts.tsx"
@@ -18,6 +20,10 @@ import {
   toneForBalance,
 } from "@/features/finance/utils.ts"
 import MetricCard from "@/features/finance/metric-card"
+
+const isDefinedPanel = (
+  panel: HTMLDivElement | null
+): panel is HTMLDivElement => panel !== null
 
 export function DashboardPage() {
   const {
@@ -47,6 +53,9 @@ export function DashboardPage() {
     buildCategoryChartData,
   } = useDashboard()
   const [responsibleFilter, setResponsibleFilter] = useState("")
+  const transactionsScrollerRef = useRef<HTMLDivElement | null>(null)
+  const transactionPanelRefs = useRef<Array<HTMLDivElement | null>>([])
+  const [transactionsEdgeSpacing, setTransactionsEdgeSpacing] = useState(0)
 
   const filteredPanels = useMemo(() => {
     if (!responsibleFilter) {
@@ -103,6 +112,73 @@ export function DashboardPage() {
   const categoryData = responsibleFilter
     ? buildCategoryChartData(responsibleFilter)
     : categorySpending
+
+  useLayoutEffect(() => {
+    transactionPanelRefs.current = transactionPanelRefs.current.slice(
+      0,
+      filteredPanels.length
+    )
+
+    const updateSpacing = () => {
+      const container = transactionsScrollerRef.current
+      const firstPanel = transactionPanelRefs.current[0]
+
+      if (!container || !firstPanel) {
+        setTransactionsEdgeSpacing(0)
+        return
+      }
+
+      setTransactionsEdgeSpacing(
+        Math.max((container.clientWidth - firstPanel.clientWidth) / 2, 0)
+      )
+    }
+
+    updateSpacing()
+    window.addEventListener("resize", updateSpacing)
+
+    return () => {
+      window.removeEventListener("resize", updateSpacing)
+    }
+  }, [filteredPanels.length])
+
+  const scrollTransactions = (direction: "previous" | "next") => {
+    const container = transactionsScrollerRef.current
+    const panels = transactionPanelRefs.current.filter(isDefinedPanel)
+    if (!container || panels.length === 0) {
+      return
+    }
+
+    const currentCenter = container.scrollLeft + container.clientWidth / 2
+    const currentIndex = panels.reduce((closestIndex, panel, index) => {
+      const panelCenter = panel.offsetLeft + panel.clientWidth / 2
+      const closestPanel = panels[closestIndex]
+      const closestCenter =
+        closestPanel.offsetLeft + closestPanel.clientWidth / 2
+
+      return Math.abs(panelCenter - currentCenter) <
+        Math.abs(closestCenter - currentCenter)
+        ? index
+        : closestIndex
+    }, 0)
+
+    const targetIndex =
+      direction === "next"
+        ? Math.min(currentIndex + 1, panels.length - 1)
+        : Math.max(currentIndex - 1, 0)
+
+    const targetPanel = panels[targetIndex]
+    const containerRect = container.getBoundingClientRect()
+    const targetPanelRect = targetPanel.getBoundingClientRect()
+    const left =
+      container.scrollLeft +
+      (targetPanelRect.left - containerRect.left) -
+      (container.clientWidth - targetPanel.clientWidth) / 2
+
+    container.scrollTo({
+      left,
+      behavior: "smooth",
+    })
+  }
 
   const selectedPeriodsLabel =
     selectedPeriodIds.length === 0
@@ -225,7 +301,6 @@ export function DashboardPage() {
               </div>
 
               <div className="rounded-[1.25rem] border border-border bg-card/80 px-4 py-1">
-                
                 <p className="mt-2 text-sm font-semibold text-foreground">
                   {periodsLoading ? "Carregando períodos..." : selectedPeriodsLabel}
                 </p>
@@ -279,57 +354,77 @@ export function DashboardPage() {
 
       <section className="space-y-5">
         <div>
-          <h3 className="font-serif text-3xl font-semibold text-foreground">
-            Transações
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Painéis de transações, faturas e manutenção estrutural do dashboard.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-serif text-3xl font-semibold text-foreground">
+                Transações
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground xl:block hidden">
+                Painéis de transações, faturas e manutenção estrutural do dashboard.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/85 text-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
+                onClick={() => scrollTransactions("previous")}
+                disabled={filteredPanels.length <= 1}
+                aria-label="Ir para o mês anterior"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/85 text-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
+                onClick={() => scrollTransactions("next")}
+                disabled={filteredPanels.length <= 1}
+                aria-label="Ir para o próximo mês"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-5 xl:hidden">
-          {filteredPanels.map((panel) => (
-            <div key={panel.period.id} className="min-w-0">
-              <TransactionsWorkspace
-                panel={panel}
-                shared={{
-                  creditCards,
-                  periods,
-                  transactionCategories,
-                  responsibleOptions,
-                }}
-              />
-            </div>
-          ))}
-
-          {periods.length > 0 && filteredPanels.length === 0 ? (
-            <div className="flex min-w-0 items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
-              Selecione ao menos um período para ativar o workspace.
-            </div>
-          ) : null}
-        </div>
-
-        <div className="hidden overflow-x-auto pb-4 xl:block">
-          <div className="flex gap-5">
-            {filteredPanels.map((panel) => (
-              <div key={panel.period.id} className="min-w-[50rem] flex-1">
-                <TransactionsWorkspace
-                  panel={panel}
-                  shared={{
-                    creditCards,
-                    periods,
-                    transactionCategories,
-                    responsibleOptions,
-                  }}
+        <div className="space-y-3">
+          <div className="relative">
+            <div
+              ref={transactionsScrollerRef}
+              className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0"
+            >
+              <div className="flex snap-x snap-mandatory gap-5">
+                {filteredPanels.map((panel, index) => (
+                  <div
+                    key={panel.period.id}
+                    ref={(element) => {
+                      transactionPanelRefs.current[index] = element
+                    }}
+                    className="w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] snap-center sm:w-[min(50rem,calc(100vw-3rem))] sm:min-w-[min(50rem,calc(100vw-3rem))] xl:min-w-[50rem] xl:flex-1"
+                  >
+                    <TransactionsWorkspace
+                      panel={panel}
+                      shared={{
+                        creditCards,
+                        periods,
+                        transactionCategories,
+                        responsibleOptions,
+                      }}
+                    />
+                  </div>
+                ))}
+                <div
+                  aria-hidden="true"
+                  className="shrink-0"
+                  style={{ width: `${transactionsEdgeSpacing}px` }}
                 />
-              </div>
-            ))}
 
-            {periods.length > 0 && filteredPanels.length === 0 ? (
-              <div className="flex min-w-[22rem] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
-                Selecione ao menos um período para ativar o workspace.
+                {periods.length > 0 && filteredPanels.length === 0 ? (
+                  <div className="flex w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground sm:w-[min(28rem,calc(100vw-3rem))] sm:min-w-[min(28rem,calc(100vw-3rem))] xl:min-w-[22rem]">
+                    Selecione ao menos um período para ativar o workspace.
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </section>
@@ -342,7 +437,7 @@ export function DashboardPage() {
             <div>
               <p className="app-eyebrow">Contexto do plano</p>
               <h3 className="font-serif text-2xl font-semibold text-foreground">
-                Leitura rápida
+                Leitura Rápida
               </h3>
             </div>
             <div className="rounded-full bg-primary/12 p-3 text-primary">
