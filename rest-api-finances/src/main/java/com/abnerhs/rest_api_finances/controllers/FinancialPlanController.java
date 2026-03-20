@@ -2,14 +2,24 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
-import com.abnerhs.rest_api_finances.docs.*;
+import com.abnerhs.rest_api_finances.assembler.CreditCardAssembler;
+import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
+import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
+import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
+import com.abnerhs.rest_api_finances.docs.ApiPatchResponses;
+import com.abnerhs.rest_api_finances.docs.ApiPostResponses;
+import com.abnerhs.rest_api_finances.docs.ApiPutResponses;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanInvitationResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanInviteLinkResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanParticipantResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
 import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
+import com.abnerhs.rest_api_finances.service.CreditCardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,6 +45,7 @@ public class FinancialPlanController {
 
     @Autowired
     private FinancialPlanService service;
+
     @Autowired
     private FinancialPlanAssembler assembler;
 
@@ -43,6 +54,12 @@ public class FinancialPlanController {
 
     @Autowired
     private FinancialPeriodAssembler financialPeriodAssembler;
+
+    @Autowired
+    private CreditCardService creditCardService;
+
+    @Autowired
+    private CreditCardAssembler creditCardAssembler;
 
     @PostMapping
     @ApiPostResponses
@@ -76,10 +93,72 @@ public class FinancialPlanController {
     @ApiGetResponses
     @Operation(summary = "Find Periods by Financial Plan", tags = {"Plan", "Period"})
     public CollectionModel<EntityModel<FinancialPeriodResponseDTO>> getPeriodsByPlan(@PathVariable UUID id) {
+        service.assertCurrentUserCanAccessPlan(id);
         List<FinancialPeriodResponseDTO> dtoList = financialPeriodService.findAllByPlan(id);
 
         return financialPeriodAssembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(FinancialPlanController.class).getPeriodsByPlan(id)).withSelfRel());
+    }
+
+    @GetMapping("/{id}/credit-cards")
+    @ApiGetResponses
+    @Operation(summary = "Find credit cards available in a financial plan", tags = {"Plan", "Card"})
+    public CollectionModel<EntityModel<CreditCardResponseDTO>> getCreditCardsByPlan(@PathVariable UUID id) {
+        List<CreditCardResponseDTO> dtoList = creditCardService.findAllByPlan(id);
+
+        return creditCardAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(FinancialPlanController.class).getCreditCardsByPlan(id)).withSelfRel());
+    }
+
+    @GetMapping("/{id}/participants")
+    @ApiGetResponses
+    @Operation(summary = "Find participants by financial plan", tags = {"Plan"})
+    public ResponseEntity<List<FinancialPlanParticipantResponseDTO>> getParticipants(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.getParticipants(id));
+    }
+
+    @GetMapping("/{id}/invite-link")
+    @ApiGetResponses
+    @Operation(summary = "Get the active invite link for a plan", tags = {"Plan"})
+    public ResponseEntity<FinancialPlanInviteLinkResponseDTO> getInviteLink(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.getInviteLink(id));
+    }
+
+    @PutMapping("/{id}/invite-link")
+    @ApiPutResponses
+    @Operation(summary = "Rotate or generate the active invite link for a plan", tags = {"Plan"})
+    public ResponseEntity<FinancialPlanInviteLinkResponseDTO> rotateInviteLink(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.rotateInviteLink(id));
+    }
+
+    @DeleteMapping("/{id}/invite-link")
+    @ApiDeleteResponses
+    @Operation(summary = "Revoke the active invite link for a plan", tags = {"Plan"})
+    public ResponseEntity<Void> revokeInviteLink(@PathVariable UUID id) {
+        service.revokeInviteLink(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/invitations/{token}")
+    @ApiGetResponses
+    @Operation(summary = "Resolve a plan invitation", tags = {"Plan"})
+    public ResponseEntity<FinancialPlanInvitationResponseDTO> resolveInvitation(@PathVariable String token) {
+        return ResponseEntity.ok(service.resolveInvitation(token));
+    }
+
+    @PostMapping("/invitations/{token}/accept")
+    @ApiPostResponses
+    @Operation(summary = "Accept a plan invitation", tags = {"Plan"})
+    public ResponseEntity<FinancialPlanInvitationResponseDTO> acceptInvitation(@PathVariable String token) {
+        return ResponseEntity.ok(service.acceptInvitation(token));
+    }
+
+    @DeleteMapping("/{id}/participants/{userId}")
+    @ApiDeleteResponses
+    @Operation(summary = "Remove a partner from a plan", tags = {"Plan"})
+    public ResponseEntity<Void> removeParticipant(@PathVariable UUID id, @PathVariable UUID userId) {
+        service.removeParticipant(id, userId);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}")
@@ -97,7 +176,6 @@ public class FinancialPlanController {
         FinancialPlanResponseDTO updated = service.updatePartial(id, updates);
         return ResponseEntity.ok(assembler.toModel(updated));
     }
-
 
     @DeleteMapping("/{id}")
     @ApiDeleteResponses

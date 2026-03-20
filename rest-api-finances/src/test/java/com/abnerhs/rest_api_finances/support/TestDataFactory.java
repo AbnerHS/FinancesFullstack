@@ -9,6 +9,9 @@ import com.abnerhs.rest_api_finances.dto.CreditCardRequestDTO;
 import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanInvitationResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanInviteLinkResponseDTO;
+import com.abnerhs.rest_api_finances.dto.FinancialPlanParticipantResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanRequestDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
@@ -42,6 +45,12 @@ public final class TestDataFactory {
     public static User currentUser() {
         User user = new User("john@example.com", "encoded-password", "John");
         user.setId(uuid("00000000-0000-0000-0000-000000000001"));
+        return user;
+    }
+
+    public static User partnerUser() {
+        User user = new User("mary@example.com", "encoded-password", "Mary");
+        user.setId(uuid("00000000-0000-0000-0000-000000000002"));
         return user;
     }
 
@@ -90,15 +99,65 @@ public final class TestDataFactory {
     }
 
     public static CreditCardInvoiceResponseDTO creditCardInvoiceResponse() {
-        return new CreditCardInvoiceResponseDTO(uuid("00000000-0000-0000-0000-000000000020"), creditCardResponse().id(), financialPeriodResponse().id(), new BigDecimal("500.00"));
+        return new CreditCardInvoiceResponseDTO(
+                uuid("00000000-0000-0000-0000-000000000020"),
+                creditCardResponse().id(),
+                creditCardResponse().name(),
+                financialPeriodResponse().id(),
+                new BigDecimal("500.00")
+        );
     }
 
     public static FinancialPlanRequestDTO financialPlanRequest() {
-        return new FinancialPlanRequestDTO("Plano Casa", userResponse().id(), uuid("00000000-0000-0000-0000-000000000002"));
+        return new FinancialPlanRequestDTO("Plano Casa");
     }
 
     public static FinancialPlanResponseDTO financialPlanResponse() {
-        return new FinancialPlanResponseDTO(uuid("00000000-0000-0000-0000-000000000030"), "Plano Casa", userResponse().id(), uuid("00000000-0000-0000-0000-000000000002"));
+        return new FinancialPlanResponseDTO(
+                uuid("00000000-0000-0000-0000-000000000030"),
+                "Plano Casa",
+                userResponse().id(),
+                List.of(partnerUser().getId())
+        );
+    }
+
+    public static FinancialPlanParticipantResponseDTO ownerParticipantResponse() {
+        return new FinancialPlanParticipantResponseDTO(
+                userResponse().id(),
+                userResponse().name(),
+                userResponse().email(),
+                "OWNER"
+        );
+    }
+
+    public static FinancialPlanParticipantResponseDTO partnerParticipantResponse() {
+        return new FinancialPlanParticipantResponseDTO(
+                partnerUser().getId(),
+                partnerUser().getName(),
+                partnerUser().getEmail(),
+                "PARTNER"
+        );
+    }
+
+    public static FinancialPlanInviteLinkResponseDTO financialPlanInviteLinkResponse() {
+        return new FinancialPlanInviteLinkResponseDTO(
+                financialPlanResponse().id(),
+                financialPlanResponse().name(),
+                "invite-token",
+                true
+        );
+    }
+
+    public static FinancialPlanInvitationResponseDTO financialPlanInvitationResponse() {
+        return new FinancialPlanInvitationResponseDTO(
+                financialPlanResponse().id(),
+                financialPlanResponse().name(),
+                userResponse().id(),
+                userResponse().name(),
+                userResponse().email(),
+                false,
+                false
+        );
     }
 
     public static FinancialPeriodRequestDTO financialPeriodRequest() {

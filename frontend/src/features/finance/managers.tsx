@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Plus, Tags, Users } from "lucide-react"
 
@@ -14,12 +14,18 @@ import {
   useCategoryManager,
   useCreditCardManager,
   useInvoiceManager,
-  usePartnerManager,
+  usePlanCollaborationManager,
   usePeriodsManager,
   usePlanManager,
 } from "@/features/finance/hooks.ts"
-import type { CreditCard, Period, Plan, TransactionCategory } from "@/features/finance/types.ts"
-import { formatMonthYear } from "@/features/finance/utils.ts"
+import type {
+  CreditCard,
+  Period,
+  Plan,
+  PlanParticipant,
+  TransactionCategory,
+} from "@/features/finance/types.ts"
+import { formatMonthYear, formatPeriodRange } from "@/features/finance/utils.ts"
 
 export function PlanManager({
   plans,
@@ -83,7 +89,9 @@ export function PlanManager({
                   ) : null}
                 </div>
                 <p className={`mt-2 text-sm ${isActive ? "text-white/80" : "text-muted-foreground"}`}>
-                  {plan.partnerId ? "Compartilhado com parceiro" : "Plano individual"}
+                  {plan.partnerIds.length > 0
+                    ? `Compartilhado com ${plan.partnerIds.length} ${plan.partnerIds.length === 1 ? "parceiro" : "parceiros"}`
+                    : "Plano individual"}
                 </p>
               </button>
             )
@@ -175,14 +183,29 @@ export function PeriodsManager({
   activePlan,
   periods,
   selectedPeriodIds,
-  onTogglePeriodId,
+  selectedStartPeriodId,
+  selectedEndPeriodId,
+  onSelectStartPeriodId,
+  onSelectEndPeriodId,
 }: {
   activePlan: Plan | null
   periods: Period[]
   selectedPeriodIds: string[]
-  onTogglePeriodId: (periodId: string) => void
+  selectedStartPeriodId: string | null
+  selectedEndPeriodId: string | null
+  onSelectStartPeriodId: (periodId: string) => void
+  onSelectEndPeriodId: (periodId: string) => void
 }) {
   const { draft, setDraft, saveMutation, errorMessage } = usePeriodsManager(activePlan)
+  const selectedStartPeriod = useMemo(
+    () => periods.find((period) => period.id === selectedStartPeriodId) || null,
+    [periods, selectedStartPeriodId]
+  )
+  const selectedEndPeriod = useMemo(
+    () => periods.find((period) => period.id === selectedEndPeriodId) || null,
+    [periods, selectedEndPeriodId]
+  )
+  const rangeLabel = formatPeriodRange(selectedStartPeriod, selectedEndPeriod)
   const months = [
     "Janeiro",
     "Fevereiro",
@@ -208,33 +231,78 @@ export function PeriodsManager({
           </h2>
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/70 px-4 py-2 text-sm text-muted-foreground">
-          {selectedPeriodIds.length} períodos em comparação
+          {selectedPeriodIds.length} períodos no intervalo
         </div>
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_22rem]">
-        <div className="grid gap-3 md:grid-cols-2">
-          {periods.map((period) => {
-            const selected = selectedPeriodIds.includes(period.id)
-            return (
-              <button
-                key={period.id}
-                type="button"
-                onClick={() => onTogglePeriodId(period.id)}
-                className={`rounded-[1.5rem] border p-5 text-left transition ${
-                  selected
-                    ? "border-primary/20 bg-accent/80"
-                    : "border-border bg-secondary/60 hover:border-primary/40"
-                }`}
+        <Card className="border-border bg-secondary/60 p-5">
+          <p className="app-eyebrow">Intervalo ativo</p>
+          <h3 className="mt-2 text-xl font-semibold text-foreground">
+            {rangeLabel}
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Escolha o mês inicial e o mês final para definir os painéis e comparações do dashboard.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Mês inicial</Label>
+              <Select
+                disabled={periods.length === 0}
+                value={selectedStartPeriodId || ""}
+                onChange={(event) => onSelectStartPeriodId(event.target.value)}
               >
-                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Período</p>
-                <h3 className="mt-2 text-lg font-semibold text-foreground">
-                  {formatMonthYear(period)}
-                </h3>
-              </button>
-            )
-          })}
-        </div>
+                {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+                {periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {formatMonthYear(period)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mês final</Label>
+              <Select
+                disabled={periods.length === 0}
+                value={selectedEndPeriodId || ""}
+                onChange={(event) => onSelectEndPeriodId(event.target.value)}
+              >
+                {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+                {periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {formatMonthYear(period)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {periods.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Crie um período para começar a trabalhar por mês.
+              </p>
+            ) : (
+              periods.map((period) => {
+                const selected = selectedPeriodIds.includes(period.id)
+                return (
+                  <span
+                    key={period.id}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                      selected
+                        ? "border-primary/20 bg-primary/10 text-primary"
+                        : "border-border bg-card/80 text-muted-foreground"
+                    }`}
+                  >
+                    {formatMonthYear(period)}
+                  </span>
+                )
+              })
+            )}
+          </div>
+        </Card>
 
         <Card className="border-border bg-secondary/60 p-5">
           <form
@@ -634,43 +702,156 @@ export function DashboardPlanQuickCreate({
   )
 }
 
-export function PlanPartnerManager({ activePlan }: { activePlan: Plan | null }) {
-  const { selectableUsers, selectedPartnerId, setSelectedPartnerId, savePartner, hasChanges } =
-    usePartnerManager(activePlan)
+export function PlanParticipantsManager({
+  activePlan,
+  participants,
+  isPlanOwner,
+}: {
+  activePlan: Plan | null
+  participants: PlanParticipant[]
+  isPlanOwner: boolean
+}) {
+  const { inviteLink, inviteLinkLoading, rotateInviteLink, revokeInviteLink, removeParticipant, inviteErrorMessage } =
+    usePlanCollaborationManager({ activePlan, isPlanOwner })
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
 
   if (!activePlan) {
     return null
   }
 
+  const partnerCount = participants.filter((participant) => participant.role === "PARTNER").length
+  const inviteUrl =
+    inviteLink?.active && inviteLink.inviteToken
+      ? `${window.location.origin}/invite/${inviteLink.inviteToken}`
+      : ""
+
   return (
-    <Card className="border-border bg-secondary/60 p-5">
-      <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
-        <Users size={16} /> Parceiro do Plano
-      </h3>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <Card className="border-border bg-secondary/60 p-5">
+        <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-muted-foreground">
+          <Users size={16} /> Convite por link
+        </h3>
 
-      <Select value={selectedPartnerId} onChange={(event) => setSelectedPartnerId(event.target.value)}>
-        <option value="">Sem parceiro</option>
-        {selectableUsers.map((user) => (
-          <option key={user.id} value={user.id}>
-            {user.name} ({user.email})
-          </option>
-        ))}
-      </Select>
+        {isPlanOwner ? (
+          <>
+            <div className="space-y-2">
+              <Label>Link ativo</Label>
+              <Input
+                readOnly
+                value={inviteUrl}
+                placeholder={inviteLinkLoading ? "Carregando link..." : "Nenhum link ativo"}
+              />
+            </div>
 
-      <Button
-        type="button"
-        onClick={() => savePartner.mutate()}
-        disabled={savePartner.isPending || !hasChanges}
-        className="mt-3 h-11 w-full"
-      >
-        {savePartner.isPending ? "Salvando..." : "Salvar parceiro"}
-      </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!inviteUrl) {
+                    rotateInviteLink.mutate()
+                    return
+                  }
 
-      <div className="mt-2">
-        <FormError
-          message={savePartner.isError ? (savePartner.error as Error).message : null}
-        />
-      </div>
-    </Card>
+                  try {
+                    await navigator.clipboard.writeText(inviteUrl)
+                    setCopyFeedback("Link copiado para a área de transferência.")
+                  } catch {
+                    setCopyFeedback("Não foi possível copiar automaticamente.")
+                  }
+                }}
+                disabled={rotateInviteLink.isPending || inviteLinkLoading}
+              >
+                {inviteUrl ? "Copiar link" : rotateInviteLink.isPending ? "Gerando..." : "Gerar link"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => rotateInviteLink.mutate()}
+                disabled={rotateInviteLink.isPending || !activePlan}
+              >
+                {rotateInviteLink.isPending ? "Rotacionando..." : inviteUrl ? "Rotacionar link" : "Gerar novo link"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => revokeInviteLink.mutate()}
+                disabled={revokeInviteLink.isPending || !inviteUrl}
+              >
+                {revokeInviteLink.isPending ? "Revogando..." : "Revogar link"}
+              </Button>
+            </div>
+
+            {copyFeedback ? (
+              <p className="mt-3 text-xs text-muted-foreground">{copyFeedback}</p>
+            ) : null}
+          </>
+        ) : (
+          <div className="rounded-[1.25rem] border border-border bg-card/80 p-4 text-sm text-muted-foreground">
+            Somente o owner do plano pode gerar, rotacionar ou revogar links de convite.
+          </div>
+        )}
+
+        <div className="mt-3">
+          <FormError message={inviteErrorMessage} />
+        </div>
+      </Card>
+
+      <Card className="border-border bg-secondary/60 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Participantes atuais</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {partnerCount === 0
+                ? "Este plano ainda não possui parceiros adicionais."
+                : `${partnerCount} ${partnerCount === 1 ? "parceiro ativo" : "parceiros ativos"}`}
+            </p>
+          </div>
+          <div className="rounded-full bg-accent px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            {participants.length} pessoas
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {participants.map((participant) => (
+            <div
+              key={participant.userId}
+              className="rounded-[1.25rem] border border-border bg-card/90 px-4 py-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{participant.name}</p>
+                  <p className="text-xs text-muted-foreground">{participant.email}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary/12 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+                    {participant.role === "OWNER" ? "Owner" : "Partner"}
+                  </span>
+
+                  {isPlanOwner && participant.role === "PARTNER" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!window.confirm(`Remover ${participant.name} deste plano?`)) {
+                          return
+                        }
+                        removeParticipant.mutate(participant.userId)
+                      }}
+                      disabled={removeParticipant.isPending}
+                    >
+                      {removeParticipant.isPending ? "Removendo..." : "Remover"}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
   )
 }

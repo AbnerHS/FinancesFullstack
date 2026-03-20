@@ -29,6 +29,7 @@ public abstract class CreditCardInvoiceMapper {
     public abstract CreditCardInvoice toEntity(CreditCardInvoiceRequestDTO dto);
 
     @Mapping(source = "creditCard.id", target = "creditCardId")
+    @Mapping(source = "creditCard.name", target = "creditCardName")
     @Mapping(source = "period.id", target = "periodId")
     public abstract CreditCardInvoiceResponseDTO toDto(CreditCardInvoice entity);
 

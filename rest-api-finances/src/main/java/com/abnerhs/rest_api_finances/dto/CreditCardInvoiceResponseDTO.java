@@ -9,6 +9,7 @@ import java.util.UUID;
 public record CreditCardInvoiceResponseDTO(
         UUID id,
         UUID creditCardId,
+        String creditCardName,
         UUID periodId,
         BigDecimal amount
 ) {

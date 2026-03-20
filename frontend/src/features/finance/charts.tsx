@@ -131,7 +131,7 @@ export function DashboardCharts({
         <div className="space-y-2">
           <p className="app-eyebrow">Comparação</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground">
-            Receitas x despesas
+            Receitas x Despesas
           </h3>
         </div>
         <div className="mt-6 h-80 min-h-[20rem] min-w-0">

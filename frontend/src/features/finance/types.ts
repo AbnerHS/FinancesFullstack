@@ -12,8 +12,34 @@ export type Plan = EntityModel<{
   id: string
   name: string
   ownerId: string
-  partnerId: string | null
+  partnerIds: string[]
 }>
+
+export type PlanParticipantRole = "OWNER" | "PARTNER"
+
+export type PlanParticipant = {
+  userId: string
+  name: string
+  email: string
+  role: PlanParticipantRole
+}
+
+export type PlanInviteLink = {
+  planId: string
+  planName: string
+  inviteToken: string | null
+  active: boolean
+}
+
+export type PlanInvitation = {
+  planId: string
+  planName: string
+  ownerId: string
+  ownerName: string
+  ownerEmail: string
+  alreadyParticipant: boolean
+  owner: boolean
+}
 
 export type Period = EntityModel<{
   id: string
@@ -37,6 +63,7 @@ export type CreditCard = EntityModel<{
 export type Invoice = EntityModel<{
   id: string
   creditCardId: string
+  creditCardName?: string | null
   periodId: string
   amount: number | string
 }>

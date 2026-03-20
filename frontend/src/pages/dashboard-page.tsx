@@ -1,26 +1,29 @@
 import {
+  ChevronLeft,
+  ChevronRight,
   ArrowRight,
   Sparkles,
   TrendingDown,
   TrendingUp,
-  Users
+  Users,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Select } from "@/components/ui/select.tsx"
 import { DashboardCharts } from "@/features/finance/charts.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
-import {
-  DashboardPlanQuickCreate,
-  PlanPartnerManager,
-} from "@/features/finance/managers.tsx"
-import MetricCard from "@/features/finance/metric-card"
+import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
 import {
   formatCurrency,
   formatMonthYear,
   toneForBalance,
 } from "@/features/finance/utils.ts"
+import MetricCard from "@/features/finance/metric-card"
+
+const isDefinedPanel = (
+  panel: HTMLDivElement | null
+): panel is HTMLDivElement => panel !== null
 
 export function DashboardPage() {
   const {
@@ -31,14 +34,18 @@ export function DashboardPage() {
     selectedPlanId,
     activePlan,
     selectedPeriodIds,
+    selectedStartPeriodId,
+    selectedEndPeriodId,
     setSelectedPlanId,
-    togglePeriodId,
+    setSelectedStartPeriodId,
+    setSelectedEndPeriodId,
     periodPanels,
     combinedStats,
     categorySpending,
     creditCards,
     transactionCategories,
     responsibleOptions,
+    participants,
     userId,
     allTransactions,
     variation,
@@ -46,6 +53,9 @@ export function DashboardPage() {
     buildCategoryChartData,
   } = useDashboard()
   const [responsibleFilter, setResponsibleFilter] = useState("")
+  const transactionsScrollerRef = useRef<HTMLDivElement | null>(null)
+  const transactionPanelRefs = useRef<Array<HTMLDivElement | null>>([])
+  const [transactionsEdgeSpacing, setTransactionsEdgeSpacing] = useState(0)
 
   const filteredPanels = useMemo(() => {
     if (!responsibleFilter) {
@@ -103,22 +113,79 @@ export function DashboardPage() {
     ? buildCategoryChartData(responsibleFilter)
     : categorySpending
 
-  const sortedPeriods = useMemo(
-    () =>
-      [...periods].sort((left, right) => {
-        const leftValue = left.year * 100 + left.month
-        const rightValue = right.year * 100 + right.month
-        return leftValue - rightValue
-      }),
-    [periods]
-  )
+  useLayoutEffect(() => {
+    transactionPanelRefs.current = transactionPanelRefs.current.slice(
+      0,
+      filteredPanels.length
+    )
+
+    const updateSpacing = () => {
+      const container = transactionsScrollerRef.current
+      const firstPanel = transactionPanelRefs.current[0]
+
+      if (!container || !firstPanel) {
+        setTransactionsEdgeSpacing(0)
+        return
+      }
+
+      setTransactionsEdgeSpacing(
+        Math.max((container.clientWidth - firstPanel.clientWidth) / 2, 0)
+      )
+    }
+
+    updateSpacing()
+    window.addEventListener("resize", updateSpacing)
+
+    return () => {
+      window.removeEventListener("resize", updateSpacing)
+    }
+  }, [filteredPanels.length])
+
+  const scrollTransactions = (direction: "previous" | "next") => {
+    const container = transactionsScrollerRef.current
+    const panels = transactionPanelRefs.current.filter(isDefinedPanel)
+    if (!container || panels.length === 0) {
+      return
+    }
+
+    const currentCenter = container.scrollLeft + container.clientWidth / 2
+    const currentIndex = panels.reduce((closestIndex, panel, index) => {
+      const panelCenter = panel.offsetLeft + panel.clientWidth / 2
+      const closestPanel = panels[closestIndex]
+      const closestCenter =
+        closestPanel.offsetLeft + closestPanel.clientWidth / 2
+
+      return Math.abs(panelCenter - currentCenter) <
+        Math.abs(closestCenter - currentCenter)
+        ? index
+        : closestIndex
+    }, 0)
+
+    const targetIndex =
+      direction === "next"
+        ? Math.min(currentIndex + 1, panels.length - 1)
+        : Math.max(currentIndex - 1, 0)
+
+    const targetPanel = panels[targetIndex]
+    const containerRect = container.getBoundingClientRect()
+    const targetPanelRect = targetPanel.getBoundingClientRect()
+    const left =
+      container.scrollLeft +
+      (targetPanelRect.left - containerRect.left) -
+      (container.clientWidth - targetPanel.clientWidth) / 2
+
+    container.scrollTo({
+      left,
+      behavior: "smooth",
+    })
+  }
 
   const selectedPeriodsLabel =
     selectedPeriodIds.length === 0
-      ? "Nenhum mês selecionado"
+      ? "Nenhum mês disponível"
       : selectedPeriodIds.length === 1
-        ? "1 mês selecionado"
-        : `${selectedPeriodIds.length} meses selecionados`
+        ? "1 mês no intervalo"
+        : `${selectedPeriodIds.length} meses no intervalo`
 
   if (plansLoading) {
     return (
@@ -189,52 +256,58 @@ export function DashboardPage() {
         ) : null}
 
         <div className="mt-5 rounded-[1.5rem] border border-border bg-secondary/35 p-3 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="app-eyebrow">Meses em foco</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {selectedPeriodsLabel}
-              </p>
-            </div>
-          </div>
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
+              <div>
+                <label className="app-label">Mês inicial</label>
+                <Select
+                  className="mt-2"
+                  disabled={periodsLoading || periods.length === 0}
+                  value={selectedStartPeriodId || ""}
+                  onChange={(event) =>
+                    setSelectedStartPeriodId(event.target.value)
+                  }
+                >
+                  {periods.length === 0 ? (
+                    <option value="">Sem períodos</option>
+                  ) : null}
+                  {periods.map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {formatMonthYear(period)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-          <div className="mt-4 -mx-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:px-0">
-            <div className="flex gap-3 sm:flex-wrap">
-              {periodsLoading ? (
-                <p className="text-sm text-muted-foreground">
-                  Carregando períodos...
+              <div>
+                <label className="app-label">Mês final</label>
+                <Select
+                  className="mt-2"
+                  disabled={periodsLoading || periods.length === 0}
+                  value={selectedEndPeriodId || ""}
+                  onChange={(event) =>
+                    setSelectedEndPeriodId(event.target.value)
+                  }
+                >
+                  {periods.length === 0 ? (
+                    <option value="">Sem períodos</option>
+                  ) : null}
+                  {periods.map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {formatMonthYear(period)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="rounded-[1.25rem] border border-border bg-card/80 px-4 py-1">
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {periodsLoading ? "Carregando períodos..." : selectedPeriodsLabel}
                 </p>
-              ) : (
-                sortedPeriods.map((period) => {
-                  const selected = selectedPeriodIds.includes(period.id)
-
-                  return (
-                    <button
-                      key={period.id}
-                      type="button"
-                      onClick={() => togglePeriodId(period.id)}
-                      className={`min-w-[10.5rem] shrink-0 snap-start rounded-[1.25rem] border px-4 py-3 text-left transition sm:min-w-0 ${selected
-                        ? "border-primary/20 bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(37,99,235,0.24)]"
-                        : "border-border bg-card/80 text-foreground hover:border-primary/40 hover:bg-accent/70"
-                        }`}
-                    >
-                      <p className="mt-2 text-sm font-semibold">
-                        {formatMonthYear(period)}
-                      </p>
-                      <p
-                        className={`mt-2 text-xs ${selected
-                          ? "text-primary-foreground/80"
-                          : "text-muted-foreground"
-                          }`}
-                      >
-                        {selected
-                          ? "Selecionado para comparação"
-                          : "Toque para incluir"}
-                      </p>
-                    </button>
-                  )
-                })
-              )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  O workspace acompanha todos os meses dentro desse intervalo.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -281,74 +354,90 @@ export function DashboardPage() {
 
       <section className="space-y-5">
         <div>
-          <h3 className="font-serif text-3xl font-semibold text-foreground">
-            Transações
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Painéis de transações, faturas e manutenção estrutural do dashboard.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-serif text-3xl font-semibold text-foreground">
+                Transações
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground xl:block hidden">
+                Painéis de transações, faturas e manutenção estrutural do dashboard.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/85 text-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
+                onClick={() => scrollTransactions("previous")}
+                disabled={filteredPanels.length <= 1}
+                aria-label="Ir para o mês anterior"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/85 text-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
+                onClick={() => scrollTransactions("next")}
+                disabled={filteredPanels.length <= 1}
+                aria-label="Ir para o próximo mês"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-5 xl:hidden">
-          {filteredPanels.map((panel) => (
-            <div key={panel.period.id} className="min-w-0">
-              <TransactionsWorkspace
-                panel={panel}
-                shared={{
-                  creditCards,
-                  periods,
-                  transactionCategories,
-                  responsibleOptions,
-                }}
-              />
-            </div>
-          ))}
-
-          {periods.length > 0 && filteredPanels.length === 0 ? (
-            <div className="flex min-w-0 items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
-              Selecione ao menos um período para ativar o workspace.
-            </div>
-          ) : null}
-        </div>
-
-        <div className="hidden overflow-x-auto pb-4 xl:block">
-          <div className="flex gap-5">
-            {filteredPanels.map((panel) => (
-              <div key={panel.period.id} className="min-w-[50rem] flex-1">
-                <TransactionsWorkspace
-                  panel={panel}
-                  shared={{
-                    creditCards,
-                    periods,
-                    transactionCategories,
-                    responsibleOptions,
-                  }}
+        <div className="space-y-3">
+          <div className="relative">
+            <div
+              ref={transactionsScrollerRef}
+              className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0"
+            >
+              <div className="flex snap-x snap-mandatory gap-5">
+                {filteredPanels.map((panel, index) => (
+                  <div
+                    key={panel.period.id}
+                    ref={(element) => {
+                      transactionPanelRefs.current[index] = element
+                    }}
+                    className="w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] snap-center sm:w-[min(50rem,calc(100vw-3rem))] sm:min-w-[min(50rem,calc(100vw-3rem))] xl:min-w-[50rem] xl:flex-1"
+                  >
+                    <TransactionsWorkspace
+                      panel={panel}
+                      shared={{
+                        creditCards,
+                        periods,
+                        transactionCategories,
+                        responsibleOptions,
+                      }}
+                    />
+                  </div>
+                ))}
+                <div
+                  aria-hidden="true"
+                  className="shrink-0"
+                  style={{ width: `${transactionsEdgeSpacing}px` }}
                 />
-              </div>
-            ))}
 
-            {periods.length > 0 && filteredPanels.length === 0 ? (
-              <div className="flex min-w-[22rem] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
-                Selecione ao menos um período para ativar o workspace.
+                {periods.length > 0 && filteredPanels.length === 0 ? (
+                  <div className="flex w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground sm:w-[min(28rem,calc(100vw-3rem))] sm:min-w-[min(28rem,calc(100vw-3rem))] xl:min-w-[22rem]">
+                    Selecione ao menos um período para ativar o workspace.
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </section>
 
       <DashboardCharts comparisonData={comparisonData} categoryData={categoryData} />
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-        <section className="app-panel">
-          <PlanPartnerManager activePlan={activePlan} />
-        </section>
-
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)]">
         <section className="app-panel">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="app-eyebrow">Contexto do plano</p>
               <h3 className="font-serif text-2xl font-semibold text-foreground">
-                Leitura rápida
+                Leitura Rápida
               </h3>
             </div>
             <div className="rounded-full bg-primary/12 p-3 text-primary">
@@ -371,6 +460,10 @@ export function DashboardPage() {
             <InfoRow
               label="Lançamentos visíveis"
               value={String(allTransactions.length)}
+            />
+            <InfoRow
+              label="Participantes"
+              value={String(participants.length)}
             />
           </dl>
         </section>

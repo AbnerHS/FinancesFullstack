@@ -1,4 +1,33 @@
-import { ArrowRight, CheckCircle2, GripVertical, Pencil, Plus, Trash2, TrendingDown, TrendingUp, X } from "lucide-react"
+import {
+  closestCenter,
+  DndContext,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import type {
+  DraggableAttributes,
+  DraggableSyntheticListeners,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
+import { CSS } from "@dnd-kit/utilities"
+import {
+  ArrowRight,
+  CheckCircle2,
+  GripVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react"
 import { useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -28,7 +57,11 @@ import type {
   TransactionCategory,
   TransactionFormValues,
 } from "@/features/finance/types.ts"
-import { formatCurrency, parseCurrencyInput, toneForBalance } from "@/features/finance/utils.ts"
+import {
+  formatCurrency,
+  parseCurrencyInput,
+  toneForBalance,
+} from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
 import MetricCard from "./metric-card"
 
@@ -50,6 +83,15 @@ type TransactionWorkspaceProps = {
   }
 }
 
+type TransactionRowProps = {
+  transaction: Transaction
+  isDragOver: boolean
+  reorderPending: boolean
+  onLink: (transaction: Transaction) => void
+  onEdit: (transaction: Transaction) => void
+  onDelete: (transaction: Transaction) => void
+}
+
 const emptyForm = (periodId: string): TransactionFormValues => ({
   description: "",
   amount: "",
@@ -62,6 +104,166 @@ const emptyForm = (periodId: string): TransactionFormValues => ({
   numberOfPeriods: 2,
   recurringGroupId: null,
 })
+
+function TransactionRowContent({
+  transaction,
+  dragHandle,
+  onLink,
+  onEdit,
+  onDelete,
+}: {
+  transaction: Transaction
+  dragHandle: React.ReactNode
+  onLink?: (transaction: Transaction) => void
+  onEdit?: (transaction: Transaction) => void
+  onDelete?: (transaction: Transaction) => void
+}) {
+  return (
+    <>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {dragHandle}
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-foreground">
+            {transaction.description}{" "}
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+              {transaction.category?.name || "Sem categoria"}
+            </span>
+            {transaction.recurringGroupId ? (
+              <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
+                Recorrente
+              </span>
+            ) : null}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
+        <span
+          className={`text-sm font-semibold ${
+            transaction.type === "REVENUE"
+              ? "text-emerald-500 dark:text-emerald-400"
+              : "text-rose-500 dark:text-rose-400"
+          }`}
+        >
+          {formatCurrency(transaction.amount)}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={
+            transaction.type === "EXPENSE" && transaction.isClearedByInvoice
+              ? "text-emerald-500 dark:text-emerald-400"
+              : undefined
+          }
+          onClick={onLink ? () => onLink(transaction) : undefined}
+          disabled={!onLink || transaction.type !== "EXPENSE"}
+        >
+          <CheckCircle2 size={14} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onEdit ? () => onEdit(transaction) : undefined}
+          disabled={!onEdit}
+        >
+          <Pencil size={14} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onDelete ? () => onDelete(transaction) : undefined}
+          disabled={!onDelete}
+        >
+          <Trash2 size={14} />
+        </Button>
+      </div>
+    </>
+  )
+}
+
+function TransactionDragHandle({
+  listeners,
+  attributes,
+  setActivatorNodeRef,
+  disabled,
+}: {
+  listeners?: DraggableSyntheticListeners
+  attributes?: DraggableAttributes
+  setActivatorNodeRef?: (element: HTMLElement | null) => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      ref={setActivatorNodeRef}
+      type="button"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/80 text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+      style={{ touchAction: "none" }}
+      aria-label="Arrastar transação"
+      disabled={disabled}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical size={14} />
+    </button>
+  )
+}
+
+function SortableTransactionRow({
+  transaction,
+  isDragOver,
+  reorderPending,
+  onLink,
+  onEdit,
+  onDelete,
+}: TransactionRowProps) {
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: transaction.id,
+    disabled: reorderPending,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition: isDragging ? undefined : transition,
+      }}
+      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
+        isDragging
+          ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
+          : isDragOver
+            ? "border-primary ring-2 ring-primary/15"
+            : "border-border"
+      }`}
+    >
+      <TransactionRowContent
+        transaction={transaction}
+        dragHandle={
+          <TransactionDragHandle
+            attributes={attributes}
+            listeners={listeners}
+            setActivatorNodeRef={setActivatorNodeRef}
+            disabled={reorderPending}
+          />
+        }
+        onLink={onLink}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
+    </div>
+  )
+}
 
 export function TransactionsWorkspace({
   panel,
@@ -93,6 +295,20 @@ export function TransactionsWorkspace({
     activePeriodId: panel.period.id,
     transactions: panel.transactions,
   })
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 180,
+        tolerance: 8,
+      },
+    })
+  )
 
   const groupedTransactions = useMemo(
     () =>
@@ -159,9 +375,32 @@ export function TransactionsWorkspace({
     window.requestAnimationFrame(() => {
       composerRef.current?.scrollIntoView({
         behavior: "smooth",
-        block: "center"
+        block: "center",
       })
     })
+  }
+
+  const startEditing = (transaction: Transaction) => {
+    setEditingTransaction(transaction)
+    setEditingScope("SINGLE")
+    setForm({
+      description: transaction.description,
+      amount: String(
+        Number(transaction.amount || 0).toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      ),
+      type: transaction.type,
+      periodId: panel.period.id,
+      responsibleUserId: transaction.responsibleUserId || "",
+      categoryId: transaction.category?.id || "",
+      categoryName: transaction.category?.name || "",
+      isRecurring: false,
+      numberOfPeriods: 2,
+      recurringGroupId: transaction.recurringGroupId || null,
+    })
+    scrollToComposerOnMobile()
   }
 
   const submit = async () => {
@@ -221,7 +460,7 @@ export function TransactionsWorkspace({
         <div>
           <p className="app-eyebrow font-bold">{panel.label}</p>
         </div>
-        <div className="grid xl:grid-cols-3 items-end gap-2">
+        <div className="grid items-end gap-2 xl:grid-cols-3">
           <MetricCard
             title="Receitas"
             value={formatCurrency(panel.stats.incomes)}
@@ -249,206 +488,212 @@ export function TransactionsWorkspace({
       <div className="mt-6 space-y-5">
         <div ref={composerRef}>
           <Card className="border-border bg-secondary/55 p-3 sm:p-4">
-          <form
-            className="space-y-1"
-            onSubmit={async (event) => {
-              event.preventDefault()
-              try {
-                await submit()
-              } catch (error) {
-                setFormError(
-                  error instanceof Error
-                    ? error.message
-                    : "Não foi possível salvar a transação."
-                )
-              }
-            }}
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-2 xl:col-span-1">
-                <Label>Descrição</Label>
-                <Input
-                  value={form.description}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  placeholder="Ex.: Supermercado"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Valor</Label>
-                <CurrencyInput
-                  value={form.amount}
-                  onValueChange={(amount) =>
-                    setForm((current) => ({ ...current, amount }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select
-                  value={form.type}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      type: event.target.value as TransactionFormValues["type"],
-                    }))
-                  }
-                >
-                  <option value="EXPENSE">Despesa</option>
-                  <option value="REVENUE">Receita</option>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Categoria</Label>
-                <Combobox
-                  allowCustomValue
-                  options={categoryOptions}
-                  preventSubmitOnEnter
-                  selectFirstFilteredOptionOnEnter
-                  value={form.categoryName}
-                  onValueChange={(nextName, matchedCategory) =>
-                    setForm((current) => ({
-                      ...current,
-                      categoryName: nextName,
-                      categoryId: matchedCategory?.value || "",
-                    }))
-                  }
-                  placeholder="Digite para buscar ou criar"
-                />
-              </div>
-            </div>
-
-            <div
-              className={`grid gap-3 ${editingTransaction
-                ? "md:grid-cols-2 xl:grid-cols-3"
-                : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
-                }`}
+            <form
+              className="space-y-1"
+              onSubmit={async (event) => {
+                event.preventDefault()
+                try {
+                  await submit()
+                } catch (error) {
+                  setFormError(
+                    error instanceof Error
+                      ? error.message
+                      : "Não foi possível salvar a transação."
+                  )
+                }
+              }}
             >
-              <div className="flex flex-col gap-2">
-                <Label>Responsável</Label>
-                <Select
-                  value={form.responsibleUserId}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      responsibleUserId: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Geral</option>
-                  {shared.responsibleOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-2 xl:col-span-1">
+                  <Label>Descrição</Label>
+                  <Input
+                    value={form.description}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    placeholder="Ex.: Supermercado"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Valor</Label>
+                  <CurrencyInput
+                    value={form.amount}
+                    onValueChange={(amount) =>
+                      setForm((current) => ({ ...current, amount }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select
+                    value={form.type}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        type: event.target.value as TransactionFormValues["type"],
+                      }))
+                    }
+                  >
+                    <option value="EXPENSE">Despesa</option>
+                    <option value="REVENUE">Receita</option>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Categoria</Label>
+                  <Combobox
+                    allowCustomValue
+                    options={categoryOptions}
+                    preventSubmitOnEnter
+                    selectFirstFilteredOptionOnEnter
+                    value={form.categoryName}
+                    onValueChange={(nextName, matchedCategory) =>
+                      setForm((current) => ({
+                        ...current,
+                        categoryName: nextName,
+                        categoryId: matchedCategory?.value || "",
+                      }))
+                    }
+                    placeholder="Digite para buscar ou criar"
+                  />
+                </div>
               </div>
 
-              {!editingTransaction ? (
-                <div className="flex items-end">
-                  <div className="w-full rounded-xl border border-border bg-card/90 px-3 py-3 xl:py-0">
-                    <div className="flex items-center gap-3 xl:flex-nowrap flex-wrap">
-                      <Label className="tracking-widest text-[11px]">Recorrente</Label>
-                      <div className="flex min-h-11 items-center">
-                        <Switch
-                          checked={form.isRecurring}
-                          onClick={() =>
-                            setForm((current) => ({
-                              ...current,
-                              isRecurring: !current.isRecurring,
-                              numberOfPeriods:
-                                !current.isRecurring &&
-                                  current.numberOfPeriods < 2
-                                  ? 2
-                                  : current.numberOfPeriods,
-                            }))
-                          }
-                        />
-                      </div>
-                      {form.isRecurring ? (
-                        <div className="flex flex-row items-center gap-2">
-                          <Label className="text-[10px] tracking-widest">Períodos</Label>
-                          <Input
-                            className="h-8 xl:w-full w-20"
-                            type="number"
-                            min={2}
-                            disabled={!form.isRecurring}
-                            value={form.numberOfPeriods}
-                            onChange={(event) =>
+              <div
+                className={`grid gap-3 ${
+                  editingTransaction
+                    ? "md:grid-cols-2 xl:grid-cols-3"
+                    : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
+                }`}
+              >
+                <div className="flex flex-col gap-2">
+                  <Label>Responsável</Label>
+                  <Select
+                    value={form.responsibleUserId}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        responsibleUserId: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Geral</option>
+                    {shared.responsibleOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                {!editingTransaction ? (
+                  <div className="flex items-end">
+                    <div className="w-full rounded-xl border border-border bg-card/90 px-3 py-3 xl:py-0">
+                      <div className="flex flex-wrap items-center gap-3 xl:flex-nowrap">
+                        <Label className="tracking-widest text-[11px]">
+                          Recorrente
+                        </Label>
+                        <div className="flex min-h-11 items-center">
+                          <Switch
+                            checked={form.isRecurring}
+                            onClick={() =>
                               setForm((current) => ({
                                 ...current,
+                                isRecurring: !current.isRecurring,
                                 numberOfPeriods:
-                                  Number(event.target.value) || 2,
+                                  !current.isRecurring &&
+                                  current.numberOfPeriods < 2
+                                    ? 2
+                                    : current.numberOfPeriods,
                               }))
                             }
                           />
                         </div>
-                      ) : null}
+                        {form.isRecurring ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <Label className="text-[10px] tracking-widest">
+                              Períodos
+                            </Label>
+                            <Input
+                              className="h-8 w-20 xl:w-full"
+                              type="number"
+                              min={2}
+                              disabled={!form.isRecurring}
+                              value={form.numberOfPeriods}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  numberOfPeriods:
+                                    Number(event.target.value) || 2,
+                                }))
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : editingTransaction.recurringGroupId ? (
-                <div>
-                  <Label>Aplicar edição</Label>
-                  <Select
-                    value={editingScope}
-                    onChange={(event) =>
-                      setEditingScope(event.target.value as "SINGLE" | "GROUP")
+                ) : editingTransaction.recurringGroupId ? (
+                  <div>
+                    <Label>Aplicar edição</Label>
+                    <Select
+                      value={editingScope}
+                      onChange={(event) =>
+                        setEditingScope(
+                          event.target.value as "SINGLE" | "GROUP"
+                        )
+                      }
+                    >
+                      <option value="SINGLE">Somente esta transação</option>
+                      <option value="GROUP">Todas do grupo recorrente</option>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="hidden" />
+                )}
+
+                <div className="flex items-end gap-2">
+                  <Button
+                    type="submit"
+                    className="h-11 flex-1"
+                    disabled={
+                      createTransaction.isPending ||
+                      createRecurringTransaction.isPending ||
+                      updateTransaction.isPending
                     }
                   >
-                    <option value="SINGLE">Somente esta transação</option>
-                    <option value="GROUP">Todas do grupo recorrente</option>
-                  </Select>
-                </div>
-              ) : (
-                <div className="hidden" />
-              )}
-
-              <div className="flex items-end gap-2">
-                <Button
-                  type="submit"
-                  className="h-11 flex-1"
-                  disabled={
-                    createTransaction.isPending ||
-                    createRecurringTransaction.isPending ||
-                    updateTransaction.isPending
-                  }
-                >
-                  {!editingTransaction ? <Plus size={16} /> : null}
-                  {editingTransaction
-                    ? updateTransaction.isPending
-                      ? "Salvando..."
-                      : "Salvar Edição"
-                    : form.isRecurring
-                      ? createRecurringTransaction.isPending
-                        ? "Criando..."
-                        : "Criar Recorrência"
-                      : createTransaction.isPending
-                        ? "Criando..."
-                        : "Adicionar Transação"}
-                </Button>
-                {editingTransaction ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11"
-                    onClick={resetComposer}
-                  >
-                    Cancelar
+                    {!editingTransaction ? <Plus size={16} /> : null}
+                    {editingTransaction
+                      ? updateTransaction.isPending
+                        ? "Salvando..."
+                        : "Salvar Edição"
+                      : form.isRecurring
+                        ? createRecurringTransaction.isPending
+                          ? "Criando..."
+                          : "Criar Recorrência"
+                        : createTransaction.isPending
+                          ? "Criando..."
+                          : "Adicionar Transação"}
                   </Button>
-                ) : null}
+                  {editingTransaction ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11"
+                      onClick={resetComposer}
+                    >
+                      Cancelar
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
 
-            <FormError message={formError || mutationError} />
-          </form>
+              <FormError message={formError || mutationError} />
+            </form>
           </Card>
         </div>
 
@@ -464,128 +709,50 @@ export function TransactionsWorkspace({
                 Nenhuma transação cadastrada.
               </p>
             ) : (
-              groupedTransactions.map((group) => (
-                <div key={group.id} className="space-y-2">
-                  <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                    <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
-                      {group.label}
-                    </p>
-                  </div>
-
-                  {group.transactions.map((transaction) => (
-                    <div
-                      key={transaction.id}
-                      draggable={!reorder.reorderPending}
-                      onDragStart={(event) =>
-                        reorder.startDrag(transaction, event)
-                      }
-                      onDragEnd={reorder.endDrag}
-                      onDragOver={(event) =>
-                        reorder.dragOver(transaction, event)
-                      }
-                      onDrop={(event) =>
-                        reorder.dropOnEntry(transaction, event)
-                      }
-                      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 transition sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${reorder.dragOverId === transaction.id
-                        ? "border-primary ring-2 ring-primary/15"
-                        : "border-border"
-                        }`}
-                    >
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="text-muted-foreground">
-                          <GripVertical size={14} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-foreground">
-                            {transaction.description}{" "}
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-                              {transaction.category?.name || "Sem categoria"}
-                            </span>
-                            {transaction.recurringGroupId ? (
-                              <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
-                                Recorrente
-                              </span>
-                            ) : null}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
-                        <span
-                          className={`text-sm font-semibold ${transaction.type === "REVENUE"
-                            ? "text-emerald-500 dark:text-emerald-400"
-                            : "text-rose-500 dark:text-rose-400"
-                            }`}
-                        >
-                          {formatCurrency(transaction.amount)}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className={
-                            transaction.type === "EXPENSE" &&
-                              transaction.isClearedByInvoice
-                              ? "text-emerald-500 dark:text-emerald-400"
-                              : undefined
-                          }
-                          onClick={() =>
-                            transactionLinking.openPaymentModal(transaction)
-                          }
-                          disabled={transaction.type !== "EXPENSE"}
-                        >
-                          <CheckCircle2 size={14} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingTransaction(transaction)
-                            setEditingScope("SINGLE")
-                            setForm({
-                              description: transaction.description,
-                              amount: String(
-                                Number(transaction.amount || 0).toLocaleString(
-                                  "pt-BR",
-                                  {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  }
-                                )
-                              ),
-                              type: transaction.type,
-                              periodId: panel.period.id,
-                              responsibleUserId:
-                                transaction.responsibleUserId || "",
-                              categoryId: transaction.category?.id || "",
-                              categoryName: transaction.category?.name || "",
-                              isRecurring: false,
-                              numberOfPeriods: 2,
-                              recurringGroupId:
-                                transaction.recurringGroupId || null,
-                            })
-                            scrollToComposerOnMobile()
-                          }}
-                        >
-                          <Pencil size={14} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            deleteTransaction.mutate(transaction.id)
-                          }
-                          disabled={deleteTransaction.isPending}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis]}
+                onDragStart={reorder.onDragStart}
+                onDragOver={reorder.onDragOver}
+                onDragCancel={reorder.onDragCancel}
+                onDragEnd={reorder.onDragEnd}
+              >
+                {groupedTransactions.map((group) => (
+                  <div key={group.id} className="space-y-2">
+                    <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                        {group.label}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              ))
+
+                    <SortableContext
+                      items={group.transactions.map(
+                        (transaction) => transaction.id
+                      )}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {group.transactions.map((transaction) => (
+                        <SortableTransactionRow
+                          key={transaction.id}
+                          transaction={transaction}
+                          isDragOver={
+                            reorder.overId === transaction.id &&
+                            reorder.activeId !== transaction.id
+                          }
+                          reorderPending={reorder.reorderPending}
+                          onLink={(entry) =>
+                            transactionLinking.openPaymentModal(entry)
+                          }
+                          onEdit={startEditing}
+                          onDelete={(entry) => deleteTransaction.mutate(entry.id)}
+                        />
+                      ))}
+                    </SortableContext>
+                  </div>
+                ))}
+
+              </DndContext>
             )}
           </div>
         </Card>
@@ -594,7 +761,12 @@ export function TransactionsWorkspace({
           <div className="flex items-center justify-between gap-3">
             <h4 className="app-eyebrow">Faturas</h4>
             {panel.invoices.length > 0 && !invoiceManager.isCreateOpen ? (
-              <Button type="button" variant="outline" size="sm" onClick={invoiceManager.startCreate}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={invoiceManager.startCreate}
+              >
                 <Plus size={14} />
                 Nova Fatura
               </Button>
@@ -614,8 +786,12 @@ export function TransactionsWorkspace({
                       }))
                     }
                   >
-                    {shared.creditCards.length === 0 ? <option value="">Sem cartões</option> : null}
-                    {shared.creditCards.length > 0 ? <option value="">Selecione o cartão</option> : null}
+                    {shared.creditCards.length === 0 ? (
+                      <option value="">Sem cartões</option>
+                    ) : null}
+                    {shared.creditCards.length > 0 ? (
+                      <option value="">Selecione o cartão</option>
+                    ) : null}
                     {shared.creditCards.map((card) => (
                       <option key={card.id} value={card.id}>
                         {card.name}
@@ -628,7 +804,10 @@ export function TransactionsWorkspace({
                   <CurrencyInput
                     value={invoiceManager.createForm.amount}
                     onValueChange={(amount) =>
-                      invoiceManager.setCreateForm((current) => ({ ...current, amount }))
+                      invoiceManager.setCreateForm((current) => ({
+                        ...current,
+                        amount,
+                      }))
                     }
                   />
                 </div>
@@ -640,7 +819,9 @@ export function TransactionsWorkspace({
                     disabled={invoiceManager.createInvoice.isPending}
                   >
                     <Plus size={14} />
-                    {invoiceManager.createInvoice.isPending ? "Criando..." : "Criar"}
+                    {invoiceManager.createInvoice.isPending
+                      ? "Criando..."
+                      : "Criar"}
                   </Button>
                   <Button
                     type="button"
@@ -664,7 +845,9 @@ export function TransactionsWorkspace({
               </p>
             ) : panel.invoices.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-4">
-                <p className="text-sm text-muted-foreground">Nenhuma fatura registrada.</p>
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma fatura registrada.
+                </p>
                 <Button
                   type="button"
                   variant="outline"
@@ -678,7 +861,11 @@ export function TransactionsWorkspace({
               </div>
             ) : (
               panel.invoices.map((invoice) => {
-                const card = shared.creditCards.find((item) => item.id === invoice.creditCardId)
+                const card = shared.creditCards.find(
+                  (item) => item.id === invoice.creditCardId
+                )
+                const cardLabel =
+                  invoice.creditCardName || card?.name || "Cartão"
                 const isEditing = invoiceManager.editingInvoiceId === invoice.id
 
                 return (
@@ -689,7 +876,7 @@ export function TransactionsWorkspace({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          {card?.name || "Cartão"}
+                          {cardLabel}
                         </p>
                       </div>
                       {isEditing ? (
@@ -706,7 +893,9 @@ export function TransactionsWorkspace({
                             onClick={() => invoiceManager.updateInvoice.mutate()}
                             disabled={invoiceManager.updateInvoice.isPending}
                           >
-                            {invoiceManager.updateInvoice.isPending ? "Salvando..." : "Salvar"}
+                            {invoiceManager.updateInvoice.isPending
+                              ? "Salvando..."
+                              : "Salvar"}
                           </Button>
                           <Button
                             type="button"
@@ -748,7 +937,7 @@ export function TransactionsWorkspace({
         {transactionLinking.paymentModalEntry ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-              <h3 className="text-sm font-bold tracking-wider text-foreground uppercase">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                 Vincular a fatura
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">
