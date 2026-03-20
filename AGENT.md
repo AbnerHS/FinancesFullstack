@@ -7,6 +7,7 @@ Este arquivo serve como guia operacional para um agente de IA trabalhar neste re
 - Implementar features e correcoes mantendo os padroes do projeto.
 - Preferir mudancas pequenas, de baixo risco e faceis de revisar.
 - Nunca expor secrets em logs, respostas ou commits.
+- Sempre ler, editar e salvar arquivos de texto em UTF-8 para preservar acentuacao e evitar corrupcao de caracteres.
 
 ## Estrutura do Repositorio
 
