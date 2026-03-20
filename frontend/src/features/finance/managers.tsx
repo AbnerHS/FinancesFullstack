@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { createPortal } from "react-dom"
-import { Plus, Tags, Users } from "lucide-react"
+import { Plus, Tags, Trash2, Users } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -14,6 +14,7 @@ import {
   useCreditCardManager,
   useInvoiceManager,
   usePlanCollaborationManager,
+  usePlanDeleteManager,
   usePeriodsManager,
   usePlanManager,
   usePlanYearManager,
@@ -26,6 +27,57 @@ import type {
   TransactionCategory,
 } from "@/features/finance/types.ts"
 import { formatMonthYear, formatPeriodRange } from "@/features/finance/utils.ts"
+
+type ConfirmationDialogState = {
+  confirmLabel: string
+  description: string
+  title: string
+  onConfirm: () => void
+}
+
+function ConfirmationDialog({
+  onClose,
+  state,
+}: {
+  onClose: () => void
+  state: ConfirmationDialogState | null
+}) {
+  if (!state) {
+    return null
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+        <p className="app-eyebrow">Confirmar exclusão</p>
+        <h3 className="mt-2 text-xl font-semibold text-foreground">
+          {state.title}
+        </h3>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {state.description}
+        </p>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            className="bg-rose-600 text-white hover:bg-rose-700"
+            onClick={() => {
+              state.onConfirm()
+              onClose()
+            }}
+          >
+            <Trash2 size={16} />
+            {state.confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
 
 export function PlanManager({
   plans,
@@ -53,12 +105,25 @@ export function PlanManager({
   } = usePlanManager({ activePlan, userId, onSelectPlanId })
   const {
     addYearMutation,
+    deleteYearErrorMessage,
+    deleteYearMutation,
     draftYear,
     errorMessage: addYearErrorMessage,
     resetDraft,
     suggestedYear,
     setDraftYear,
   } = usePlanYearManager(activePlan, periods)
+  const { deletePlanMutation, errorMessage: deletePlanErrorMessage } =
+    usePlanDeleteManager({
+      activePlan,
+      plans,
+      onSelectPlanId,
+    })
+  const isPlanOwner = Boolean(
+    activePlan?.ownerId && userId && activePlan.ownerId === userId
+  )
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
   const yearSummaries = useMemo(() => {
     const monthCountByYear = periods.reduce((acc, period) => {
       acc.set(period.year, (acc.get(period.year) ?? 0) + 1)
@@ -179,6 +244,40 @@ export function PlanManager({
                     : "Criar Plano"}
               </Button>
               <FormError message={errorMessage} />
+
+              {activePlan && isPlanOwner ? (
+                <div className="rounded-[1.25rem] border border-rose-200/70 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
+                  <p className="text-sm font-medium text-foreground">
+                    Excluir plano
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Remove o plano ativo e todos os dados vinculados que o
+                    backend permitir excluir.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-3 h-11 w-full border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/40 dark:text-rose-300"
+                    disabled={deletePlanMutation.isPending}
+                    onClick={() =>
+                      setConfirmationDialog({
+                        confirmLabel: "Excluir Plano",
+                        description: `O plano "${activePlan.name}" será removido. Esta ação não pode ser desfeita.`,
+                        title: "Excluir plano ativo?",
+                        onConfirm: () => deletePlanMutation.mutate(),
+                      })
+                    }
+                  >
+                    <Trash2 size={16} />
+                    {deletePlanMutation.isPending
+                      ? "Excluindo..."
+                      : "Excluir Plano"}
+                  </Button>
+                  <div className="mt-3">
+                    <FormError message={deletePlanErrorMessage} />
+                  </div>
+                </div>
+              ) : null}
             </form>
           </Card>
 
@@ -210,11 +309,37 @@ export function PlanManager({
                         key={year}
                         className="rounded-[1rem] border border-border bg-card/80 px-3 py-2"
                       >
-                        <div className="text-sm font-semibold text-foreground">
-                          {year}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {monthCount}/12 meses
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {year}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {monthCount}/12 meses
+                            </div>
+                          </div>
+
+                          {isPlanOwner ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-rose-600 hover:text-rose-700"
+                              disabled={deleteYearMutation.isPending}
+                              onClick={() =>
+                                setConfirmationDialog({
+                                  confirmLabel: "Excluir Ano",
+                                  description: `Todos os meses de ${year} serão removidos do plano "${activePlan.name}".`,
+                                  title: `Excluir o ano ${year}?`,
+                                  onConfirm: () =>
+                                    deleteYearMutation.mutate(year),
+                                })
+                              }
+                            >
+                              <Trash2 size={14} />
+                              Excluir
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     ))
@@ -266,12 +391,17 @@ export function PlanManager({
                     </Button>
                   </div>
                   <FormError message={addYearErrorMessage} />
+                  <FormError message={deleteYearErrorMessage} />
                 </form>
               </>
             ) : null}
           </Card>
         </div>
       </div>
+      <ConfirmationDialog
+        onClose={() => setConfirmationDialog(null)}
+        state={confirmationDialog}
+      />
     </section>
   )
 }
@@ -868,6 +998,8 @@ export function PlanParticipantsManager({
     inviteErrorMessage,
   } = usePlanCollaborationManager({ activePlan, isPlanOwner })
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
 
   if (!activePlan) {
     return null
@@ -1012,16 +1144,15 @@ export function PlanParticipantsManager({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        if (
-                          !window.confirm(
-                            `Remover ${participant.name} deste plano?`
-                          )
-                        ) {
-                          return
-                        }
-                        removeParticipant.mutate(participant.userId)
-                      }}
+                      onClick={() =>
+                        setConfirmationDialog({
+                          confirmLabel: "Remover Parceiro",
+                          description: `${participant.name} deixará de participar deste plano.`,
+                          title: `Remover ${participant.name}?`,
+                          onConfirm: () =>
+                            removeParticipant.mutate(participant.userId),
+                        })
+                      }
                       disabled={removeParticipant.isPending}
                     >
                       {removeParticipant.isPending ? "Removendo..." : "Remover"}
@@ -1033,6 +1164,10 @@ export function PlanParticipantsManager({
           ))}
         </div>
       </Card>
+      <ConfirmationDialog
+        onClose={() => setConfirmationDialog(null)}
+        state={confirmationDialog}
+      />
     </div>
   )
 }

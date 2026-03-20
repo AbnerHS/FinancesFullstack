@@ -748,15 +748,18 @@ export function usePeriodInvoiceManager({
   })
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [editingAmount, setEditingAmount] = useState("")
+  const resolvedCreateForm = useMemo(() => {
+    const hasCurrentCard = creditCards.some(
+      (card) => card.id === createForm.creditCardId
+    )
 
-  useEffect(() => {
-    setCreateForm((current) => ({
-      ...current,
-      creditCardId: creditCards.some((card) => card.id === current.creditCardId)
-        ? current.creditCardId
+    return {
+      ...createForm,
+      creditCardId: hasCurrentCard
+        ? createForm.creditCardId
         : creditCards[0]?.id || "",
-    }))
-  }, [creditCards])
+    }
+  }, [createForm, creditCards])
 
   const invalidatePeriodInvoices = async () => {
     await queryClient.invalidateQueries({
@@ -766,17 +769,17 @@ export function usePeriodInvoiceManager({
 
   const createInvoice = useMutation({
     mutationFn: async () => {
-      if (!createForm.creditCardId) {
+      if (!resolvedCreateForm.creditCardId) {
         throw new Error("Selecione um cartão.")
       }
 
-      const amountNumber = parseCurrencyInput(createForm.amount)
+      const amountNumber = parseCurrencyInput(resolvedCreateForm.amount)
       if (Number.isNaN(amountNumber) || amountNumber <= 0) {
         throw new Error("Informe um valor válido.")
       }
 
       return invoiceService.create({
-        creditCardId: createForm.creditCardId,
+        creditCardId: resolvedCreateForm.creditCardId,
         periodId,
         amount: amountNumber,
       })
@@ -846,7 +849,7 @@ export function usePeriodInvoiceManager({
 
   return {
     isCreateOpen,
-    createForm,
+    createForm: resolvedCreateForm,
     setCreateForm,
     startCreate,
     cancelCreate,
@@ -947,12 +950,25 @@ export function usePlanManager({
 
 export function usePlanYearManager(activePlan: Plan | null, periods: Period[]) {
   const queryClient = useQueryClient()
+  const activePlanId = activePlan?.id ?? null
   const suggestedYear = useMemo(() => getSuggestedNextYear(periods), [periods])
-  const [draftYear, setDraftYear] = useState(suggestedYear)
-
-  useEffect(() => {
-    setDraftYear(suggestedYear)
-  }, [activePlan?.id, suggestedYear])
+  // Keep the year draft keyed by plan id so changing plans resets the visible
+  // value without triggering a setState from inside an effect. Do not
+  // reintroduce this with useEffect(setState), because it causes cascading
+  // renders and trips the React lint rule.
+  const [draftYearState, setDraftYearState] = useState(() => ({
+    planId: activePlanId,
+    value: suggestedYear,
+  }))
+  const draftYear =
+    draftYearState.planId === activePlanId
+      ? draftYearState.value
+      : suggestedYear
+  const setDraftYear = (value: number) =>
+    setDraftYearState({
+      planId: activePlanId,
+      value,
+    })
 
   const addYearMutation = useMutation({
     mutationFn: async () => {
@@ -977,6 +993,33 @@ export function usePlanYearManager(activePlan: Plan | null, periods: Period[]) {
 
       return { year, createdCount }
     },
+    onSuccess: async ({ year }) => {
+      setDraftYearState({
+        planId: activePlanId,
+        value: year + 1,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: financeKeys.periods(activePlan?.id),
+      })
+    },
+  })
+  const deleteYearMutation = useMutation({
+    mutationFn: async (year: number) => {
+      if (!activePlan?.id) {
+        throw new Error("Selecione um plano antes de excluir um ano.")
+      }
+
+      const periodsForYear = periods.filter((period) => period.year === year)
+      if (periodsForYear.length === 0) {
+        throw new Error(`O ano ${year} não existe neste plano.`)
+      }
+
+      await Promise.all(
+        periodsForYear.map((period) => periodService.delete(period.id))
+      )
+
+      return { year }
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: financeKeys.periods(activePlan?.id),
@@ -989,13 +1032,70 @@ export function usePlanYearManager(activePlan: Plan | null, periods: Period[]) {
     setDraftYear,
     suggestedYear,
     addYearMutation,
+    deleteYearMutation,
     errorMessage: addYearMutation.error
       ? getErrorMessage(
           addYearMutation.error,
           "Não foi possível adicionar o ano ao plano."
         )
       : null,
-    resetDraft: () => setDraftYear(getSuggestedNextYear(periods)),
+    deleteYearErrorMessage: deleteYearMutation.error
+      ? getErrorMessage(
+          deleteYearMutation.error,
+          "Não foi possível excluir o ano do plano."
+        )
+      : null,
+    resetDraft: () =>
+      setDraftYearState({
+        planId: activePlanId,
+        value: getSuggestedNextYear(periods),
+      }),
+  }
+}
+
+export function usePlanDeleteManager({
+  activePlan,
+  plans,
+  onSelectPlanId,
+}: {
+  activePlan: Plan | null
+  plans: Plan[]
+  onSelectPlanId: (id: string | null) => void
+}) {
+  const queryClient = useQueryClient()
+
+  const deletePlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!activePlan?.id) {
+        throw new Error("Selecione um plano antes de excluir.")
+      }
+
+      await planService.delete(activePlan.id)
+      return activePlan.id
+    },
+    onSuccess: async (deletedPlanId) => {
+      const nextPlanId =
+        plans.find((plan) => plan.id !== deletedPlanId)?.id ?? null
+
+      onSelectPlanId(nextPlanId)
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
+        queryClient.invalidateQueries({
+          queryKey: financeKeys.periods(deletedPlanId),
+        }),
+      ])
+    },
+  })
+
+  return {
+    deletePlanMutation,
+    errorMessage: deletePlanMutation.error
+      ? getErrorMessage(
+          deletePlanMutation.error,
+          "Não foi possível excluir o plano."
+        )
+      : null,
   }
 }
 
