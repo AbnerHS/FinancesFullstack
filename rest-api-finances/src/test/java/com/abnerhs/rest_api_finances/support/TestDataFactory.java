@@ -99,7 +99,13 @@ public final class TestDataFactory {
     }
 
     public static CreditCardInvoiceResponseDTO creditCardInvoiceResponse() {
-        return new CreditCardInvoiceResponseDTO(uuid("00000000-0000-0000-0000-000000000020"), creditCardResponse().id(), financialPeriodResponse().id(), new BigDecimal("500.00"));
+        return new CreditCardInvoiceResponseDTO(
+                uuid("00000000-0000-0000-0000-000000000020"),
+                creditCardResponse().id(),
+                creditCardResponse().name(),
+                financialPeriodResponse().id(),
+                new BigDecimal("500.00")
+        );
     }
 
     public static FinancialPlanRequestDTO financialPlanRequest() {

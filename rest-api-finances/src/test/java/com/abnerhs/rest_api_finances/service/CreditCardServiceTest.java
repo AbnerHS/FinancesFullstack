@@ -8,6 +8,7 @@ import com.abnerhs.rest_api_finances.model.CreditCard;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.repository.CreditCardRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
+import com.abnerhs.rest_api_finances.service.FinancialPlanService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,6 +34,9 @@ class CreditCardServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private FinancialPlanService financialPlanService;
 
     @InjectMocks
     private CreditCardService service;
@@ -61,6 +65,19 @@ class CreditCardServiceTest {
         when(mapper.toDtoList(cards)).thenReturn(response);
 
         assertEquals(response, service.findAllByUser(userId));
+    }
+
+    @Test
+    void shouldFindAllCardsByPlan() {
+        UUID planId = UUID.randomUUID();
+        List<CreditCard> cards = List.of(new CreditCard());
+        List<CreditCardResponseDTO> response = List.of(new CreditCardResponseDTO(UUID.randomUUID(), "Visa", UUID.randomUUID()));
+
+        when(repository.findAllByPlanId(planId)).thenReturn(cards);
+        when(mapper.toDtoList(cards)).thenReturn(response);
+
+        assertEquals(response, service.findAllByPlan(planId));
+        verify(financialPlanService).assertCurrentUserCanAccessPlan(planId);
     }
 
     @Test

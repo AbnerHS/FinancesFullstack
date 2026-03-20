@@ -28,6 +28,9 @@ public class CreditCardService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private FinancialPlanService financialPlanService;
+
     @Transactional
     public CreditCardResponseDTO create(CreditCardRequestDTO dto) {
         CreditCard entity = mapper.toEntity(dto);
@@ -36,6 +39,12 @@ public class CreditCardService {
 
     public List<CreditCardResponseDTO> findAllByUser(UUID userId) {
         List<CreditCard> cards = repository.findByUserId(userId);
+        return mapper.toDtoList(cards);
+    }
+
+    public List<CreditCardResponseDTO> findAllByPlan(UUID planId) {
+        financialPlanService.assertCurrentUserCanAccessPlan(planId);
+        List<CreditCard> cards = repository.findAllByPlanId(planId);
         return mapper.toDtoList(cards);
     }
 

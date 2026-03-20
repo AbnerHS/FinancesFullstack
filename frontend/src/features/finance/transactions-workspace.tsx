@@ -679,6 +679,7 @@ export function TransactionsWorkspace({
             ) : (
               panel.invoices.map((invoice) => {
                 const card = shared.creditCards.find((item) => item.id === invoice.creditCardId)
+                const cardLabel = invoice.creditCardName || card?.name || "Cartão"
                 const isEditing = invoiceManager.editingInvoiceId === invoice.id
 
                 return (
@@ -689,7 +690,7 @@ export function TransactionsWorkspace({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          {card?.name || "Cartão"}
+                          {cardLabel}
                         </p>
                       </div>
                       {isEditing ? (

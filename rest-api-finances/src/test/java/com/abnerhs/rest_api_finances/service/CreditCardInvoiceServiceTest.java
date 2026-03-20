@@ -136,6 +136,12 @@ class CreditCardInvoiceServiceTest {
     }
 
     private CreditCardInvoiceResponseDTO buildResponse() {
-        return new CreditCardInvoiceResponseDTO(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), new BigDecimal("120.50"));
+        return new CreditCardInvoiceResponseDTO(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Visa",
+                UUID.randomUUID(),
+                new BigDecimal("120.50")
+        );
     }
 }

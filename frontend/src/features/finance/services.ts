@@ -23,7 +23,9 @@ export const financeKeys = {
   participants: (planId?: string | null) => ["plan-participants", planId] as const,
   inviteLink: (planId?: string | null) => ["plan-invite-link", planId] as const,
   invitation: (token?: string | null) => ["plan-invitation", token] as const,
-  cards: ["credit-cards-me"] as const,
+  cards: ["credit-cards"] as const,
+  ownCards: ["credit-cards", "me"] as const,
+  planCards: (planId?: string | null) => ["credit-cards", "plan", planId] as const,
   categories: ["transaction-categories"] as const,
   users: ["users-all"] as const,
   periodTransactionsRoot: ["period-transactions"] as const,
@@ -69,6 +71,16 @@ export const planService = {
 
     const { data } = await http.get<PlanParticipant[]>(`/plans/${planId}/participants`)
     return data ?? []
+  },
+  async getCreditCards(planId?: string | null) {
+    if (!planId) {
+      return []
+    }
+
+    const { data } = await http.get<EmbeddedCollection<CreditCard, "creditCards">>(
+      `/plans/${planId}/credit-cards`
+    )
+    return embedded(data, "creditCards")
   },
   async getInviteLink(planId?: string | null) {
     if (!planId) {
@@ -254,11 +266,19 @@ export const financeQueries = {
       staleTime: 1000 * 60 * 5,
       placeholderData: keepPreviousData,
     }),
-  cards: () =>
+  ownCards: () =>
     queryOptions({
-      queryKey: financeKeys.cards,
+      queryKey: financeKeys.ownCards,
       queryFn: creditCardService.getMyCreditCards,
       staleTime: 1000 * 60 * 10,
+    }),
+  planCards: (plan: Plan | null) =>
+    queryOptions({
+      queryKey: financeKeys.planCards(plan?.id),
+      queryFn: () => planService.getCreditCards(plan?.id),
+      enabled: Boolean(plan?.id),
+      staleTime: 1000 * 60 * 10,
+      placeholderData: keepPreviousData,
     }),
   categories: () =>
     queryOptions({

@@ -2,6 +2,8 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
+import com.abnerhs.rest_api_finances.assembler.CreditCardAssembler;
+import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
 import com.abnerhs.rest_api_finances.docs.ApiDeleteResponses;
 import com.abnerhs.rest_api_finances.docs.ApiGetResponses;
 import com.abnerhs.rest_api_finances.docs.ApiPatchResponses;
@@ -17,6 +19,7 @@ import com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO;
 import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
+import com.abnerhs.rest_api_finances.service.CreditCardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -51,6 +54,12 @@ public class FinancialPlanController {
 
     @Autowired
     private FinancialPeriodAssembler financialPeriodAssembler;
+
+    @Autowired
+    private CreditCardService creditCardService;
+
+    @Autowired
+    private CreditCardAssembler creditCardAssembler;
 
     @PostMapping
     @ApiPostResponses
@@ -89,6 +98,16 @@ public class FinancialPlanController {
 
         return financialPeriodAssembler.toCollectionModel(dtoList)
                 .add(linkTo(methodOn(FinancialPlanController.class).getPeriodsByPlan(id)).withSelfRel());
+    }
+
+    @GetMapping("/{id}/credit-cards")
+    @ApiGetResponses
+    @Operation(summary = "Find credit cards available in a financial plan", tags = {"Plan", "Card"})
+    public CollectionModel<EntityModel<CreditCardResponseDTO>> getCreditCardsByPlan(@PathVariable UUID id) {
+        List<CreditCardResponseDTO> dtoList = creditCardService.findAllByPlan(id);
+
+        return creditCardAssembler.toCollectionModel(dtoList)
+                .add(linkTo(methodOn(FinancialPlanController.class).getCreditCardsByPlan(id)).withSelfRel());
     }
 
     @GetMapping("/{id}/participants")

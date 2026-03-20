@@ -63,6 +63,7 @@ export type CreditCard = EntityModel<{
 export type Invoice = EntityModel<{
   id: string
   creditCardId: string
+  creditCardName?: string | null
   periodId: string
   amount: number | string
 }>

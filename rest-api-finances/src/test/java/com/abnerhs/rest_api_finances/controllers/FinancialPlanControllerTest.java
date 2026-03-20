@@ -2,6 +2,8 @@ package com.abnerhs.rest_api_finances.controllers;
 
 import com.abnerhs.rest_api_finances.assembler.FinancialPeriodAssembler;
 import com.abnerhs.rest_api_finances.assembler.FinancialPlanAssembler;
+import com.abnerhs.rest_api_finances.assembler.CreditCardAssembler;
+import com.abnerhs.rest_api_finances.dto.CreditCardResponseDTO;
 import com.abnerhs.rest_api_finances.config.JwtAuthenticationFilter;
 import com.abnerhs.rest_api_finances.dto.FinancialPeriodResponseDTO;
 import com.abnerhs.rest_api_finances.dto.FinancialPlanInviteLinkResponseDTO;
@@ -10,6 +12,7 @@ import com.abnerhs.rest_api_finances.dto.FinancialPlanResponseDTO;
 import com.abnerhs.rest_api_finances.exception.handler.CustomEntityResponseHandler;
 import com.abnerhs.rest_api_finances.service.FinancialPeriodService;
 import com.abnerhs.rest_api_finances.service.FinancialPlanService;
+import com.abnerhs.rest_api_finances.service.CreditCardService;
 import com.abnerhs.rest_api_finances.service.UserDetailsServiceImpl;
 import com.abnerhs.rest_api_finances.support.TestDataFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +61,12 @@ class FinancialPlanControllerTest {
 
     @MockitoBean
     private FinancialPeriodAssembler financialPeriodAssembler;
+
+    @MockitoBean
+    private CreditCardService creditCardService;
+
+    @MockitoBean
+    private CreditCardAssembler creditCardAssembler;
 
     @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -120,6 +129,23 @@ class FinancialPlanControllerTest {
         mockMvc.perform(get("/api/plans/{id}/periods", plan.id()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$._embedded.periods[0].id").value(period.id().toString()));
+    }
+
+    @Test
+    void shouldListCreditCardsByPlan() throws Exception {
+        FinancialPlanResponseDTO plan = TestDataFactory.financialPlanResponse();
+        CreditCardResponseDTO card = TestDataFactory.creditCardResponse();
+        when(creditCardService.findAllByPlan(plan.id())).thenReturn(List.of(card));
+        when(creditCardAssembler.toCollectionModel(List.of(card))).thenReturn(
+                TestDataFactory.collectionModel(
+                        List.of(TestDataFactory.entityModel(card, "/api/credit-cards/" + card.id())),
+                        "/api/plans/" + plan.id() + "/credit-cards"
+                )
+        );
+
+        mockMvc.perform(get("/api/plans/{id}/credit-cards", plan.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._embedded.creditCards[0].id").value(card.id().toString()));
     }
 
     @Test

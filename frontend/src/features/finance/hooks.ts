@@ -115,9 +115,21 @@ export function usePeriods(plan: Plan | null) {
 }
 
 export function useCreditCards() {
+  const { data: plans = [] } = usePlans()
+  const selectedPlanId = useDashboardStore((state) => state.selectedPlanId)
+  const userId = useAuthStore((state) => state.user?.id)
+  const activePlan = useMemo(
+    () => (userId ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null : null),
+    [plans, selectedPlanId, userId]
+  )
+
+  return useQuery(financeQueries.planCards(activePlan))
+}
+
+export function useOwnCreditCards() {
   const isAuthenticated = Boolean(useAuthStore((state) => state.user?.id))
   return useQuery({
-    ...financeQueries.cards(),
+    ...financeQueries.ownCards(),
     enabled: isAuthenticated,
   })
 }
@@ -339,7 +351,13 @@ export function useDashboard() {
       queryFn: () => periodService.getInvoicesByPeriod(period),
       enabled: Boolean(period.id),
       staleTime: 1000 * 60 * 2,
-      placeholderData: [] as Array<{ id: string; amount: number | string; creditCardId: string; periodId: string }>,
+      placeholderData: [] as Array<{
+        id: string
+        amount: number | string
+        creditCardId: string
+        creditCardName?: string | null
+        periodId: string
+      }>,
     })),
   })
 
@@ -375,6 +393,7 @@ export function useDashboard() {
           id: string
           amount: number | string
           creditCardId: string
+          creditCardName?: string | null
           periodId: string
         }>
         const invoicesAmount = invoices.reduce(
@@ -430,7 +449,8 @@ export function useDashboard() {
 
   const comparisonData = useMemo(() => buildComparisonChartData(periodPanels), [periodPanels])
   const variation = useMemo(() => computeVariation(comparisonData), [comparisonData])
-  const { data: creditCards = [] } = useCreditCards()
+  const { data: creditCards = [] } = useQuery(financeQueries.planCards(activePlan))
+  const { data: ownCreditCards = [] } = useOwnCreditCards()
   const { data: transactionCategories = [] } = useTransactionCategories()
   const isPlanOwner = Boolean(activePlan?.ownerId && user?.id && activePlan.ownerId === user.id)
 
@@ -455,6 +475,7 @@ export function useDashboard() {
     comparisonData,
     variation,
     creditCards,
+    ownCreditCards,
     transactionCategories,
     participants,
     isPlanOwner,
