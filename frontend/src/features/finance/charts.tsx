@@ -47,6 +47,19 @@ export function DashboardCharts({
   comparisonData: ComparisonItem[]
   categoryData: CategoryItem[]
 }) {
+  const categoryTotal = categoryData.reduce(
+    (total, item) => total + Number(item.totalAmount || 0),
+    0
+  )
+  const categoryBreakdown = categoryData.map((item, index) => ({
+    ...item,
+    color: pieColors[index % pieColors.length],
+    percentage:
+      categoryTotal > 0
+        ? (Number(item.totalAmount || 0) / categoryTotal) * 100
+        : 0,
+  }))
+
   return (
     <>
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -96,33 +109,68 @@ export function DashboardCharts({
               Distribuição de despesas
             </h3>
           </div>
-          <div className="mt-6 h-80 min-h-[20rem] min-w-0">
-            <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 200 }}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  dataKey="totalAmount"
-                  nameKey="category"
-                  innerRadius={68}
-                  outerRadius={102}
-                  paddingAngle={3}
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={entry.category} fill={pieColors[index % pieColors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => tooltipCurrency(value)}
-                  contentStyle={{
-                    borderRadius: "16px",
-                    border: "1px solid rgba(148, 163, 184, 0.18)",
-                    backgroundColor: "rgba(15, 23, 42, 0.94)",
-                    color: "#e2e8f0",
-                  }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+            <div className="h-80 min-h-[20rem] min-w-0">
+              <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 200 }}>
+                <PieChart>
+                  <Pie
+                    data={categoryBreakdown}
+                    dataKey="totalAmount"
+                    nameKey="category"
+                    innerRadius={68}
+                    outerRadius={102}
+                    paddingAngle={3}
+                  >
+                    {categoryBreakdown.map((entry) => (
+                      <Cell key={entry.category} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value) => tooltipCurrency(value)}
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "1px solid rgba(148, 163, 184, 0.18)",
+                      backgroundColor: "rgba(15, 23, 42, 0.94)",
+                      color: "#e2e8f0",
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
+              {categoryBreakdown.length > 0 ? (
+                categoryBreakdown.map((item) => (
+                  <div
+                    key={item.category}
+                    className="rounded-2xl border border-border/70 bg-card/70 px-4 py-1.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <p className="text-sm font-medium text-foreground">
+                            {item.category}
+                          </p>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {formatCurrency(item.totalAmount)}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {item.percentage.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/70 bg-card/40 px-4 py-6 text-sm text-muted-foreground">
+                  Nenhuma despesa no perÃ­odo selecionado.
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       </section>

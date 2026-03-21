@@ -140,7 +140,10 @@ export function buildCategoryChartData({
 
   const totals = new Map<string, number>()
   filteredTransactions
-    .filter((transaction) => transaction.type === "EXPENSE")
+    .filter(
+      (transaction) =>
+        transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
+    )
     .forEach((transaction) => {
       const label = transaction.category?.name || "Sem categoria"
       totals.set(

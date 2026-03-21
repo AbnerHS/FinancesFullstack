@@ -16,7 +16,6 @@ import {
   invoiceService,
   periodService,
   planService,
-  reportService,
   transactionCategoryService,
   transactionService,
   userService,
@@ -443,16 +442,6 @@ export function useDashboard() {
     }))
   }, [participants])
 
-  const categorySpendingQueries = useQueries({
-    queries: selectedPeriods.map((period) => ({
-      queryKey: financeKeys.categoryReport(period.id),
-      queryFn: () => reportService.getSpendingByCategory(period.id),
-      enabled: Boolean(period.id),
-      staleTime: 1000 * 60 * 5,
-      placeholderData: [],
-    })),
-  })
-
   const periodPanels = useMemo(
     () =>
       selectedPeriods.map((period, index) => {
@@ -499,15 +488,20 @@ export function useDashboard() {
 
   const categorySpending = useMemo(() => {
     const totals = new Map<string, number>()
-    categorySpendingQueries.forEach((query) => {
-      const items = query.data ?? []
-      items.forEach((item) => {
-        const label = item.category || "Sem categoria"
-        totals.set(
-          label,
-          (totals.get(label) ?? 0) + Number(item.totalAmount || 0)
+
+    periodPanels.forEach((panel) => {
+      panel.transactions
+        .filter(
+          (transaction) =>
+            transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
         )
-      })
+        .forEach((transaction) => {
+          const label = transaction.category?.name || "Sem categoria"
+          totals.set(
+            label,
+            (totals.get(label) ?? 0) + Number(transaction.amount || 0)
+          )
+        })
     })
 
     const creditCardInvoicesTotal = periodPanels.reduce(
@@ -530,7 +524,7 @@ export function useDashboard() {
     return [...totals.entries()]
       .map(([category, totalAmount]) => ({ category, totalAmount }))
       .sort((a, b) => b.totalAmount - a.totalAmount)
-  }, [categorySpendingQueries, periodPanels])
+  }, [periodPanels])
 
   const allTransactions = useMemo(
     () => periodPanels.flatMap((panel) => panel.transactions),
