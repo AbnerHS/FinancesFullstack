@@ -8,7 +8,6 @@ import com.abnerhs.rest_api_finances.model.CreditCard;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.repository.CreditCardRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
-import com.abnerhs.rest_api_finances.service.FinancialPlanService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
