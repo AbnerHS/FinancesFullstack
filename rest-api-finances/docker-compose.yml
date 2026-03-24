@@ -26,6 +26,12 @@ services:
     depends_on:
       mysql-db:
         condition: service_healthy # Espera o banco estar pronto para subir o Spring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 45s
 
 volumes:
   mysql_data:
