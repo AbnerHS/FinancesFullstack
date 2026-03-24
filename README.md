@@ -143,11 +143,59 @@ Para a instancia Oracle Cloud, use o arquivo especifico do ambiente:
 docker compose -f docker-compose.yml -f docker-compose.oci.yml up -d --build
 ```
 
+### CI/CD do backend
+
+O fluxo de producao do backend agora deve seguir o modelo:
+
+- CI em toda PR e push relevante via GitHub Actions
+- build da imagem Docker no CI
+- publicacao da imagem no GHCR com tag imutavel por commit
+- deploy na VPS por SSH com `docker compose pull` e `docker compose up -d`
+
+Arquivos principais:
+
+- `.github/workflows/ci-backend.yml`
+- `.github/workflows/ci-frontend.yml`
+- `.github/workflows/deploy-backend.yml`
+- `rest-api-finances/deploy/vps/docker-compose.prod.yml`
+- `rest-api-finances/deploy/vps/.env.production.example`
+
+### Secrets necessarios no GitHub
+
+Para o deploy do backend na VPS, configurar os seguintes secrets:
+
+- `GHCR_USERNAME`
+- `GHCR_TOKEN`
+- `VPS_HOST`
+- `VPS_USERNAME`
+- `VPS_PORT`
+- `VPS_SSH_PRIVATE_KEY`
+- `VPS_DEPLOY_PATH`
+
+Tambem configure o GitHub Environment `production` com aprovacao manual obrigatoria.
+
+### Bootstrap da VPS
+
+No host remoto, manter um diretorio estavel para deploy, por exemplo `/opt/finances`, contendo:
+
+- `docker-compose.prod.yml`
+- `.env`
+- `.deploy.env` gerado pelo workflow
+
+Passos iniciais:
+
+1. instalar Docker Engine com Docker Compose plugin
+2. criar o diretorio informado em `VPS_DEPLOY_PATH`
+3. copiar `rest-api-finances/deploy/vps/docker-compose.prod.yml`
+4. criar `.env` com base em `rest-api-finances/deploy/vps/.env.production.example`
+5. garantir acesso da VPS ao GHCR com um token de leitura em `GHCR_TOKEN`
+
 Organizacao recomendada dos arquivos:
 
 - `rest-api-finances/docker-compose.yml`: servicos comuns
 - `rest-api-finances/docker-compose.override.yml`: portas e ajustes locais
 - `rest-api-finances/docker-compose.oci.yml`: ajustes da instancia Oracle/Ubuntu
+- `rest-api-finances/deploy/vps/docker-compose.prod.yml`: stack de producao na VPS
 - `rest-api-finances/.env.example`: exemplo de configuracao
 - `rest-api-finances/.env`: configuracao real de cada maquina
 
@@ -261,6 +309,16 @@ No diretorio `rest-api-finances`:
 
 ```bash
 mvn test
+```
+
+### 4. Rodar os checks do frontend
+
+No diretorio `frontend`:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
 Relatorio de coverage JaCoCo:
