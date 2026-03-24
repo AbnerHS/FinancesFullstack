@@ -137,7 +137,8 @@ jobs:
               exit 1
             fi
 
-            cat > .deploy.env <<EOF
+            cp .env .deploy.env
+            cat >> .deploy.env <<EOF
             BACKEND_IMAGE=$BACKEND_IMAGE
             IMAGE_TAG=$IMAGE_TAG
             EOF
