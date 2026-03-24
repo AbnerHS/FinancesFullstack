@@ -149,14 +149,16 @@ jobs:
 
             ATTEMPTS=0
             until [ "$ATTEMPTS" -ge 18 ]; do
-              if docker compose --env-file .deploy.env -f docker-compose.prod.yml ps --format json spring-app | grep -q '"Health":"healthy"'; then
+              STATUS="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' spring-app 2>/dev/null || true)"
+              if [ "$STATUS" = "healthy" ] || [ "$STATUS" = "running" ]; then
                 break
               fi
               ATTEMPTS=$((ATTEMPTS + 1))
               sleep 10
             done
 
-            if ! docker compose --env-file .deploy.env -f docker-compose.prod.yml ps --format json spring-app | grep -q '"Health":"healthy"'; then
+            STATUS="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' spring-app 2>/dev/null || true)"
+            if [ "$STATUS" != "healthy" ] && [ "$STATUS" != "running" ]; then
               docker compose --env-file .deploy.env -f docker-compose.prod.yml logs --tail=100 spring-app
               exit 1
             fi
