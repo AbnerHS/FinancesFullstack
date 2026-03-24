@@ -6,6 +6,7 @@ export type User = {
   id: string
   name: string
   email: string
+  authProvider: "LOCAL" | "GOOGLE"
 }
 
 export type Plan = EntityModel<{

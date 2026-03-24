@@ -53,7 +53,7 @@ export function AppLayout() {
   )
 
   return (
-    <div className="min-h-screen text-foreground">
+    <div className="min-h-svh text-foreground">
       <AppShellSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
