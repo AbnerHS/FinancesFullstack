@@ -137,7 +137,9 @@
     background:
       radial-gradient(circle at top, rgb(255, 255, 255), transparent 28%),
       linear-gradient(180deg, #f8fbff 0%, #eef4fb 42%, #e8eef8 100%);
+    background-attachment: scroll;
     min-width: 320px;
+    min-height: 100svh;
   }
 
   .dark body {
@@ -147,10 +149,20 @@
   }
   html {
     @apply font-sans;
+    min-height: 100%;
   }
 
   #root {
-    min-height: 100vh;
+    min-height: 100svh;
+  }
+}
+
+@supports (min-height: 100dvh) {
+  @layer base {
+    body,
+    #root {
+      min-height: 100dvh;
+    }
   }
 }
 

@@ -27,6 +27,13 @@ Define the mandatory guides that must be reviewed before implementing any task i
 - Use shadcn/ui as the base component approach.
 - Use TanStack Router for routing.
 
+## React State Safety
+
+- Do not call `setState` synchronously inside `useEffect` just to realign derived form values.
+- When state depends on props, queries, or selected entities, prefer derived values via `useMemo`, keyed local state, or explicit reset handlers.
+- If a draft must reset when the active entity changes, key the draft by that entity or recompute the displayed value without `useEffect(setState)`.
+- Before shipping a hook/component, check for patterns like `useEffect(() => setState(...), [...])` and replace them unless the side effect is genuinely external.
+
 ## Scope
 
 Applies to all new features, bug fixes, refactors, and reviews in this repository.

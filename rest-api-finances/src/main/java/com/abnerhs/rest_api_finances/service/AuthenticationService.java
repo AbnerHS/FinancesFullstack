@@ -39,7 +39,7 @@ public class AuthenticationService {
         );
         user.setAuthProvider(AuthProvider.LOCAL);
         repository.save(user);
-        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail(), user.getAuthProvider());
         return buildAuthResponse(user, userDto);
     }
 
@@ -58,7 +58,7 @@ public class AuthenticationService {
         );
         var user = repository.findByEmail(request.email())
                 .orElseThrow();
-        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail(), user.getAuthProvider());
         return buildAuthResponse(user, userDto);
     }
 
@@ -70,7 +70,7 @@ public class AuthenticationService {
                         .map(existingByEmail -> linkExistingUserToGoogle(existingByEmail, profile))
                         .orElseGet(() -> createGoogleUser(profile)));
 
-        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+        UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail(), user.getAuthProvider());
         return buildAuthResponse(user, userDto);
     }
 
@@ -83,7 +83,7 @@ public class AuthenticationService {
                 throw new BadCredentialsException("Refresh token invalido");
             }
 
-            UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail());
+            UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getName(), user.getEmail(), user.getAuthProvider());
             return buildAuthResponse(user, userDto);
         } catch (JwtException | IllegalArgumentException exception) {
             throw new BadCredentialsException("Refresh token invalido");

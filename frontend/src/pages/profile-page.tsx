@@ -10,6 +10,7 @@ import { useProfileSettings } from "@/features/finance/hooks.ts"
 export function ProfilePage() {
   const { user, profileMutation, passwordMutation, profileError, passwordError } =
     useProfileSettings()
+  const isGoogleUser = user?.authProvider === "GOOGLE"
   const [profileForm, setProfileForm] = useState<{ name: string; email: string } | null>(null)
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -60,6 +61,7 @@ export function ProfilePage() {
             <Label>Email</Label>
             <Input
               value={resolvedProfileForm.email}
+              disabled={isGoogleUser}
               onChange={(event) =>
                 setProfileForm((current) => ({
                   ...(current ?? resolvedProfileForm),
@@ -91,55 +93,63 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <form
-          className="mt-6 space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            passwordMutation.mutate(passwordForm, {
-              onSuccess: () =>
-                setPasswordForm({
-                  currentPassword: "",
-                  newPassword: "",
-                }),
-            })
-          }}
-        >
-          <div className="space-y-2">
-            <Label>Senha atual</Label>
-            <Input
-              type="password"
-              value={passwordForm.currentPassword}
-              onChange={(event) =>
-                setPasswordForm((current) => ({
-                  ...current,
-                  currentPassword: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Nova senha</Label>
-            <Input
-              type="password"
-              value={passwordForm.newPassword}
-              onChange={(event) =>
-                setPasswordForm((current) => ({
-                  ...current,
-                  newPassword: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <Button type="submit" className="h-11" disabled={passwordMutation.isPending}>
-            {passwordMutation.isPending ? "Atualizando..." : "Atualizar senha"}
-          </Button>
-          {passwordMutation.isSuccess ? (
-            <p className="text-sm text-emerald-500 dark:text-emerald-400">
-              Senha atualizada com sucesso.
+        {isGoogleUser ? (
+          <div className="mt-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Sua conta usa login com Google. Por isso, a senha não pode ser alterada por aqui.
             </p>
-          ) : null}
-          <FormError message={passwordError} />
-        </form>
+          </div>
+        ) : (
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              passwordMutation.mutate(passwordForm, {
+                onSuccess: () =>
+                  setPasswordForm({
+                    currentPassword: "",
+                    newPassword: "",
+                  }),
+              })
+            }}
+          >
+            <div className="space-y-2">
+              <Label>Senha atual</Label>
+              <Input
+                type="password"
+                value={passwordForm.currentPassword}
+                onChange={(event) =>
+                  setPasswordForm((current) => ({
+                    ...current,
+                    currentPassword: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Nova senha</Label>
+              <Input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(event) =>
+                  setPasswordForm((current) => ({
+                    ...current,
+                    newPassword: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <Button type="submit" className="h-11" disabled={passwordMutation.isPending}>
+              {passwordMutation.isPending ? "Atualizando..." : "Atualizar senha"}
+            </Button>
+            {passwordMutation.isSuccess ? (
+              <p className="text-sm text-emerald-500 dark:text-emerald-400">
+                Senha atualizada com sucesso.
+              </p>
+            ) : null}
+            <FormError message={passwordError} />
+          </form>
+        )}
       </section>
     </div>
   )

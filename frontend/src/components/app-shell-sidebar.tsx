@@ -7,7 +7,6 @@ import {
   Menu,
   UserRound,
   Users,
-  WalletCards,
   X,
 } from "lucide-react"
 
@@ -23,12 +22,36 @@ type AppShellSidebarProps = {
 }
 
 const navItems = [
-  { to: "/", label: "Dashboard", description: "Resumo e fluxo diário", icon: LayoutDashboard },
-  { to: "/profile", label: "Perfil", description: "Conta e senha", icon: UserRound },
-  { to: "/plans", label: "Planos", description: "Estrutura financeira", icon: FolderKanban },
-  { to: "/periods", label: "Períodos", description: "Comparação mensal", icon: WalletCards },
-  { to: "/cards", label: "Cartões", description: "Cartões e faturas", icon: CreditCard },
-  { to: "/partner", label: "Participantes", description: "Parceiros e convites", icon: Users },
+  {
+    to: "/",
+    label: "Dashboard",
+    description: "Resumo e fluxo diário",
+    icon: LayoutDashboard,
+  },
+  {
+    to: "/profile",
+    label: "Perfil",
+    description: "Conta e senha",
+    icon: UserRound,
+  },
+  {
+    to: "/plans",
+    label: "Planos",
+    description: "Estrutura financeira",
+    icon: FolderKanban,
+  },
+  {
+    to: "/cards",
+    label: "Cartões",
+    description: "Cartões e faturas",
+    icon: CreditCard,
+  },
+  {
+    to: "/partner",
+    label: "Participantes",
+    description: "Parceiros e convites",
+    icon: Users,
+  },
 ]
 
 export function MobileSidebarButton({ onClick }: { onClick: () => void }) {
@@ -58,21 +81,25 @@ export function AppShellSidebar({
         onClick={onClose}
         className={cn(
           "fixed inset-0 z-30 bg-slate-950/55 backdrop-blur-sm transition lg:hidden",
-          isOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+          isOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0"
         )}
         aria-label="Fechar menu"
       />
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-sidebar-border bg-[linear-gradient(180deg,rgba(248,251,255,0.88),rgba(226,235,255,0.82))] shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur-2xl transition-transform duration-300 dark:bg-[linear-gradient(180deg,rgba(11,22,40,0.96),rgba(19,34,56,0.94))] dark:shadow-[0_28px_90px_rgba(2,6,23,0.54)] lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-sidebar-border bg-[linear-gradient(180deg,rgba(248,251,255,0.88),rgba(226,235,255,0.82))] shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0 dark:bg-[linear-gradient(180deg,rgba(11,22,40,0.96),rgba(19,34,56,0.94))] dark:shadow-[0_28px_90px_rgba(2,6,23,0.54)]",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between px-5 py-5">
             <Link to="/" className="space-y-1" onClick={onClose}>
-              <div className="font-serif text-2xl font-semibold text-foreground">Finances</div>
+              <div className="font-serif text-2xl font-semibold text-foreground">
+                Finances
+              </div>
             </Link>
             <button
               type="button"
@@ -84,14 +111,20 @@ export function AppShellSidebar({
           </div>
 
           <div className="mx-4 rounded-[1.75rem] border border-border bg-card/75 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Usuário ativo</p>
+            <p className="text-xs tracking-[0.28em] text-muted-foreground uppercase">
+              Usuário ativo
+            </p>
             <div className="mt-3 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-lg font-semibold text-primary">
                 {userName?.slice(0, 1) || "F"}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">{userName || "Sua conta"}</p>
-                <p className="truncate text-xs text-muted-foreground">{userEmail || "Sem email"}</p>
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {userName || "Sua conta"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {userEmail || "Sem email"}
+                </p>
               </div>
             </div>
           </div>

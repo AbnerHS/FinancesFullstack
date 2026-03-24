@@ -10,6 +10,7 @@ import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,11 @@ public class UserService {
         User entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado!"));
         
+        if (entity.usesGoogleAuthentication()
+                && !entity.getEmail().equalsIgnoreCase(dto.email())) {
+            throw new AccessDeniedException("Contas com login Google nÃ£o podem alterar o email.");
+        }
+
         mapper.updateEntityFromDto(dto, entity);
         return mapper.toDto(repository.save(entity));
     }
@@ -59,6 +65,10 @@ public class UserService {
     public void updatePassword(UUID id, UserPasswordUpdateDTO dto) {
         User entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado!"));
+
+        if (entity.usesGoogleAuthentication()) {
+            throw new AccessDeniedException("Contas com login Google nÃ£o podem alterar a senha.");
+        }
 
         if (!passwordEncoder.matches(dto.currentPassword(), entity.getPassword())) {
             throw new BadCredentialsException("Senha atual incorreta");

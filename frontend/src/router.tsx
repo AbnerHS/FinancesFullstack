@@ -3,6 +3,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
 } from "@tanstack/react-router"
 
 import { GoogleAuthCallback } from "@/features/auth/google-auth-callback.tsx"
@@ -14,7 +15,6 @@ import { CardsPage } from "@/pages/cards-page.tsx"
 import { DashboardPage } from "@/pages/dashboard-page.tsx"
 import { InvitePage } from "@/pages/invite-page.tsx"
 import { PartnerPage } from "@/pages/partner-page.tsx"
-import { PeriodsPage } from "@/pages/periods-page.tsx"
 import { PlansPage } from "@/pages/plans-page.tsx"
 import { ProfilePage } from "@/pages/profile-page.tsx"
 
@@ -81,7 +81,10 @@ const plansRoute = createRoute({
 const periodsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/periods",
-  component: PeriodsPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/plans" })
+  },
+  component: Outlet,
 })
 
 const cardsRoute = createRoute({

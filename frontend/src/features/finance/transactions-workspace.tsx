@@ -23,6 +23,8 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Save,
+  SendHorizonal,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -33,6 +35,10 @@ import { useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
 import { Combobox } from "@/components/ui/combobox.tsx"
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogState,
+} from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
@@ -270,6 +276,7 @@ export function TransactionsWorkspace({
   shared,
 }: TransactionWorkspaceProps) {
   const composerRef = useRef<HTMLDivElement | null>(null)
+  const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [form, setForm] = useState<TransactionFormValues>(() =>
     emptyForm(panel.period.id)
   )
@@ -277,6 +284,8 @@ export function TransactionsWorkspace({
     useState<Transaction | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
   const [formError, setFormError] = useState<string | null>(null)
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
 
   const {
     createTransaction,
@@ -364,11 +373,28 @@ export function TransactionsWorkspace({
     setForm(emptyForm(panel.period.id))
   }
 
+  const isMobileTransactionsViewport = () =>
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 1279px)").matches
+
+  const openComposerOnMobile = () => {
+    if (!isMobileTransactionsViewport()) {
+      return
+    }
+
+    setIsComposerOpen(true)
+  }
+
+  const closeComposerOnMobile = () => {
+    if (!isMobileTransactionsViewport()) {
+      return
+    }
+
+    setIsComposerOpen(false)
+  }
+
   const scrollToComposerOnMobile = () => {
-    if (
-      typeof window === "undefined" ||
-      !window.matchMedia("(max-width: 1279px)").matches
-    ) {
+    if (!isMobileTransactionsViewport()) {
       return
     }
 
@@ -380,7 +406,14 @@ export function TransactionsWorkspace({
     })
   }
 
+  const startCreateTransaction = () => {
+    resetComposer()
+    openComposerOnMobile()
+    scrollToComposerOnMobile()
+  }
+
   const startEditing = (transaction: Transaction) => {
+    openComposerOnMobile()
     setEditingTransaction(transaction)
     setEditingScope("SINGLE")
     setForm({
@@ -452,13 +485,16 @@ export function TransactionsWorkspace({
     }
 
     resetComposer()
+    closeComposerOnMobile()
   }
 
   return (
     <Card className="border-border bg-card/90 p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl xl:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
         <div>
-          <p className="app-eyebrow font-bold">{panel.label}</p>
+          <p className="app-eyebrow text-[13px] font-bold text-primary">
+            {panel.label}
+          </p>
         </div>
         <div className="grid items-end gap-2 xl:grid-cols-3">
           <MetricCard
@@ -486,7 +522,23 @@ export function TransactionsWorkspace({
       </div>
 
       <div className="mt-6 space-y-5">
-        <div ref={composerRef}>
+        {!isComposerOpen ? (
+          <div className="xl:hidden">
+            <Button
+              type="button"
+              className="w-full"
+              onClick={startCreateTransaction}
+            >
+              Nova Transação
+              <Plus size={16} />
+            </Button>
+          </div>
+        ) : null}
+
+        <div
+          ref={composerRef}
+          className={`${isComposerOpen ? "block" : "hidden"} xl:block`}
+        >
           <Card className="border-border bg-secondary/55 p-3 sm:p-4">
             <form
               className="space-y-1"
@@ -535,7 +587,8 @@ export function TransactionsWorkspace({
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        type: event.target.value as TransactionFormValues["type"],
+                        type: event.target
+                          .value as TransactionFormValues["type"],
                       }))
                     }
                   >
@@ -592,9 +645,9 @@ export function TransactionsWorkspace({
                 </div>
                 {!editingTransaction ? (
                   <div className="flex items-end">
-                    <div className="w-full rounded-xl border border-border bg-card/90 px-3 py-3 xl:py-0">
-                      <div className="flex flex-wrap items-center gap-3 xl:flex-nowrap">
-                        <Label className="tracking-widest text-[11px]">
+                    <div className="w-full rounded-xl border border-border bg-card/90 px-3">
+                      <div className="flex flex-wrap items-center gap-x-3 xl:flex-nowrap">
+                        <Label className="text-[11px] tracking-widest">
                           Recorrente
                         </Label>
                         <div className="flex min-h-11 items-center">
@@ -614,9 +667,9 @@ export function TransactionsWorkspace({
                           />
                         </div>
                         {form.isRecurring ? (
-                          <div className="flex flex-row items-center gap-2">
+                          <div className="flex flex-row items-center gap-2 py-2 xl:py-0">
                             <Label className="text-[10px] tracking-widest">
-                              Períodos
+                              Meses
                             </Label>
                             <Input
                               className="h-8 w-20 xl:w-full"
@@ -666,25 +719,32 @@ export function TransactionsWorkspace({
                       updateTransaction.isPending
                     }
                   >
-                    {!editingTransaction ? <Plus size={16} /> : null}
                     {editingTransaction
                       ? updateTransaction.isPending
                         ? "Salvando..."
-                        : "Salvar Edição"
+                        : "Salvar"
                       : form.isRecurring
                         ? createRecurringTransaction.isPending
                           ? "Criando..."
                           : "Criar Recorrência"
                         : createTransaction.isPending
                           ? "Criando..."
-                          : "Adicionar Transação"}
+                          : "Enviar"}
+                    {editingTransaction ? (
+                      <Save size={16} />
+                    ) : (
+                      <SendHorizonal size={16} />
+                    )}
                   </Button>
-                  {editingTransaction ? (
+                  {editingTransaction || isComposerOpen ? (
                     <Button
                       type="button"
                       variant="outline"
                       className="h-11"
-                      onClick={resetComposer}
+                      onClick={() => {
+                        resetComposer()
+                        closeComposerOnMobile()
+                      }}
                     >
                       Cancelar
                     </Button>
@@ -721,7 +781,7 @@ export function TransactionsWorkspace({
                 {groupedTransactions.map((group) => (
                   <div key={group.id} className="space-y-2">
                     <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
                         {group.label}
                       </p>
                     </div>
@@ -745,17 +805,28 @@ export function TransactionsWorkspace({
                             transactionLinking.openPaymentModal(entry)
                           }
                           onEdit={startEditing}
-                          onDelete={(entry) => deleteTransaction.mutate(entry.id)}
+                          onDelete={(entry) =>
+                            setConfirmationDialog({
+                              confirmLabel: "Excluir Transação",
+                              description: `A transação "${entry.description}" será removida deste mês.`,
+                              title: "Excluir transação?",
+                              onConfirm: () =>
+                                deleteTransaction.mutate(entry.id),
+                            })
+                          }
                         />
                       ))}
                     </SortableContext>
                   </div>
                 ))}
-
               </DndContext>
             )}
           </div>
         </Card>
+        <ConfirmationDialog
+          onClose={() => setConfirmationDialog(null)}
+          state={confirmationDialog}
+        />
 
         <Card className="border-border bg-secondary/40 p-4">
           <div className="flex items-center justify-between gap-3">
@@ -767,8 +838,8 @@ export function TransactionsWorkspace({
                 size="sm"
                 onClick={invoiceManager.startCreate}
               >
-                <Plus size={14} />
                 Nova Fatura
+                <Plus size={14} />
               </Button>
             ) : null}
           </div>
@@ -818,10 +889,10 @@ export function TransactionsWorkspace({
                     onClick={() => invoiceManager.createInvoice.mutate()}
                     disabled={invoiceManager.createInvoice.isPending}
                   >
-                    <Plus size={14} />
                     {invoiceManager.createInvoice.isPending
-                      ? "Criando..."
-                      : "Criar"}
+                      ? "Enviando..."
+                      : "Enviar"}
+                    <SendHorizonal size={14} />
                   </Button>
                   <Button
                     type="button"
@@ -855,8 +926,8 @@ export function TransactionsWorkspace({
                   className="mt-3"
                   onClick={invoiceManager.startCreate}
                 >
-                  <Plus size={14} />
                   Criar fatura neste mês
+                  <Plus size={14} />
                 </Button>
               </div>
             ) : (
@@ -890,12 +961,15 @@ export function TransactionsWorkspace({
                           <Button
                             type="button"
                             className="h-11"
-                            onClick={() => invoiceManager.updateInvoice.mutate()}
+                            onClick={() =>
+                              invoiceManager.updateInvoice.mutate()
+                            }
                             disabled={invoiceManager.updateInvoice.isPending}
                           >
                             {invoiceManager.updateInvoice.isPending
                               ? "Salvando..."
                               : "Salvar"}
+                            <Save size={14} />
                           </Button>
                           <Button
                             type="button"
@@ -924,7 +998,9 @@ export function TransactionsWorkspace({
                     </div>
                     {isEditing ? (
                       <div className="mt-3">
-                        <FormError message={invoiceManager.updateErrorMessage} />
+                        <FormError
+                          message={invoiceManager.updateErrorMessage}
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -937,7 +1013,7 @@ export function TransactionsWorkspace({
         {transactionLinking.paymentModalEntry ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+              <h3 className="text-sm font-bold tracking-wider text-foreground uppercase">
                 Vincular a fatura
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">

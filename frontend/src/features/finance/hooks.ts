@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
@@ -11,7 +16,6 @@ import {
   invoiceService,
   periodService,
   planService,
-  reportService,
   transactionCategoryService,
   transactionService,
   userService,
@@ -102,6 +106,54 @@ function normalizePeriodRange(
       }
 }
 
+function getCurrentYear() {
+  return new Date().getFullYear()
+}
+
+function getSuggestedNextYear(periods: Period[]) {
+  if (periods.length === 0) {
+    return getCurrentYear()
+  }
+
+  return Math.max(...periods.map((period) => period.year)) + 1
+}
+
+async function createMissingPeriodsForYear({
+  financialPlanId,
+  year,
+  periods,
+}: {
+  financialPlanId: string
+  year: number
+  periods: Period[]
+}) {
+  const existingMonths = new Set(
+    periods
+      .filter((period) => period.year === year)
+      .map((period) => period.month)
+  )
+  const missingMonths = Array.from(
+    { length: 12 },
+    (_, index) => index + 1
+  ).filter((month) => !existingMonths.has(month))
+
+  if (missingMonths.length === 0) {
+    return 0
+  }
+
+  await Promise.all(
+    missingMonths.map((month) =>
+      periodService.create({
+        month,
+        year,
+        financialPlanId,
+      })
+    )
+  )
+
+  return missingMonths.length
+}
+
 export function usePlans() {
   const isAuthenticated = Boolean(useAuthStore((state) => state.user?.id))
   return useQuery({
@@ -119,7 +171,10 @@ export function useCreditCards() {
   const selectedPlanId = useDashboardStore((state) => state.selectedPlanId)
   const userId = useAuthStore((state) => state.user?.id)
   const activePlan = useMemo(
-    () => (userId ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null : null),
+    () =>
+      userId
+        ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null
+        : null,
     [plans, selectedPlanId, userId]
   )
 
@@ -150,18 +205,25 @@ export function useDashboard() {
   const selectedStartPeriodId = useDashboardStore(
     (state) => state.selectedStartPeriodId
   )
-  const selectedEndPeriodId = useDashboardStore((state) => state.selectedEndPeriodId)
+  const selectedEndPeriodId = useDashboardStore(
+    (state) => state.selectedEndPeriodId
+  )
   const legacySelectedPeriodIds = useDashboardStore(
     (state) => state.selectedPeriodIds
   )
-  const setSelectedPlanId = useDashboardStore((state) => state.setSelectedPlanId)
+  const setSelectedPlanId = useDashboardStore(
+    (state) => state.setSelectedPlanId
+  )
   const setSelectedPeriodRange = useDashboardStore(
     (state) => state.setSelectedPeriodRange
   )
   const clearSelections = useDashboardStore((state) => state.clearSelections)
 
   const activePlan = useMemo(
-    () => (isAuthenticated ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null : null),
+    () =>
+      isAuthenticated
+        ? plans.find((plan) => plan.id === selectedPlanId) || plans[0] || null
+        : null,
     [isAuthenticated, plans, selectedPlanId]
   )
 
@@ -195,7 +257,13 @@ export function useDashboard() {
     if (activePlan.id !== selectedPlanId) {
       setSelectedPlanId(activePlan.id)
     }
-  }, [activePlan, isAuthenticated, plansLoading, selectedPlanId, setSelectedPlanId])
+  }, [
+    activePlan,
+    isAuthenticated,
+    plansLoading,
+    selectedPlanId,
+    setSelectedPlanId,
+  ])
 
   const {
     data: periods = [],
@@ -214,10 +282,7 @@ export function useDashboard() {
     }
 
     if (sortedPeriods.length === 0) {
-      if (
-        selectedStartPeriodId !== null ||
-        selectedEndPeriodId !== null
-      ) {
+      if (selectedStartPeriodId !== null || selectedEndPeriodId !== null) {
         setSelectedPeriodRange(EMPTY_PERIOD_RANGE)
       }
       return
@@ -371,24 +436,17 @@ export function useDashboard() {
   const responsibleOptions = useMemo<ResponsibleOption[]>(() => {
     return participants.map((participant) => ({
       id: participant.userId,
-      label: participant.name || (participant.role === "OWNER" ? "Owner" : "Parceiro"),
+      label:
+        participant.name ||
+        (participant.role === "OWNER" ? "Owner" : "Parceiro"),
     }))
   }, [participants])
-
-  const categorySpendingQueries = useQueries({
-    queries: selectedPeriods.map((period) => ({
-      queryKey: financeKeys.categoryReport(period.id),
-      queryFn: () => reportService.getSpendingByCategory(period.id),
-      enabled: Boolean(period.id),
-      staleTime: 1000 * 60 * 5,
-      placeholderData: [],
-    })),
-  })
 
   const periodPanels = useMemo(
     () =>
       selectedPeriods.map((period, index) => {
-        const transactions = (transactionQueries[index]?.data ?? []) as Transaction[]
+        const transactions = (transactionQueries[index]?.data ??
+          []) as Transaction[]
         const invoices = (invoiceQueries[index]?.data ?? []) as Array<{
           id: string
           amount: number | string
@@ -430,29 +488,65 @@ export function useDashboard() {
 
   const categorySpending = useMemo(() => {
     const totals = new Map<string, number>()
-    categorySpendingQueries.forEach((query) => {
-      const items = query.data ?? []
-      items.forEach((item) => {
-        const label = item.category || "Sem categoria"
-        totals.set(label, (totals.get(label) ?? 0) + Number(item.totalAmount || 0))
-      })
+
+    periodPanels.forEach((panel) => {
+      panel.transactions
+        .filter(
+          (transaction) =>
+            transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
+        )
+        .forEach((transaction) => {
+          const label = transaction.category?.name || "Sem categoria"
+          totals.set(
+            label,
+            (totals.get(label) ?? 0) + Number(transaction.amount || 0)
+          )
+        })
     })
+
+    const creditCardInvoicesTotal = periodPanels.reduce(
+      (total, panel) =>
+        total +
+        panel.invoices.reduce(
+          (invoiceTotal, invoice) => invoiceTotal + Number(invoice.amount || 0),
+          0
+        ),
+      0
+    )
+
+    if (creditCardInvoicesTotal > 0) {
+      totals.set(
+        "Cartão de Crédito",
+        (totals.get("Cartão de Crédito") ?? 0) + creditCardInvoicesTotal
+      )
+    }
+
     return [...totals.entries()]
       .map(([category, totalAmount]) => ({ category, totalAmount }))
       .sort((a, b) => b.totalAmount - a.totalAmount)
-  }, [categorySpendingQueries])
+  }, [periodPanels])
 
   const allTransactions = useMemo(
     () => periodPanels.flatMap((panel) => panel.transactions),
     [periodPanels]
   )
 
-  const comparisonData = useMemo(() => buildComparisonChartData(periodPanels), [periodPanels])
-  const variation = useMemo(() => computeVariation(comparisonData), [comparisonData])
-  const { data: creditCards = [] } = useQuery(financeQueries.planCards(activePlan))
+  const comparisonData = useMemo(
+    () => buildComparisonChartData(periodPanels),
+    [periodPanels]
+  )
+  const variation = useMemo(
+    () => computeVariation(comparisonData),
+    [comparisonData]
+  )
+  const { data: creditCards = [] } = useQuery(
+    financeQueries.planCards(activePlan)
+  )
   const { data: ownCreditCards = [] } = useOwnCreditCards()
   const { data: transactionCategories = [] } = useTransactionCategories()
-  const isPlanOwner = Boolean(activePlan?.ownerId && user?.id && activePlan.ownerId === user.id)
+  const isPlanOwner = Boolean(
+    activePlan?.ownerId && user?.id && activePlan.ownerId === user.id
+  )
 
   return {
     plans,
@@ -486,7 +580,8 @@ export function useDashboard() {
         categorySpending,
         filteredTransactions: allTransactions.filter(
           (transaction) =>
-            !responsibleFilter || transaction.responsibleUserId === responsibleFilter
+            !responsibleFilter ||
+            transaction.responsibleUserId === responsibleFilter
         ),
         responsibleFilter,
       }),
@@ -513,10 +608,16 @@ export function useProfileSettings() {
     profileMutation,
     passwordMutation,
     profileError: profileMutation.error
-      ? getErrorMessage(profileMutation.error, "Não foi possível atualizar o perfil.")
+      ? getErrorMessage(
+          profileMutation.error,
+          "Não foi possível atualizar o perfil."
+        )
       : null,
     passwordError: passwordMutation.error
-      ? getErrorMessage(passwordMutation.error, "Não foi possível atualizar a senha.")
+      ? getErrorMessage(
+          passwordMutation.error,
+          "Não foi possível atualizar a senha."
+        )
       : null,
   }
 }
@@ -589,13 +690,19 @@ export function useInvoiceManager({
   })
 
   const resolvedForm = useMemo(() => {
-    const hasCurrentCard = creditCards.some((card) => card.id === form.creditCardId)
-    const hasCurrentPeriod = periods.some((period) => period.id === form.periodId)
+    const hasCurrentCard = creditCards.some(
+      (card) => card.id === form.creditCardId
+    )
+    const hasCurrentPeriod = periods.some(
+      (period) => period.id === form.periodId
+    )
     const preferredPeriodId = selectedPeriodIds[0] || periods[0]?.id || ""
 
     return {
       ...form,
-      creditCardId: hasCurrentCard ? form.creditCardId : creditCards[0]?.id || "",
+      creditCardId: hasCurrentCard
+        ? form.creditCardId
+        : creditCards[0]?.id || "",
       periodId: hasCurrentPeriod ? form.periodId : preferredPeriodId,
     }
   }, [creditCards, form, periods, selectedPeriodIds])
@@ -653,33 +760,38 @@ export function usePeriodInvoiceManager({
   })
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [editingAmount, setEditingAmount] = useState("")
+  const resolvedCreateForm = useMemo(() => {
+    const hasCurrentCard = creditCards.some(
+      (card) => card.id === createForm.creditCardId
+    )
 
-  useEffect(() => {
-    setCreateForm((current) => ({
-      ...current,
-      creditCardId: creditCards.some((card) => card.id === current.creditCardId)
-        ? current.creditCardId
+    return {
+      ...createForm,
+      creditCardId: hasCurrentCard
+        ? createForm.creditCardId
         : creditCards[0]?.id || "",
-    }))
-  }, [creditCards])
+    }
+  }, [createForm, creditCards])
 
   const invalidatePeriodInvoices = async () => {
-    await queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoices(periodId) })
+    await queryClient.invalidateQueries({
+      queryKey: financeKeys.periodInvoices(periodId),
+    })
   }
 
   const createInvoice = useMutation({
     mutationFn: async () => {
-      if (!createForm.creditCardId) {
+      if (!resolvedCreateForm.creditCardId) {
         throw new Error("Selecione um cartão.")
       }
 
-      const amountNumber = parseCurrencyInput(createForm.amount)
+      const amountNumber = parseCurrencyInput(resolvedCreateForm.amount)
       if (Number.isNaN(amountNumber) || amountNumber <= 0) {
         throw new Error("Informe um valor válido.")
       }
 
       return invoiceService.create({
-        creditCardId: createForm.creditCardId,
+        creditCardId: resolvedCreateForm.creditCardId,
         periodId,
         amount: amountNumber,
       })
@@ -749,7 +861,7 @@ export function usePeriodInvoiceManager({
 
   return {
     isCreateOpen,
-    createForm,
+    createForm: resolvedCreateForm,
     setCreateForm,
     startCreate,
     cancelCreate,
@@ -764,7 +876,10 @@ export function usePeriodInvoiceManager({
       ? getErrorMessage(createInvoice.error, "Não foi possível criar a fatura.")
       : null,
     updateErrorMessage: updateInvoice.error
-      ? getErrorMessage(updateInvoice.error, "Não foi possível atualizar a fatura.")
+      ? getErrorMessage(
+          updateInvoice.error,
+          "Não foi possível atualizar a fatura."
+        )
       : null,
   }
 }
@@ -779,16 +894,8 @@ export function usePlanManager({
   onSelectPlanId: (id: string | null) => void
 }) {
   const queryClient = useQueryClient()
-  const currentYear = new Date().getFullYear()
   const [draft, setDraft] = useState("")
   const [mode, setMode] = useState<"create" | "edit">("create")
-  const [createYearPeriods, setCreateYearPeriods] = useState(false)
-  const [periodsYear, setPeriodsYear] = useState(currentYear)
-
-  const resetCreateOptions = () => {
-    setCreateYearPeriods(false)
-    setPeriodsYear(currentYear)
-  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -809,21 +916,11 @@ export function usePlanManager({
 
       const createdPlan = await planService.create({ name })
 
-      if (createYearPeriods) {
-        if (!Number.isInteger(periodsYear) || periodsYear < 2000) {
-          throw new Error("Informe um ano válido para criar os períodos.")
-        }
-
-        await Promise.all(
-          Array.from({ length: 12 }, (_, index) =>
-            periodService.create({
-              month: index + 1,
-              year: periodsYear,
-              financialPlanId: createdPlan.id,
-            })
-          )
-        )
-      }
+      await createMissingPeriodsForYear({
+        financialPlanId: createdPlan.id,
+        year: getCurrentYear(),
+        periods: [],
+      })
 
       return createdPlan
     },
@@ -831,7 +928,9 @@ export function usePlanManager({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
         response?.id
-          ? queryClient.invalidateQueries({ queryKey: financeKeys.periods(response.id) })
+          ? queryClient.invalidateQueries({
+              queryKey: financeKeys.periods(response.id),
+            })
           : Promise.resolve(),
       ])
       if (response?.id) {
@@ -839,28 +938,21 @@ export function usePlanManager({
       }
       setMode("create")
       setDraft("")
-      resetCreateOptions()
     },
   })
 
   return {
-    createYearPeriods,
     draft,
     mode,
-    periodsYear,
     setDraft,
-    setCreateYearPeriods,
-    setPeriodsYear,
     saveMutation,
     startCreate: () => {
       setMode("create")
       setDraft("")
-      resetCreateOptions()
     },
     startEdit: () => {
       setMode("edit")
       setDraft(activePlan?.name || "")
-      resetCreateOptions()
     },
     errorMessage: saveMutation.error
       ? getErrorMessage(saveMutation.error, "Não foi possível salvar o plano.")
@@ -868,10 +960,164 @@ export function usePlanManager({
   }
 }
 
+export function usePlanYearManager(activePlan: Plan | null, periods: Period[]) {
+  const queryClient = useQueryClient()
+  const activePlanId = activePlan?.id ?? null
+  const suggestedYear = useMemo(() => getSuggestedNextYear(periods), [periods])
+  // Keep the year draft keyed by plan id so changing plans resets the visible
+  // value without triggering a setState from inside an effect. Do not
+  // reintroduce this with useEffect(setState), because it causes cascading
+  // renders and trips the React lint rule.
+  const [draftYearState, setDraftYearState] = useState(() => ({
+    planId: activePlanId,
+    value: suggestedYear,
+  }))
+  const draftYear =
+    draftYearState.planId === activePlanId
+      ? draftYearState.value
+      : suggestedYear
+  const setDraftYear = (value: number) =>
+    setDraftYearState({
+      planId: activePlanId,
+      value,
+    })
+
+  const addYearMutation = useMutation({
+    mutationFn: async () => {
+      if (!activePlan?.id) {
+        throw new Error("Selecione um plano antes de adicionar um ano.")
+      }
+
+      const year = Number(draftYear)
+      if (!Number.isInteger(year) || year < 2000) {
+        throw new Error("Informe um ano válido.")
+      }
+
+      const createdCount = await createMissingPeriodsForYear({
+        financialPlanId: activePlan.id,
+        year,
+        periods,
+      })
+
+      if (createdCount === 0) {
+        throw new Error(`O ano ${year} já possui todos os 12 meses.`)
+      }
+
+      return { year, createdCount }
+    },
+    onSuccess: async ({ year }) => {
+      setDraftYearState({
+        planId: activePlanId,
+        value: year + 1,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: financeKeys.periods(activePlan?.id),
+      })
+    },
+  })
+  const deleteYearMutation = useMutation({
+    mutationFn: async (year: number) => {
+      if (!activePlan?.id) {
+        throw new Error("Selecione um plano antes de excluir um ano.")
+      }
+
+      const periodsForYear = periods.filter((period) => period.year === year)
+      if (periodsForYear.length === 0) {
+        throw new Error(`O ano ${year} não existe neste plano.`)
+      }
+
+      await Promise.all(
+        periodsForYear.map((period) => periodService.delete(period.id))
+      )
+
+      return { year }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: financeKeys.periods(activePlan?.id),
+      })
+    },
+  })
+
+  return {
+    draftYear,
+    setDraftYear,
+    suggestedYear,
+    addYearMutation,
+    deleteYearMutation,
+    errorMessage: addYearMutation.error
+      ? getErrorMessage(
+          addYearMutation.error,
+          "Não foi possível adicionar o ano ao plano."
+        )
+      : null,
+    deleteYearErrorMessage: deleteYearMutation.error
+      ? getErrorMessage(
+          deleteYearMutation.error,
+          "Não foi possível excluir o ano do plano."
+        )
+      : null,
+    resetDraft: () =>
+      setDraftYearState({
+        planId: activePlanId,
+        value: getSuggestedNextYear(periods),
+      }),
+  }
+}
+
+export function usePlanDeleteManager({
+  activePlan,
+  plans,
+  onSelectPlanId,
+}: {
+  activePlan: Plan | null
+  plans: Plan[]
+  onSelectPlanId: (id: string | null) => void
+}) {
+  const queryClient = useQueryClient()
+
+  const deletePlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!activePlan?.id) {
+        throw new Error("Selecione um plano antes de excluir.")
+      }
+
+      await planService.delete(activePlan.id)
+      return activePlan.id
+    },
+    onSuccess: async (deletedPlanId) => {
+      const nextPlanId =
+        plans.find((plan) => plan.id !== deletedPlanId)?.id ?? null
+
+      onSelectPlanId(nextPlanId)
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
+        queryClient.invalidateQueries({
+          queryKey: financeKeys.periods(deletedPlanId),
+        }),
+      ])
+    },
+  })
+
+  return {
+    deletePlanMutation,
+    errorMessage: deletePlanMutation.error
+      ? getErrorMessage(
+          deletePlanMutation.error,
+          "Não foi possível excluir o plano."
+        )
+      : null,
+  }
+}
+
 export function usePeriodsManager(activePlan: Plan | null) {
   const queryClient = useQueryClient()
   const currentYear = new Date().getFullYear()
-  const [draft, setDraft] = useState({ month: new Date().getMonth() + 1, year: currentYear })
+  const [draft, setDraft] = useState({
+    month: new Date().getMonth() + 1,
+    year: currentYear,
+  })
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -886,7 +1132,9 @@ export function usePeriodsManager(activePlan: Plan | null) {
       })
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: financeKeys.periods(activePlan?.id) })
+      await queryClient.invalidateQueries({
+        queryKey: financeKeys.periods(activePlan?.id),
+      })
     },
   })
 
@@ -895,7 +1143,10 @@ export function usePeriodsManager(activePlan: Plan | null) {
     setDraft,
     saveMutation,
     errorMessage: saveMutation.error
-      ? getErrorMessage(saveMutation.error, "Não foi possível salvar o período.")
+      ? getErrorMessage(
+          saveMutation.error,
+          "Não foi possível salvar o período."
+        )
       : null,
   }
 }
@@ -918,8 +1169,12 @@ export function usePlanCollaborationManager({
   const invalidatePlanCollaboration = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
-      queryClient.invalidateQueries({ queryKey: financeKeys.participants(activePlan?.id) }),
-      queryClient.invalidateQueries({ queryKey: financeKeys.inviteLink(activePlan?.id) }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.participants(activePlan?.id),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.inviteLink(activePlan?.id),
+      }),
     ])
   }
 
@@ -963,11 +1218,20 @@ export function usePlanCollaborationManager({
     revokeInviteLink,
     removeParticipant,
     inviteErrorMessage: rotateInviteLink.error
-      ? getErrorMessage(rotateInviteLink.error, "NÃ£o foi possÃ­vel gerar o link de convite.")
+      ? getErrorMessage(
+          rotateInviteLink.error,
+          "NÃ£o foi possÃ­vel gerar o link de convite."
+        )
       : revokeInviteLink.error
-        ? getErrorMessage(revokeInviteLink.error, "NÃ£o foi possÃ­vel revogar o link de convite.")
+        ? getErrorMessage(
+            revokeInviteLink.error,
+            "NÃ£o foi possÃ­vel revogar o link de convite."
+          )
         : removeParticipant.error
-          ? getErrorMessage(removeParticipant.error, "NÃ£o foi possÃ­vel remover o participante.")
+          ? getErrorMessage(
+              removeParticipant.error,
+              "NÃ£o foi possÃ­vel remover o participante."
+            )
           : null,
   }
 }
@@ -996,19 +1260,31 @@ export function useCategoryManager() {
     setDraft,
     createMutation,
     errorMessage: createMutation.error
-      ? getErrorMessage(createMutation.error, "Não foi possível salvar a categoria.")
+      ? getErrorMessage(
+          createMutation.error,
+          "Não foi possível salvar a categoria."
+        )
       : null,
   }
 }
 
-export function useTransactionMutations(periodId: string, periods: Period[] = []) {
+export function useTransactionMutations(
+  periodId: string,
+  periods: Period[] = []
+) {
   const queryClient = useQueryClient()
 
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactions(periodId) }),
-      queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoices(periodId) }),
-      queryClient.invalidateQueries({ queryKey: financeKeys.categoryReport(periodId) }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.periodTransactions(periodId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.periodInvoices(periodId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.categoryReport(periodId),
+      }),
       queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
     ])
   }
@@ -1022,9 +1298,15 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
     mutationFn: transactionService.createRecurring,
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactionsRoot }),
-        queryClient.invalidateQueries({ queryKey: ["report-spending-by-category"] }),
-        queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoices(periodId) }),
+        queryClient.invalidateQueries({
+          queryKey: financeKeys.periodTransactionsRoot,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["report-spending-by-category"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: financeKeys.periodInvoices(periodId),
+        }),
         queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
       ])
     },
@@ -1054,10 +1336,14 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
 
       const recurringTransactions = transactionsByPeriod
         .flat()
-        .filter((transaction) => transaction.recurringGroupId === recurringGroupId)
+        .filter(
+          (transaction) => transaction.recurringGroupId === recurringGroupId
+        )
 
       if (recurringTransactions.length === 0) {
-        throw new Error("Nenhuma transação recorrente encontrada para este grupo.")
+        throw new Error(
+          "Nenhuma transação recorrente encontrada para este grupo."
+        )
       }
 
       await Promise.all(
@@ -1070,8 +1356,12 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactionsRoot }),
-        queryClient.invalidateQueries({ queryKey: ["report-spending-by-category"] }),
+        queryClient.invalidateQueries({
+          queryKey: financeKeys.periodTransactionsRoot,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["report-spending-by-category"],
+        }),
         queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
       ])
     },
@@ -1092,7 +1382,8 @@ export function useTransactionMutations(periodId: string, periods: Period[] = []
 
 export function useTransactionLinking(activePeriodId: string) {
   const queryClient = useQueryClient()
-  const [paymentModalEntry, setPaymentModalEntry] = useState<Transaction | null>(null)
+  const [paymentModalEntry, setPaymentModalEntry] =
+    useState<Transaction | null>(null)
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("")
 
   const closePaymentModal = () => {
@@ -1149,7 +1440,10 @@ export function useTransactionLinking(activePeriodId: string) {
     linkTransactionToInvoice,
     unlinkTransactionFromInvoice,
     linkTransactionError: linkTransactionToInvoice.error
-      ? getErrorMessage(linkTransactionToInvoice.error, "Não foi possível vincular a transação.")
+      ? getErrorMessage(
+          linkTransactionToInvoice.error,
+          "Não foi possível vincular a transação."
+        )
       : null,
   }
 }

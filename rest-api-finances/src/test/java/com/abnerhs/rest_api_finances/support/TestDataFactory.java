@@ -27,6 +27,7 @@ import com.abnerhs.rest_api_finances.dto.UserRequestDTO;
 import com.abnerhs.rest_api_finances.dto.UserResponseDTO;
 import com.abnerhs.rest_api_finances.dto.UserUpdateDTO;
 import com.abnerhs.rest_api_finances.model.User;
+import com.abnerhs.rest_api_finances.model.enums.AuthProvider;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
@@ -67,7 +68,7 @@ public final class TestDataFactory {
     }
 
     public static UserResponseDTO userResponse() {
-        return new UserResponseDTO(uuid("00000000-0000-0000-0000-000000000001"), "John", "john@example.com");
+        return new UserResponseDTO(uuid("00000000-0000-0000-0000-000000000001"), "John", "john@example.com", AuthProvider.LOCAL);
     }
 
     public static RegisterRequestDTO registerRequest() {
