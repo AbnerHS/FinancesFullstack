@@ -4,5 +4,14 @@ services:
       - "3306:3306"
 
   spring-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: build
+    command: mvn -B spring-boot:run
+    volumes:
+      - .:/app
+      - ${USERPROFILE}\.m2:/root/.m2
     ports:
       - "8080:8080"
+      - "5005:5005"
