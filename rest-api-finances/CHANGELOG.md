@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.1](https://github.com/AbnerHS/FinancesFullstack/compare/v0.2.0...v0.2.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* prevent revalidate CI on release ([#19](https://github.com/AbnerHS/FinancesFullstack/issues/19)) ([2a3f005](https://github.com/AbnerHS/FinancesFullstack/commit/2a3f0050972fed0be042a498c61adf412220f7c5))
+
+## [0.2.0](https://github.com/AbnerHS/FinancesFullstack/compare/v0.1.0...v0.2.0) (2026-03-25)
+
+
+### Features
+
+* add payment tracking fields to transactions ([#16](https://github.com/AbnerHS/FinancesFullstack/issues/16)) ([d89fdca](https://github.com/AbnerHS/FinancesFullstack/commit/d89fdca1834a4033809f67d87574550cfc2019f0))
+
 ## [0.1.0](https://github.com/AbnerHS/FinancesFullstack/compare/v0.0.1...v0.1.0) (2026-03-25)
 
 
