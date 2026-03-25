@@ -20,6 +20,7 @@ import { CSS } from "@dnd-kit/utilities"
 import {
   ArrowRight,
   CheckCircle2,
+  Clock3,
   GripVertical,
   Pencil,
   Plus,
@@ -30,26 +31,25 @@ import {
   TrendingUp,
   X,
 } from "lucide-react"
-import { useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
-import { Combobox } from "@/components/ui/combobox.tsx"
 import {
   ConfirmationDialog,
   type ConfirmationDialogState,
 } from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
-import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
-import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import {
   usePeriodInvoiceManager,
   useTransactionLinking,
   useTransactionMutations,
 } from "@/features/finance/hooks.ts"
+import { TransactionComposer } from "@/features/finance/transaction-composer.tsx"
 import {
   buildTransactionGroups,
   useTransactionReorder,
@@ -57,6 +57,7 @@ import {
 import type {
   CreditCard,
   Invoice,
+  PaymentStatus,
   Period,
   ResponsibleOption,
   Transaction,
@@ -65,6 +66,9 @@ import type {
 } from "@/features/finance/types.ts"
 import {
   formatCurrency,
+  formatDateOnly,
+  formatDateTime,
+  getTransactionDueAlert,
   parseCurrencyInput,
   toneForBalance,
 } from "@/features/finance/utils.ts"
@@ -93,6 +97,7 @@ type TransactionRowProps = {
   transaction: Transaction
   isDragOver: boolean
   reorderPending: boolean
+  onOpenDetails: (transaction: Transaction) => void
   onLink: (transaction: Transaction) => void
   onEdit: (transaction: Transaction) => void
   onDelete: (transaction: Transaction) => void
@@ -109,47 +114,100 @@ const emptyForm = (periodId: string): TransactionFormValues => ({
   isRecurring: false,
   numberOfPeriods: 2,
   recurringGroupId: null,
+  hasDueDate: false,
+  dueDate: "",
+  isPaid: false,
+  paymentDate: "",
 })
 
 function TransactionRowContent({
   transaction,
   dragHandle,
+  onOpenDetails,
   onLink,
   onEdit,
   onDelete,
 }: {
   transaction: Transaction
   dragHandle: React.ReactNode
+  onOpenDetails?: (transaction: Transaction) => void
   onLink?: (transaction: Transaction) => void
   onEdit?: (transaction: Transaction) => void
   onDelete?: (transaction: Transaction) => void
 }) {
+  const dueAlert = getTransactionDueAlert(transaction)
+  const dueAlertBadge =
+    dueAlert === "overdue"
+      ? {
+        label: "Vencida",
+        className:
+          "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+      }
+      : dueAlert === "dueSoon"
+        ? {
+          label: "Vence em breve",
+          className:
+            "border-orange-500/40 bg-orange-500/12 text-orange-700 dark:text-orange-300",
+        }
+        : null
+
   return (
     <>
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {dragHandle}
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-foreground">
-            {transaction.description}{" "}
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-              {transaction.category?.name || "Sem categoria"}
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-1">
+            <button
+              type="button"
+              className="max-w-full cursor-pointer truncate text-left font-semibold text-foreground transition hover:text-primary"
+              onClick={
+                onOpenDetails
+                  ? () => onOpenDetails(transaction)
+                  : undefined
+              }
+            >
+              {transaction.description}
+            </button>
+            <span className="flex items-center gap-1">
+
+              {transaction.recurringGroupId ? (
+                <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
+                  Recorrente
+                </span>
+              ) : null}
+              {dueAlertBadge ? (
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase ${dueAlertBadge.className}`}
+                >
+                  {dueAlertBadge.label}
+                </span>
+              ) : null}
+              {transaction.type === "EXPENSE" &&
+                transaction.paymentStatus !== "PAID" &&
+                transaction.dueDate ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+                  <Clock3 size={12} />
+                  {`Vence ${formatDateOnly(transaction.dueDate)}`}
+                </span>
+              ) : null}
+              {transaction.type === "EXPENSE" &&
+                transaction.paymentStatus === "PAID" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 size={12} />
+                  Pago
+                </span>
+              ) : null}
             </span>
-            {transaction.recurringGroupId ? (
-              <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
-                Recorrente
-              </span>
-            ) : null}
-          </p>
+          </div>
         </div>
       </div>
 
       <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
         <span
-          className={`text-sm font-semibold ${
-            transaction.type === "REVENUE"
-              ? "text-emerald-500 dark:text-emerald-400"
-              : "text-rose-500 dark:text-rose-400"
-          }`}
+          className={`text-sm font-semibold ${transaction.type === "REVENUE"
+            ? "text-emerald-500 dark:text-emerald-400"
+            : "text-rose-500 dark:text-rose-400"
+            }`}
         >
           {formatCurrency(transaction.amount)}
         </span>
@@ -221,6 +279,7 @@ function SortableTransactionRow({
   transaction,
   isDragOver,
   reorderPending,
+  onOpenDetails,
   onLink,
   onEdit,
   onDelete,
@@ -245,13 +304,16 @@ function SortableTransactionRow({
         transform: CSS.Transform.toString(transform),
         transition: isDragging ? undefined : transition,
       }}
-      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
-        isDragging
-          ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
-          : isDragOver
-            ? "border-primary ring-2 ring-primary/15"
-            : "border-border"
-      }`}
+      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${isDragging
+        ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
+        : getTransactionDueAlert(transaction) === "overdue"
+          ? "border-amber-500/60 bg-amber-500/[0.05] shadow-[0_14px_30px_rgba(245,158,11,0.10)]"
+          : getTransactionDueAlert(transaction) === "dueSoon"
+            ? "border-orange-400/50 bg-orange-500/[0.04]"
+            : isDragOver
+              ? "border-primary ring-2 ring-primary/15"
+              : "border-border"
+        }`}
     >
       <TransactionRowContent
         transaction={transaction}
@@ -263,6 +325,7 @@ function SortableTransactionRow({
             disabled={reorderPending}
           />
         }
+        onOpenDetails={onOpenDetails}
         onLink={onLink}
         onEdit={onEdit}
         onDelete={onDelete}
@@ -271,16 +334,119 @@ function SortableTransactionRow({
   )
 }
 
+function TransactionDetailsModal({
+  transaction,
+  periodLabel,
+  responsibleOptions,
+  onClose,
+}: {
+  transaction: Transaction | null
+  periodLabel: string
+  responsibleOptions: ResponsibleOption[]
+  onClose: () => void
+}) {
+  if (!transaction) {
+    return null
+  }
+
+  const responsibleLabel =
+    responsibleOptions.find(
+      (option) => option.id === transaction.responsibleUserId
+    )?.label ?? "Geral"
+
+  const details = [
+    { label: "Período", value: periodLabel },
+    { label: "Tipo", value: transaction.type === "REVENUE" ? "Receita" : "Despesa" },
+    {
+      label: "Categoria",
+      value: transaction.category?.name || "Sem categoria",
+    },
+    { label: "Responsável", value: responsibleLabel },
+    {
+      label: "Vencimento",
+      value: transaction.dueDate ? formatDateOnly(transaction.dueDate) : "Não informado",
+    },
+    {
+      label: "Status do pagamento",
+      value:
+        transaction.type === "EXPENSE"
+          ? transaction.paymentStatus === "PAID"
+            ? "Pago"
+            : "Pendente"
+          : "Não se aplica",
+    },
+    {
+      label: "Data de pagamento",
+      value: transaction.paymentDate
+        ? formatDateOnly(transaction.paymentDate)
+        : "Não informado",
+    },
+    {
+      label: "Lançamento",
+      value: transaction.dateTime
+        ? formatDateTime(transaction.dateTime)
+        : "Não informado",
+    },
+  ]
+
+  return createPortal(
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+      <div className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+        <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
+          <div>
+            <p className="app-eyebrow">Detalhes da transação</p>
+            <h3 className="mt-2 text-xl font-semibold text-foreground">
+              {transaction.description}
+            </h3>
+            <p className="mt-2 text-sm font-semibold text-primary">
+              {formatCurrency(transaction.amount)}
+            </p>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            <X size={16} />
+          </Button>
+        </div>
+
+        <div className="overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {details.map((detail) => (
+              <div
+                key={detail.label}
+                className="rounded-xl border border-border/70 bg-secondary/40 px-4 py-3"
+              >
+                <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                  {detail.label}
+                </p>
+                <p className="mt-2 text-sm font-medium text-foreground">
+                  {detail.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-border/70 px-4 py-4 sm:px-5">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 export function TransactionsWorkspace({
   panel,
   shared,
 }: TransactionWorkspaceProps) {
-  const composerRef = useRef<HTMLDivElement | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [form, setForm] = useState<TransactionFormValues>(() =>
     emptyForm(panel.period.id)
   )
   const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null)
+  const [detailsTransaction, setDetailsTransaction] =
     useState<Transaction | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
   const [formError, setFormError] = useState<string | null>(null)
@@ -373,47 +539,13 @@ export function TransactionsWorkspace({
     setForm(emptyForm(panel.period.id))
   }
 
-  const isMobileTransactionsViewport = () =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 1279px)").matches
-
-  const openComposerOnMobile = () => {
-    if (!isMobileTransactionsViewport()) {
-      return
-    }
-
+  const startCreateTransaction = () => {
+    resetComposer()
     setIsComposerOpen(true)
   }
 
-  const closeComposerOnMobile = () => {
-    if (!isMobileTransactionsViewport()) {
-      return
-    }
-
-    setIsComposerOpen(false)
-  }
-
-  const scrollToComposerOnMobile = () => {
-    if (!isMobileTransactionsViewport()) {
-      return
-    }
-
-    window.requestAnimationFrame(() => {
-      composerRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      })
-    })
-  }
-
-  const startCreateTransaction = () => {
-    resetComposer()
-    openComposerOnMobile()
-    scrollToComposerOnMobile()
-  }
-
   const startEditing = (transaction: Transaction) => {
-    openComposerOnMobile()
+    setIsComposerOpen(true)
     setEditingTransaction(transaction)
     setEditingScope("SINGLE")
     setForm({
@@ -432,8 +564,15 @@ export function TransactionsWorkspace({
       isRecurring: false,
       numberOfPeriods: 2,
       recurringGroupId: transaction.recurringGroupId || null,
+      hasDueDate: Boolean(
+        transaction.dueDate ||
+        transaction.paymentDate ||
+        transaction.paymentStatus === "PAID"
+      ),
+      dueDate: transaction.dueDate || "",
+      isPaid: transaction.paymentStatus === "PAID",
+      paymentDate: transaction.paymentDate || "",
     })
-    scrollToComposerOnMobile()
   }
 
   const submit = async () => {
@@ -446,8 +585,22 @@ export function TransactionsWorkspace({
       throw new Error("Informe um valor válido.")
     }
 
+    if (form.type === "EXPENSE" && form.hasDueDate && !form.dueDate) {
+      throw new Error("Informe a data de vencimento.")
+    }
+
     const categoryName = form.categoryName.trim()
-    const payload = {
+    const payload: {
+      description: string
+      amount: number
+      type: Transaction["type"]
+      periodId: string
+      responsibleUserId: string | null
+      category: { id?: string; name?: string } | null
+      dueDate?: string | null
+      paymentDate?: string | null
+      paymentStatus?: PaymentStatus | null
+    } = {
       description: form.description.trim(),
       amount,
       type: form.type,
@@ -458,6 +611,23 @@ export function TransactionsWorkspace({
           ? { id: form.categoryId }
           : { name: categoryName }
         : null,
+    }
+
+    if (form.type === "EXPENSE") {
+      if (form.hasDueDate && form.dueDate) {
+        payload.dueDate = form.dueDate
+        payload.paymentStatus = form.isPaid ? "PAID" : "PENDING"
+        payload.paymentDate =
+          form.isPaid && form.paymentDate ? form.paymentDate : null
+      } else {
+        payload.dueDate = null
+        payload.paymentDate = null
+        payload.paymentStatus = "PENDING"
+      }
+    } else {
+      payload.dueDate = null
+      payload.paymentDate = null
+      payload.paymentStatus = null
     }
 
     if (editingTransaction?.id) {
@@ -485,7 +655,7 @@ export function TransactionsWorkspace({
     }
 
     resetComposer()
-    closeComposerOnMobile()
+    setIsComposerOpen(false)
   }
 
   return (
@@ -495,6 +665,18 @@ export function TransactionsWorkspace({
           <p className="app-eyebrow text-[13px] font-bold text-primary">
             {panel.label}
           </p>
+          {!isComposerOpen ? (
+            <div className="mt-2">
+              <Button
+                type="button"
+                className="w-full xl:w-auto"
+                onClick={startCreateTransaction}
+              >
+                Nova Transação
+                <Plus size={16} />
+              </Button>
+            </div>
+          ) : null}
         </div>
         <div className="grid items-end gap-2 xl:grid-cols-3">
           <MetricCard
@@ -522,239 +704,41 @@ export function TransactionsWorkspace({
       </div>
 
       <div className="mt-6 space-y-5">
-        {!isComposerOpen ? (
-          <div className="xl:hidden">
-            <Button
-              type="button"
-              className="w-full"
-              onClick={startCreateTransaction}
-            >
-              Nova Transação
-              <Plus size={16} />
-            </Button>
-          </div>
-        ) : null}
 
-        <div
-          ref={composerRef}
-          className={`${isComposerOpen ? "block" : "hidden"} xl:block`}
-        >
-          <Card className="border-border bg-secondary/55 p-3 sm:p-4">
-            <form
-              className="space-y-1"
-              onSubmit={async (event) => {
-                event.preventDefault()
-                try {
-                  await submit()
-                } catch (error) {
-                  setFormError(
-                    error instanceof Error
-                      ? error.message
-                      : "Não foi possível salvar a transação."
-                  )
-                }
-              }}
-            >
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div className="space-y-2 xl:col-span-1">
-                  <Label>Descrição</Label>
-                  <Input
-                    value={form.description}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        description: event.target.value,
-                      }))
-                    }
-                    placeholder="Ex.: Supermercado"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Valor</Label>
-                  <CurrencyInput
-                    value={form.amount}
-                    onValueChange={(amount) =>
-                      setForm((current) => ({ ...current, amount }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Tipo</Label>
-                  <Select
-                    value={form.type}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        type: event.target
-                          .value as TransactionFormValues["type"],
-                      }))
-                    }
-                  >
-                    <option value="EXPENSE">Despesa</option>
-                    <option value="REVENUE">Receita</option>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Categoria</Label>
-                  <Combobox
-                    allowCustomValue
-                    options={categoryOptions}
-                    preventSubmitOnEnter
-                    selectFirstFilteredOptionOnEnter
-                    value={form.categoryName}
-                    onValueChange={(nextName, matchedCategory) =>
-                      setForm((current) => ({
-                        ...current,
-                        categoryName: nextName,
-                        categoryId: matchedCategory?.value || "",
-                      }))
-                    }
-                    placeholder="Digite para buscar ou criar"
-                  />
-                </div>
-              </div>
-
-              <div
-                className={`grid gap-3 ${
-                  editingTransaction
-                    ? "md:grid-cols-2 xl:grid-cols-3"
-                    : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_20rem_minmax(0,1fr)]"
-                }`}
-              >
-                <div className="flex flex-col gap-2">
-                  <Label>Responsável</Label>
-                  <Select
-                    value={form.responsibleUserId}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        responsibleUserId: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Geral</option>
-                    {shared.responsibleOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                {!editingTransaction ? (
-                  <div className="flex items-end">
-                    <div className="w-full rounded-xl border border-border bg-card/90 px-3">
-                      <div className="flex flex-wrap items-center gap-x-3 xl:flex-nowrap">
-                        <Label className="text-[11px] tracking-widest">
-                          Recorrente
-                        </Label>
-                        <div className="flex min-h-11 items-center">
-                          <Switch
-                            checked={form.isRecurring}
-                            onClick={() =>
-                              setForm((current) => ({
-                                ...current,
-                                isRecurring: !current.isRecurring,
-                                numberOfPeriods:
-                                  !current.isRecurring &&
-                                  current.numberOfPeriods < 2
-                                    ? 2
-                                    : current.numberOfPeriods,
-                              }))
-                            }
-                          />
-                        </div>
-                        {form.isRecurring ? (
-                          <div className="flex flex-row items-center gap-2 py-2 xl:py-0">
-                            <Label className="text-[10px] tracking-widest">
-                              Meses
-                            </Label>
-                            <Input
-                              className="h-8 w-20 xl:w-full"
-                              type="number"
-                              min={2}
-                              disabled={!form.isRecurring}
-                              value={form.numberOfPeriods}
-                              onChange={(event) =>
-                                setForm((current) => ({
-                                  ...current,
-                                  numberOfPeriods:
-                                    Number(event.target.value) || 2,
-                                }))
-                              }
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                ) : editingTransaction.recurringGroupId ? (
-                  <div>
-                    <Label>Aplicar edição</Label>
-                    <Select
-                      value={editingScope}
-                      onChange={(event) =>
-                        setEditingScope(
-                          event.target.value as "SINGLE" | "GROUP"
-                        )
-                      }
-                    >
-                      <option value="SINGLE">Somente esta transação</option>
-                      <option value="GROUP">Todas do grupo recorrente</option>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="hidden" />
-                )}
-
-                <div className="flex items-end gap-2">
-                  <Button
-                    type="submit"
-                    className="h-11 flex-1"
-                    disabled={
-                      createTransaction.isPending ||
-                      createRecurringTransaction.isPending ||
-                      updateTransaction.isPending
-                    }
-                  >
-                    {editingTransaction
-                      ? updateTransaction.isPending
-                        ? "Salvando..."
-                        : "Salvar"
-                      : form.isRecurring
-                        ? createRecurringTransaction.isPending
-                          ? "Criando..."
-                          : "Criar Recorrência"
-                        : createTransaction.isPending
-                          ? "Criando..."
-                          : "Enviar"}
-                    {editingTransaction ? (
-                      <Save size={16} />
-                    ) : (
-                      <SendHorizonal size={16} />
-                    )}
-                  </Button>
-                  {editingTransaction || isComposerOpen ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11"
-                      onClick={() => {
-                        resetComposer()
-                        closeComposerOnMobile()
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-
-              <FormError message={formError || mutationError} />
-            </form>
-          </Card>
+        <div>
+          <TransactionComposer
+            isOpen={isComposerOpen}
+            periodLabel={panel.label}
+            form={form}
+            setForm={setForm}
+            editingTransaction={editingTransaction}
+            showCancel={Boolean(editingTransaction || isComposerOpen)}
+            editingScope={editingScope}
+            setEditingScope={setEditingScope}
+            categoryOptions={categoryOptions}
+            responsibleOptions={shared.responsibleOptions}
+            formError={formError}
+            mutationError={mutationError}
+            createPending={createTransaction.isPending}
+            createRecurringPending={createRecurringTransaction.isPending}
+            updatePending={updateTransaction.isPending}
+            onSubmit={async (event) => {
+              event.preventDefault()
+              try {
+                await submit()
+              } catch (error) {
+                setFormError(
+                  error instanceof Error
+                    ? error.message
+                    : "Não foi possível salvar a transação."
+                )
+              }
+            }}
+            onCancel={() => {
+              resetComposer()
+              setIsComposerOpen(false)
+            }}
+          />
         </div>
 
         <Card className="border-border bg-secondary/40 p-3 sm:p-4">
@@ -801,6 +785,9 @@ export function TransactionsWorkspace({
                             reorder.activeId !== transaction.id
                           }
                           reorderPending={reorder.reorderPending}
+                          onOpenDetails={(entry) =>
+                            setDetailsTransaction(entry)
+                          }
                           onLink={(entry) =>
                             transactionLinking.openPaymentModal(entry)
                           }
@@ -812,6 +799,21 @@ export function TransactionsWorkspace({
                               title: "Excluir transação?",
                               onConfirm: () =>
                                 deleteTransaction.mutate(entry.id),
+                              ...(entry.recurringGroupId
+                                ? {
+                                  confirmLabel: "Excluir somente esta",
+                                  description: `A transação "${entry.description}" faz parte de uma recorrência. Você pode remover apenas este mês ou excluir todas as recorrências do grupo.`,
+                                  title: "Excluir transação recorrente?",
+                                  secondaryConfirmLabel: "Excluir todas",
+                                  onSecondaryConfirm: () =>
+                                    deleteTransaction.mutate({
+                                      id: entry.id,
+                                      recurringGroupId:
+                                        entry.recurringGroupId,
+                                      deleteScope: "GROUP",
+                                    }),
+                                }
+                                : {}),
                             })
                           }
                         />
@@ -826,6 +828,12 @@ export function TransactionsWorkspace({
         <ConfirmationDialog
           onClose={() => setConfirmationDialog(null)}
           state={confirmationDialog}
+        />
+        <TransactionDetailsModal
+          transaction={detailsTransaction}
+          periodLabel={panel.label}
+          responsibleOptions={shared.responsibleOptions}
+          onClose={() => setDetailsTransaction(null)}
         />
 
         <Card className="border-border bg-secondary/40 p-4">
@@ -1012,54 +1020,56 @@ export function TransactionsWorkspace({
 
         {transactionLinking.paymentModalEntry ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-              <h3 className="text-sm font-bold tracking-wider text-foreground uppercase">
-                Vincular a fatura
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Transação:{" "}
-                <span className="font-semibold text-foreground">
+            <div className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+              <div className="border-b border-border/70 px-4 py-4 sm:px-5">
+                <p className="app-eyebrow">Fatura</p>
+                <h3 className="mt-2 text-xl font-semibold text-foreground">
+                  Vincular transação
+                </h3>
+                <p className="mt-2 text-sm font-medium text-foreground">
                   {transactionLinking.paymentModalEntry.description}
-                </span>
-              </p>
-
-              <div className="mt-4 space-y-2">
-                <Label>Fatura</Label>
-                <Select
-                  value={transactionLinking.selectedInvoiceId}
-                  onChange={(event) =>
-                    transactionLinking.setSelectedInvoiceId(event.target.value)
-                  }
-                >
-                  <option value="">Selecione a fatura</option>
-                  {panel.invoices.map((invoice) => {
-                    const card = shared.creditCards.find(
-                      (creditCard) => creditCard.id === invoice.creditCardId
-                    )
-
-                    return (
-                      <option key={invoice.id} value={invoice.id}>
-                        {card?.name || "Fatura"} -{" "}
-                        {formatCurrency(invoice.amount)}
-                      </option>
-                    )
-                  })}
-                </Select>
+                </p>
               </div>
 
-              {transactionLinking.linkTransactionError ? (
-                <p className="mt-2 text-xs text-rose-500 dark:text-rose-400">
-                  {transactionLinking.linkTransactionError}
-                </p>
-              ) : null}
+              <div className="overflow-y-auto px-4 py-4 sm:px-5">
+                <div className="space-y-2">
+                  <Label>Fatura</Label>
+                  <Select
+                    value={transactionLinking.selectedInvoiceId}
+                    onChange={(event) =>
+                      transactionLinking.setSelectedInvoiceId(event.target.value)
+                    }
+                  >
+                    <option value="">Selecione a fatura</option>
+                    {panel.invoices.map((invoice) => {
+                      const card = shared.creditCards.find(
+                        (creditCard) => creditCard.id === invoice.creditCardId
+                      )
 
-              {panel.invoices.length === 0 ? (
-                <p className="mt-2 text-xs text-amber-500 dark:text-amber-400">
-                  Nenhuma fatura disponível neste período.
-                </p>
-              ) : null}
+                      return (
+                        <option key={invoice.id} value={invoice.id}>
+                          {card?.name || "Fatura"} -{" "}
+                          {formatCurrency(invoice.amount)}
+                        </option>
+                      )
+                    })}
+                  </Select>
+                </div>
 
-              <div className="mt-5 flex justify-end gap-2">
+                {transactionLinking.linkTransactionError ? (
+                  <p className="mt-3 text-xs text-rose-500 dark:text-rose-400">
+                    {transactionLinking.linkTransactionError}
+                  </p>
+                ) : null}
+
+                {panel.invoices.length === 0 ? (
+                  <p className="mt-3 text-xs text-amber-500 dark:text-amber-400">
+                    Nenhuma fatura disponível.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 border-t border-border/70 px-4 py-4 sm:px-5">
                 {transactionLinking.paymentModalEntry.isClearedByInvoice ? (
                   <Button
                     type="button"

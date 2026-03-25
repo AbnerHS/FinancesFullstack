@@ -240,7 +240,7 @@ export function Combobox({
       </button>
 
       {shouldShowPopup ? (
-        <div className="app-field-popup absolute z-50 mt-2 min-w-full">
+        <div className="app-field-popup absolute z-[130] mt-2 min-w-full">
           <div className="max-h-72 overflow-y-auto" role="listbox">
             {filteredOptions.map((option, index) => {
               const isSelected = matchedOption?.value === option.value
