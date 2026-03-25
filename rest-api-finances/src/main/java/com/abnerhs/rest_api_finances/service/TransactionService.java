@@ -100,8 +100,7 @@ public class TransactionService {
                 day = maxDay;
             }
             transaction.setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
-            transaction.setDueDate(shiftToPeriod(transaction.getDueDate(), year, month));
-            transaction.setPaymentDate(shiftToPeriod(transaction.getPaymentDate(), year, month));
+            applyRecurringDates(transaction, year, month, i);
 
             createdTransactions.add(mapper.toDto(repository.save(transaction)));
         }
@@ -239,6 +238,17 @@ public class TransactionService {
 
         int day = Math.min(date.getDayOfMonth(), java.time.YearMonth.of(year, month).lengthOfMonth());
         return LocalDate.of(year, month, day);
+    }
+
+    private void applyRecurringDates(Transaction transaction, int year, int month, int occurrenceIndex) {
+        transaction.setDueDate(shiftToPeriod(transaction.getDueDate(), year, month));
+
+        if (occurrenceIndex == 0) {
+            return;
+        }
+
+        transaction.setPaymentDate(null);
+        transaction.setPaymentStatus(PaymentStatus.PENDING);
     }
 
     private void validateResponsibleUser(Transaction transaction) {

@@ -76,7 +76,7 @@ export function Select({
       <BaseSelect.Portal>
         <BaseSelect.Positioner
           alignItemWithTrigger={false}
-          className="z-50 outline-none"
+          className="z-[130] outline-none"
           sideOffset={8}
         >
           <BaseSelect.Popup className="app-field-popup min-w-[var(--anchor-width)]">

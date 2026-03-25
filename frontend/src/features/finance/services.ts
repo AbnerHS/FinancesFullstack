@@ -258,6 +258,9 @@ export const transactionService = {
     periodId: string
     responsibleUserId?: string | null
     category?: { id?: string; name?: string } | null
+    dueDate?: string | null
+    paymentDate?: string | null
+    paymentStatus?: "PENDING" | "PAID" | null
   }) {
     const { data } = await http.post<Transaction>("/transactions", payload)
     return data
@@ -270,6 +273,9 @@ export const transactionService = {
       periodId: string
       responsibleUserId?: string | null
       category?: { id?: string; name?: string } | null
+      dueDate?: string | null
+      paymentDate?: string | null
+      paymentStatus?: "PENDING" | "PAID" | null
     }
     numberOfPeriods: number
   }) {

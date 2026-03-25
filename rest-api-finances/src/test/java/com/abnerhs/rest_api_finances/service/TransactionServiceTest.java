@@ -261,6 +261,69 @@ class TransactionServiceTest {
     }
 
     @Test
+    void shouldShiftDueDateAcrossRecurringTransactionsAndKeepPaymentOnlyOnFirstOccurrence() {
+        UUID planId = UUID.randomUUID();
+        FinancialPlan plan = new FinancialPlan();
+        plan.setId(planId);
+
+        FinancialPeriod januaryPeriod = new FinancialPeriod();
+        januaryPeriod.setId(UUID.randomUUID());
+        januaryPeriod.setMonth(1);
+        januaryPeriod.setYear(2026);
+        januaryPeriod.setFinancialPlan(plan);
+
+        FinancialPeriod februaryPeriod = new FinancialPeriod();
+        februaryPeriod.setId(UUID.randomUUID());
+        februaryPeriod.setMonth(2);
+        februaryPeriod.setYear(2026);
+        februaryPeriod.setFinancialPlan(plan);
+
+        FinancialPeriod marchPeriod = new FinancialPeriod();
+        marchPeriod.setId(UUID.randomUUID());
+        marchPeriod.setMonth(3);
+        marchPeriod.setYear(2026);
+        marchPeriod.setFinancialPlan(plan);
+
+        TransactionRequestDTO dto = buildRequest(
+                januaryPeriod.getId(),
+                "CASA",
+                LocalDate.of(2026, 1, 31),
+                LocalDate.of(2026, 1, 10),
+                PaymentStatus.PAID
+        );
+        RecurringTransactionRequestDTO recurringRequest = new RecurringTransactionRequestDTO(dto, 3);
+
+        when(periodRepository.findById(januaryPeriod.getId())).thenReturn(Optional.of(januaryPeriod));
+        when(periodRepository.findByMonthAndYearAndFinancialPlanId(1, 2026, planId)).thenReturn(Optional.of(januaryPeriod));
+        when(periodRepository.findByMonthAndYearAndFinancialPlanId(2, 2026, planId)).thenReturn(Optional.of(februaryPeriod));
+        when(periodRepository.findByMonthAndYearAndFinancialPlanId(3, 2026, planId)).thenReturn(Optional.of(marchPeriod));
+        when(transactionCategoryRepository.findByNameIgnoreCase("CASA")).thenReturn(Optional.of(buildCategory("CASA")));
+        when(repository.findMaxOrderByPeriodId(januaryPeriod.getId())).thenReturn(0);
+        when(repository.findMaxOrderByPeriodId(februaryPeriod.getId())).thenReturn(0);
+        when(repository.findMaxOrderByPeriodId(marchPeriod.getId())).thenReturn(0);
+        when(mapper.toEntity(dto)).thenReturn(
+                buildRecurringEntity(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 1, 10), PaymentStatus.PAID),
+                buildRecurringEntity(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 1, 10), PaymentStatus.PAID),
+                buildRecurringEntity(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 1, 10), PaymentStatus.PAID)
+        );
+        when(repository.save(any(Transaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mapper.toDto(any(Transaction.class))).thenAnswer(invocation -> toResponse(invocation.getArgument(0)));
+
+        List<TransactionResponseDTO> result = service.createRecurring(recurringRequest);
+
+        assertEquals(3, result.size());
+        assertEquals(LocalDate.of(2026, 1, 31), result.get(0).dueDate());
+        assertEquals(LocalDate.of(2026, 2, 28), result.get(1).dueDate());
+        assertEquals(LocalDate.of(2026, 3, 31), result.get(2).dueDate());
+        assertEquals(LocalDate.of(2026, 1, 10), result.get(0).paymentDate());
+        assertNull(result.get(1).paymentDate());
+        assertNull(result.get(2).paymentDate());
+        assertEquals(PaymentStatus.PAID, result.get(0).paymentStatus());
+        assertEquals(PaymentStatus.PENDING, result.get(1).paymentStatus());
+        assertEquals(PaymentStatus.PENDING, result.get(2).paymentStatus());
+    }
+
+    @Test
     void shouldRejectRecurringCreationWhenInitialPeriodDoesNotExist() {
         UUID periodId = UUID.randomUUID();
         TransactionRequestDTO dto = buildRequest(periodId);
@@ -566,6 +629,30 @@ class TransactionServiceTest {
         return buildRequest(periodId, "CASA");
     }
 
+    private TransactionRequestDTO buildRequest(
+            UUID periodId,
+            String categoryName,
+            LocalDate dueDate,
+            LocalDate paymentDate,
+            PaymentStatus paymentStatus
+    ) {
+        return new TransactionRequestDTO(
+                "Salario",
+                new BigDecimal("1500.00"),
+                TransactionType.REVENUE,
+                periodId,
+                null,
+                new TransactionCategoryDTO(null, categoryName),
+                1,
+                null,
+                null,
+                false,
+                dueDate,
+                paymentDate,
+                paymentStatus
+        );
+    }
+
     private TransactionRequestDTO buildRequestWithCategoryId(UUID categoryId, String categoryName) {
         return new TransactionRequestDTO(
                 "Salario",
@@ -585,17 +672,9 @@ class TransactionServiceTest {
     }
 
     private TransactionRequestDTO buildRequest(UUID periodId, String categoryName) {
-        return new TransactionRequestDTO(
-                "Salario",
-                new BigDecimal("1500.00"),
-                TransactionType.REVENUE,
+        return buildRequest(
                 periodId,
-                null,
-                new TransactionCategoryDTO(null, categoryName),
-                1,
-                null,
-                null,
-                false,
+                categoryName,
                 LocalDate.of(2026, 3, 20),
                 LocalDate.of(2026, 3, 18),
                 PaymentStatus.PAID
@@ -645,5 +724,13 @@ class TransactionServiceTest {
                 transaction.getPaymentDate(),
                 transaction.getPaymentStatus()
         );
+    }
+
+    private Transaction buildRecurringEntity(LocalDate dueDate, LocalDate paymentDate, PaymentStatus paymentStatus) {
+        Transaction transaction = new Transaction();
+        transaction.setDueDate(dueDate);
+        transaction.setPaymentDate(paymentDate);
+        transaction.setPaymentStatus(paymentStatus);
+        return transaction;
     }
 }

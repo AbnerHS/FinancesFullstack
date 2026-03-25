@@ -64,6 +64,74 @@ function buildLegacyPeriodRange(ids: string[]) {
   }
 }
 
+function shiftIsoDateToPeriod(
+  dateValue: unknown,
+  period: Pick<Period, "month" | "year">
+) {
+  if (typeof dateValue !== "string" || !dateValue) {
+    return null
+  }
+
+  const [year, month, day] = dateValue.split("-").map(Number)
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day) ||
+    year <= 0 ||
+    month <= 0 ||
+    day <= 0
+  ) {
+    return null
+  }
+
+  const resolvedDay = Math.min(
+    day,
+    new Date(period.year, period.month, 0).getDate()
+  )
+
+  return `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}-${String(
+    resolvedDay
+  ).padStart(2, "0")}`
+}
+
+function buildRecurringGroupPayload({
+  transaction,
+  basePayload,
+  anchorDueDate,
+  period,
+  currentTransactionId,
+}: {
+  transaction: Transaction
+  basePayload: Record<string, unknown>
+  anchorDueDate: unknown
+  period: Period | undefined
+  currentTransactionId: string
+}) {
+  if (transaction.id === currentTransactionId) {
+    return basePayload
+  }
+
+  const groupPayload = { ...basePayload }
+  delete groupPayload.paymentDate
+  delete groupPayload.paymentStatus
+
+  if (!Object.prototype.hasOwnProperty.call(basePayload, "dueDate")) {
+    return groupPayload
+  }
+
+  if (anchorDueDate == null) {
+    groupPayload.dueDate = null
+    return groupPayload
+  }
+
+  if (!period) {
+    return groupPayload
+  }
+
+  groupPayload.dueDate = shiftIsoDateToPeriod(anchorDueDate, period)
+  return groupPayload
+}
+
 function normalizePeriodRange(
   range: PeriodRange,
   periods: Period[],
@@ -1192,7 +1260,7 @@ export function usePlanCollaborationManager({
   const revokeInviteLink = useMutation({
     mutationFn: async () => {
       if (!activePlan?.id) {
-        throw new Error("Plano invÃ¡lido.")
+        throw new Error("Plano inválido.")
       }
 
       await planService.revokeInviteLink(activePlan.id)
@@ -1203,7 +1271,7 @@ export function usePlanCollaborationManager({
   const removeParticipant = useMutation({
     mutationFn: async (userId: string) => {
       if (!activePlan?.id) {
-        throw new Error("Plano invÃ¡lido.")
+        throw new Error("Plano inválido.")
       }
 
       await planService.removeParticipant(activePlan.id, userId)
@@ -1220,17 +1288,17 @@ export function usePlanCollaborationManager({
     inviteErrorMessage: rotateInviteLink.error
       ? getErrorMessage(
           rotateInviteLink.error,
-          "NÃ£o foi possÃ­vel gerar o link de convite."
+          "Não foi possível gerar o link de convite."
         )
       : revokeInviteLink.error
         ? getErrorMessage(
             revokeInviteLink.error,
-            "NÃ£o foi possÃ­vel revogar o link de convite."
+            "Não foi possível revogar o link de convite."
           )
         : removeParticipant.error
           ? getErrorMessage(
               removeParticipant.error,
-              "NÃ£o foi possÃ­vel remover o participante."
+              "Não foi possível remover o participante."
             )
           : null,
   }
@@ -1334,10 +1402,16 @@ export function useTransactionMutations(
         periods.map((period) => periodService.getTransactionsByPeriod(period))
       )
 
+      const periodById = new Map(periods.map((period) => [period.id, period]))
       const recurringTransactions = transactionsByPeriod
-        .flat()
+        .flatMap((transactions, index) =>
+          transactions.map((transaction) => ({
+            period: periods[index],
+            transaction,
+          }))
+        )
         .filter(
-          (transaction) => transaction.recurringGroupId === recurringGroupId
+          ({ transaction }) => transaction.recurringGroupId === recurringGroupId
         )
 
       if (recurringTransactions.length === 0) {
@@ -1347,12 +1421,21 @@ export function useTransactionMutations(
       }
 
       await Promise.all(
-        recurringTransactions.map((transaction) =>
-          transactionService.updatePartial(transaction.id, normalizedPayload)
+        recurringTransactions.map(({ transaction, period }) =>
+          transactionService.updatePartial(
+            transaction.id,
+            buildRecurringGroupPayload({
+              transaction,
+              basePayload: normalizedPayload,
+              anchorDueDate: normalizedPayload.dueDate,
+              period: period ?? periodById.get(transaction.periodId),
+              currentTransactionId: id,
+            })
+          )
         )
       )
 
-      return recurringTransactions
+      return recurringTransactions.map(({ transaction }) => transaction)
     },
     onSuccess: async () => {
       await Promise.all([
@@ -1368,8 +1451,71 @@ export function useTransactionMutations(
   })
 
   const deleteTransaction = useMutation({
-    mutationFn: transactionService.delete,
-    onSuccess: invalidate,
+    mutationFn: async (
+      variables:
+        | string
+        | {
+            id: string
+            recurringGroupId?: string | null
+            deleteScope?: "SINGLE" | "GROUP"
+          }
+    ) => {
+      const id = typeof variables === "string" ? variables : variables.id
+      const recurringGroupId =
+        typeof variables === "string" ? null : variables.recurringGroupId
+      const deleteScope =
+        typeof variables === "string"
+          ? "SINGLE"
+          : variables.deleteScope ?? "SINGLE"
+
+      if (deleteScope !== "GROUP" || !recurringGroupId) {
+        await transactionService.delete(id)
+        return { deleteScope: "SINGLE" as const }
+      }
+
+      const transactionsByPeriod = await Promise.all(
+        periods.map((period) => periodService.getTransactionsByPeriod(period))
+      )
+
+      const recurringTransactions = transactionsByPeriod
+        .flat()
+        .filter(
+          (transaction) => transaction.recurringGroupId === recurringGroupId
+        )
+
+      if (recurringTransactions.length === 0) {
+        throw new Error(
+          "Nenhuma transação recorrente encontrada para este grupo."
+        )
+      }
+
+      await Promise.all(
+        recurringTransactions.map((transaction) =>
+          transactionService.delete(transaction.id)
+        )
+      )
+
+      return { deleteScope: "GROUP" as const }
+    },
+    onSuccess: async (result) => {
+      if (result.deleteScope === "GROUP") {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: financeKeys.periodTransactionsRoot,
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["period-invoices"],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["report-spending-by-category"],
+          }),
+          queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
+        ])
+        return
+      }
+
+      await invalidate()
+    },
   })
 
   return {
