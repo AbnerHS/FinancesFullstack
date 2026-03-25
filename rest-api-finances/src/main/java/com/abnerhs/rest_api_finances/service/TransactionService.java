@@ -12,6 +12,7 @@ import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.model.Transaction;
 import com.abnerhs.rest_api_finances.model.TransactionCategory;
 import com.abnerhs.rest_api_finances.model.User;
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,6 +100,8 @@ public class TransactionService {
                 day = maxDay;
             }
             transaction.setDateTime(LocalDateTime.of(year, month, day, now.getHour(), now.getMinute(), now.getSecond()));
+            transaction.setDueDate(shiftToPeriod(transaction.getDueDate(), year, month));
+            transaction.setPaymentDate(shiftToPeriod(transaction.getPaymentDate(), year, month));
 
             createdTransactions.add(mapper.toDto(repository.save(transaction)));
         }
@@ -168,6 +172,9 @@ public class TransactionService {
                     }
                 }
                 case "isClearedByInvoice" -> transaction.setClearedByInvoice((Boolean) value);
+                case "dueDate" -> transaction.setDueDate(value != null ? LocalDate.parse(value.toString()) : null);
+                case "paymentDate" -> transaction.setPaymentDate(value != null ? LocalDate.parse(value.toString()) : null);
+                case "paymentStatus" -> transaction.setPaymentStatus(value != null ? PaymentStatus.valueOf(value.toString()) : PaymentStatus.PENDING);
             }
         });
 
@@ -223,6 +230,15 @@ public class TransactionService {
         String name = Objects.toString(nameValue, null);
 
         return new TransactionCategoryDTO(id, name);
+    }
+
+    private LocalDate shiftToPeriod(LocalDate date, int year, int month) {
+        if (date == null) {
+            return null;
+        }
+
+        int day = Math.min(date.getDayOfMonth(), java.time.YearMonth.of(year, month).lengthOfMonth());
+        return LocalDate.of(year, month, day);
     }
 
     private void validateResponsibleUser(Transaction transaction) {

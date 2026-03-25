@@ -12,6 +12,7 @@ import com.abnerhs.rest_api_finances.model.FinancialPlan;
 import com.abnerhs.rest_api_finances.model.Transaction;
 import com.abnerhs.rest_api_finances.model.TransactionCategory;
 import com.abnerhs.rest_api_finances.model.User;
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
@@ -25,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,7 +141,10 @@ class TransactionServiceTest {
                 1,
                 null,
                 null,
-                false
+                false,
+                null,
+                null,
+                PaymentStatus.PENDING
         );
         Transaction entity = new Transaction();
         FinancialPeriod period = new FinancialPeriod();
@@ -329,7 +334,10 @@ class TransactionServiceTest {
                 1,
                 null,
                 null,
-                false
+                false,
+                null,
+                null,
+                PaymentStatus.PENDING
         );
         Transaction entity = new Transaction();
         entity.setTransactionCategory(buildCategory("CASA"));
@@ -372,16 +380,20 @@ class TransactionServiceTest {
         when(repository.save(transaction)).thenReturn(transaction);
         when(mapper.toDto(transaction)).thenReturn(response);
 
-        TransactionResponseDTO result = service.updatePartial(transactionId, Map.of(
-                "amount", "25.40",
-                "description", "Mercado",
-                "type", "EXPENSE",
-                "category", Map.of("name", "CASA"),
-                "responsibleUserId", responsibleUserId.toString(),
-                "order", "3",
-                "creditCardInvoiceId", invoiceId.toString(),
-                "isClearedByInvoice", true
-        ));
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("amount", "25.40");
+        updates.put("description", "Mercado");
+        updates.put("type", "EXPENSE");
+        updates.put("category", Map.of("name", "CASA"));
+        updates.put("responsibleUserId", responsibleUserId.toString());
+        updates.put("order", "3");
+        updates.put("creditCardInvoiceId", invoiceId.toString());
+        updates.put("isClearedByInvoice", true);
+        updates.put("dueDate", "2026-03-20");
+        updates.put("paymentDate", "2026-03-18");
+        updates.put("paymentStatus", "PAID");
+
+        TransactionResponseDTO result = service.updatePartial(transactionId, updates);
 
         assertEquals(response, result);
         assertEquals(new BigDecimal("25.40"), transaction.getAmount());
@@ -392,6 +404,9 @@ class TransactionServiceTest {
         assertEquals(3, transaction.getOrder());
         assertEquals(invoice, transaction.getCreditCardInvoice());
         assertTrue(transaction.isClearedByInvoice());
+        assertEquals(LocalDate.of(2026, 3, 20), transaction.getDueDate());
+        assertEquals(LocalDate.of(2026, 3, 18), transaction.getPaymentDate());
+        assertEquals(PaymentStatus.PAID, transaction.getPaymentStatus());
     }
 
     @Test
@@ -425,12 +440,16 @@ class TransactionServiceTest {
         updates.put("category", null);
         updates.put("responsibleUserId", null);
         updates.put("creditCardInvoiceId", null);
+        updates.put("dueDate", null);
+        updates.put("paymentDate", null);
 
         service.updatePartial(transactionId, updates);
 
         assertNull(transaction.getTransactionCategory());
         assertNull(transaction.getResponsibleUser());
         assertNull(transaction.getCreditCardInvoice());
+        assertNull(transaction.getDueDate());
+        assertNull(transaction.getPaymentDate());
     }
 
     @Test
@@ -558,7 +577,10 @@ class TransactionServiceTest {
                 1,
                 null,
                 null,
-                false
+                false,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID
         );
     }
 
@@ -573,7 +595,10 @@ class TransactionServiceTest {
                 1,
                 null,
                 null,
-                false
+                false,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID
         );
     }
 
@@ -594,7 +619,10 @@ class TransactionServiceTest {
                 1,
                 null,
                 null,
-                false
+                false,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID
         );
     }
 
@@ -612,7 +640,10 @@ class TransactionServiceTest {
                 transaction.getOrder(),
                 transaction.getRecurringGroupId(),
                 transaction.getCreditCardInvoice() != null ? transaction.getCreditCardInvoice().getId() : null,
-                transaction.isClearedByInvoice()
+                transaction.isClearedByInvoice(),
+                transaction.getDueDate(),
+                transaction.getPaymentDate(),
+                transaction.getPaymentStatus()
         );
     }
 }

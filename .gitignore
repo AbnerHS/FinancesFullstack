@@ -64,6 +64,7 @@ temp/
 # Sensitive application properties should not be committed to the repository.
 # Use environment variables or a secrets manager instead.
 .env
+.env.aws
 application*.properties.example
 application*.yml.example
 # Exclude actual properties/yml files if they contain sensitive data and you use external management

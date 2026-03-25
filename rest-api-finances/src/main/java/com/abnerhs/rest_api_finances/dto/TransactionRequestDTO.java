@@ -2,12 +2,14 @@ package com.abnerhs.rest_api_finances.dto;
 
 import com.abnerhs.rest_api_finances.dto.groups.onCreate;
 import com.abnerhs.rest_api_finances.dto.groups.onUpdate;
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record TransactionRequestDTO(
@@ -29,5 +31,8 @@ public record TransactionRequestDTO(
         Integer order,
         UUID recurringGroupId,
         UUID creditCardInvoiceId,
-        Boolean isClearedByInvoice
+        Boolean isClearedByInvoice,
+        LocalDate dueDate,
+        LocalDate paymentDate,
+        PaymentStatus paymentStatus
 ) {}
