@@ -6,6 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: light;
   --background: #f4f7fb;
   --foreground: #0f172a;
   --card: #ffffff;
@@ -41,6 +42,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #08111f;
   --foreground: #e5eefc;
   --card: #0f1b2d;
@@ -150,6 +152,12 @@
   html {
     @apply font-sans;
     min-height: 100%;
+  }
+
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"] {
+    color-scheme: inherit;
   }
 
   #root {

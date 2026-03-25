@@ -1,6 +1,7 @@
 import type { EntityModel } from "@/lib/api/types.ts"
 
 export type TransactionType = "REVENUE" | "EXPENSE"
+export type PaymentStatus = "PENDING" | "PAID"
 
 export type User = {
   id: string
@@ -82,6 +83,9 @@ export type Transaction = EntityModel<{
   recurringGroupId?: string | null
   creditCardInvoiceId?: string | null
   isClearedByInvoice?: boolean | null
+  dueDate?: string | null
+  paymentDate?: string | null
+  paymentStatus?: PaymentStatus | null
 }>
 
 export type CategorySpending = {
@@ -105,4 +109,8 @@ export type TransactionFormValues = {
   isRecurring: boolean
   numberOfPeriods: number
   recurringGroupId?: string | null
+  hasDueDate: boolean
+  dueDate: string
+  isPaid: boolean
+  paymentDate: string
 }

@@ -1,5 +1,6 @@
 import type {
   CategorySpending,
+  PaymentStatus,
   Period,
   Transaction,
   TransactionType,
@@ -107,6 +108,113 @@ export function parseCurrencyInput(value: string) {
     return Number.NaN
   }
   return Number(normalized)
+}
+
+export function formatDateOnly(value: string | null | undefined) {
+  if (!value) {
+    return ""
+  }
+
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(year, month - 1, day))
+}
+
+export function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return ""
+  }
+
+  const normalizedValue = value.replace(" ", "T")
+  const parsedDate = new Date(normalizedValue)
+  if (Number.isFinite(parsedDate.getTime())) {
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(parsedDate)
+  }
+
+  const match = normalizedValue.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/
+  )
+  if (!match) {
+    return value
+  }
+
+  const [, year, month, day, hour, minute] = match
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(
+    new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute)
+    )
+  )
+}
+
+export type DueAlertLevel = "none" | "dueSoon" | "overdue"
+
+function parseDateOnly(value: string | null | undefined) {
+  if (!value) {
+    return null
+  }
+
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) {
+    return null
+  }
+
+  return new Date(year, month - 1, day)
+}
+
+function normalizeDate(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+export function getTransactionDueAlert(transaction: {
+  type: TransactionType
+  dueDate?: string | null
+  paymentStatus?: PaymentStatus | null
+}) {
+  if (
+    transaction.type !== "EXPENSE" ||
+    !transaction.dueDate ||
+    transaction.paymentStatus === "PAID"
+  ) {
+    return "none" satisfies DueAlertLevel
+  }
+
+  const dueDate = parseDateOnly(transaction.dueDate)
+  if (!dueDate) {
+    return "none" satisfies DueAlertLevel
+  }
+
+  const today = normalizeDate(new Date())
+  const normalizedDueDate = normalizeDate(dueDate)
+  const diffInDays = Math.round(
+    (normalizedDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  )
+
+  if (diffInDays < 0) {
+    return "overdue" satisfies DueAlertLevel
+  }
+
+  if (diffInDays <= 7) {
+    return "dueSoon" satisfies DueAlertLevel
+  }
+
+  return "none" satisfies DueAlertLevel
 }
 
 export function buildComparisonChartData(
