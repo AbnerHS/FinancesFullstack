@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/AbnerHS/FinancesFullstack/compare/v0.2.0...v0.2.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* prevent revalidate CI on release ([#19](https://github.com/AbnerHS/FinancesFullstack/issues/19)) ([2a3f005](https://github.com/AbnerHS/FinancesFullstack/commit/2a3f0050972fed0be042a498c61adf412220f7c5))
+
 ## [0.2.0](https://github.com/AbnerHS/FinancesFullstack/compare/v0.1.0...v0.2.0) (2026-03-25)
 
 
