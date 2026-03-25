@@ -9,7 +9,7 @@
 	</parent>
 	<groupId>com.abnerhs.github</groupId>
 	<artifactId>rest-api-finances</artifactId>
-	<version>0.2.0</version>
+	<version>0.2.1-SNAPSHOT</version>
 	<name>rest-api-finances</name>
 	<description>Projeto de controle financeiro pessoal</description>
 	<url/>
