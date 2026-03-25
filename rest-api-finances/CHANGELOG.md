@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/AbnerHS/FinancesFullstack/compare/v0.2.1...v0.3.0) (2026-03-25)
+
+
+### Features
+
+* improve transaction workflow and payment tracking UI ([#22](https://github.com/AbnerHS/FinancesFullstack/issues/22)) ([6a0a70a](https://github.com/AbnerHS/FinancesFullstack/commit/6a0a70a49444fb9c82bc1c2aa1f3813942d01ec4))
+
 ## [0.2.1](https://github.com/AbnerHS/FinancesFullstack/compare/v0.2.0...v0.2.1) (2026-03-25)
 
 
