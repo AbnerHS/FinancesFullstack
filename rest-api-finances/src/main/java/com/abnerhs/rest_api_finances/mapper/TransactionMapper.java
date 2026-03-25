@@ -36,6 +36,7 @@ public abstract class TransactionMapper {
             + ".orElseThrow(() -> new ResourceNotFoundException(\"Fatura nÃ£o encontrada\")) : null)")
     @Mapping(target = "transactionCategory", ignore = true)
     @Mapping(target = "clearedByInvoice", source = "isClearedByInvoice", defaultValue = "false")
+    @Mapping(target = "paymentStatus", source = "paymentStatus", defaultValue = "PENDING")
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "dateTime", ignore = true)
     public abstract Transaction toEntity(TransactionRequestDTO dto);
@@ -56,6 +57,7 @@ public abstract class TransactionMapper {
     @Mapping(target = "responsibleUser", ignore = true)
     @Mapping(target = "creditCardInvoice", ignore = true)
     @Mapping(target = "clearedByInvoice", ignore = true)
+    @Mapping(target = "paymentStatus", ignore = true)
     public abstract void updateEntityFromDto(TransactionRequestDTO dto, @MappingTarget Transaction entity);
 
     @AfterMapping
@@ -86,6 +88,7 @@ public abstract class TransactionMapper {
         }
 
         entity.setClearedByInvoice(Boolean.TRUE.equals(dto.isClearedByInvoice()));
+        entity.setPaymentStatus(dto.paymentStatus() != null ? dto.paymentStatus() : com.abnerhs.rest_api_finances.model.enums.PaymentStatus.PENDING);
     }
 
     protected TransactionCategoryDTO toCategoryDto(Transaction entity) {

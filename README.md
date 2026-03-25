@@ -150,7 +150,40 @@ O fluxo de producao do backend agora deve seguir o modelo:
 - CI em toda PR e push relevante via GitHub Actions
 - build da imagem Docker no CI
 - publicacao da imagem no GHCR com tag imutavel por commit
-- deploy na VPS por SSH com `docker compose pull` e `docker compose up -d`
+- release semantica automatica na `main` com Release Please
+- deploy na VPS por SSH quando uma GitHub Release for publicada
+
+### Semantic version do backend
+
+O backend agora esta preparado para release automatica com Release Please.
+
+Arquivos principais:
+
+- `.github/workflows/release-please.yml`
+- `release-please-config.json`
+- `.release-please-manifest.json`
+
+Como funciona:
+
+- pushes na `main` executam o Release Please
+- commits seguindo Conventional Commits geram ou atualizam uma Release PR
+- ao fazer merge dessa Release PR, o GitHub cria a release semantica e a tag correspondente
+- no backend Maven, o `pom.xml` passa a ser atualizado automaticamente entre versoes de release e `-SNAPSHOT`
+- a publicacao da release dispara o workflow de deploy do backend, evitando deploy duplicado no push original e no merge da Release PR
+
+Convencoes de commit recomendadas:
+
+- `fix:` gera bump de patch
+- `feat:` gera bump de minor
+- `feat!:` ou `BREAKING CHANGE:` gera bump de major
+
+Exemplos:
+
+```text
+fix: corrige validacao do refresh token
+feat: adiciona endpoint de relatorio mensal
+feat!: altera contrato do endpoint de autenticacao
+```
 
 Arquivos principais:
 

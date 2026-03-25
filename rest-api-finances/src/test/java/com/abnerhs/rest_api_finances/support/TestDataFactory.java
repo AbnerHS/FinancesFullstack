@@ -28,12 +28,14 @@ import com.abnerhs.rest_api_finances.dto.UserResponseDTO;
 import com.abnerhs.rest_api_finances.dto.UserUpdateDTO;
 import com.abnerhs.rest_api_finances.model.User;
 import com.abnerhs.rest_api_finances.model.enums.AuthProvider;
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.Link;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -192,7 +194,10 @@ public final class TestDataFactory {
                 1,
                 null,
                 creditCardInvoiceResponse().id(),
-                true
+                true,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID
         );
     }
 
@@ -213,7 +218,10 @@ public final class TestDataFactory {
                 1,
                 uuid("00000000-0000-0000-0000-000000000061"),
                 creditCardInvoiceResponse().id(),
-                true
+                true,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID
         );
     }
 

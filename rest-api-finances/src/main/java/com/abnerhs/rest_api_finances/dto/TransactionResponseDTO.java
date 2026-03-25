@@ -1,11 +1,13 @@
 package com.abnerhs.rest_api_finances.dto;
 
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.hateoas.server.core.Relation;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -28,5 +30,10 @@ public record TransactionResponseDTO(
         UUID recurringGroupId,
         UUID creditCardInvoiceId,
         @JsonProperty("isClearedByInvoice")
-        Boolean isClearedByInvoice
+        Boolean isClearedByInvoice,
+        @JsonFormat(pattern = "yyyy-MM-dd")
+        LocalDate dueDate,
+        @JsonFormat(pattern = "yyyy-MM-dd")
+        LocalDate paymentDate,
+        PaymentStatus paymentStatus
 ) {}

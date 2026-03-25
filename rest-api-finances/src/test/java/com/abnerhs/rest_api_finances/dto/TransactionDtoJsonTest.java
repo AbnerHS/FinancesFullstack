@@ -1,11 +1,13 @@
 package com.abnerhs.rest_api_finances.dto;
 
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TransactionDtoJsonTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
     void shouldDeserializeRequestCategoryFromJson() throws Exception {
@@ -29,7 +31,10 @@ class TransactionDtoJsonTest {
                     "id": null,
                     "name": "CASA"
                   },
-                  "isClearedByInvoice": false
+                  "isClearedByInvoice": false,
+                  "dueDate": "2026-03-20",
+                  "paymentDate": "2026-03-18",
+                  "paymentStatus": "PAID"
                 }
                 """;
 
@@ -38,6 +43,9 @@ class TransactionDtoJsonTest {
         assertEquals("Mercado", dto.description());
         assertEquals("CASA", dto.category().name());
         assertNull(dto.category().id());
+        assertEquals(LocalDate.of(2026, 3, 20), dto.dueDate());
+        assertEquals(LocalDate.of(2026, 3, 18), dto.paymentDate());
+        assertEquals(PaymentStatus.PAID, dto.paymentStatus());
     }
 
     @Test
@@ -54,7 +62,10 @@ class TransactionDtoJsonTest {
                 3,
                 null,
                 null,
-                false
+                false,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID
         );
 
         JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(dto));
@@ -62,5 +73,8 @@ class TransactionDtoJsonTest {
         assertTrue(json.has("category"));
         assertEquals("CASA", json.get("category").get("name").asText());
         assertFalse(json.has("responsibilityTag"));
+        assertEquals("2026-03-20", json.get("dueDate").asText());
+        assertEquals("2026-03-18", json.get("paymentDate").asText());
+        assertEquals("PAID", json.get("paymentStatus").asText());
     }
 }

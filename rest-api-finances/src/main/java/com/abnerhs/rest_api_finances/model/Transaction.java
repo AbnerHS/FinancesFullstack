@@ -1,9 +1,11 @@
 package com.abnerhs.rest_api_finances.model;
 
+import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -55,6 +57,16 @@ public class Transaction {
 
     @Column(name = "is_cleared_by_invoice", nullable = false)
     private boolean clearedByInvoice;
+
+    @Column(name = "due_date")
+    private LocalDate dueDate;
+
+    @Column(name = "payment_date")
+    private LocalDate paymentDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false)
+    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
     public Transaction() {
     }
@@ -153,5 +165,29 @@ public class Transaction {
 
     public void setClearedByInvoice(Boolean clearedByInvoice) {
         this.clearedByInvoice = clearedByInvoice;
+    }
+
+    public LocalDate getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(LocalDate dueDate) {
+        this.dueDate = dueDate;
+    }
+
+    public LocalDate getPaymentDate() {
+        return paymentDate;
+    }
+
+    public void setPaymentDate(LocalDate paymentDate) {
+        this.paymentDate = paymentDate;
+    }
+
+    public PaymentStatus getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(PaymentStatus paymentStatus) {
+        this.paymentStatus = paymentStatus;
     }
 }
