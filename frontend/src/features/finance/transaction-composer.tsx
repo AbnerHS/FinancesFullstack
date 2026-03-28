@@ -133,8 +133,8 @@ function TransactionCommonRow({
             )
           }
         >
-          <option value="EXPENSE">Entrada</option>
-          <option value="REVENUE">Saída</option>
+          <option value="EXPENSE">Saída</option>
+          <option value="REVENUE">Entrada</option>
         </Select>
       </div>
     </div>
