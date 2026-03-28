@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Clock3,
   GripVertical,
+  Link,
   Pencil,
   Plus,
   Repeat2,
@@ -147,13 +148,7 @@ function TransactionRowContent({
         className:
           "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
       }
-      : dueAlert === "dueSoon"
-        ? {
-          label: "Vence em breve",
-          className:
-            "border-orange-500/40 bg-orange-500/12 text-orange-700 dark:text-orange-300",
-        }
-        : null
+      : null
 
   return (
     <>
@@ -235,7 +230,7 @@ function TransactionRowContent({
           onClick={onLink ? () => onLink(transaction) : undefined}
           disabled={!onLink || transaction.type !== "EXPENSE"}
         >
-          <CheckCircle2 size={14} />
+          <Link size={14} />
         </Button>
         <Button
           type="button"
