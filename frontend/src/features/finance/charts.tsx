@@ -15,6 +15,7 @@ import {
 } from "recharts"
 
 import { Card } from "@/components/ui/card.tsx"
+import { getCategoryColor } from "@/features/finance/category-colors.ts"
 import { formatCurrency } from "@/features/finance/utils.ts"
 
 type ComparisonItem = {
@@ -29,7 +30,6 @@ type CategoryItem = {
   totalAmount: number
 }
 
-const pieColors = ["#60a5fa", "#22d3ee", "#a78bfa", "#34d399", "#fb923c", "#f472b6"]
 const chartGrid = "rgba(148, 163, 184, 0.18)"
 const chartAxis = "#94a3b8"
 
@@ -51,9 +51,9 @@ export function DashboardCharts({
     (total, item) => total + Number(item.totalAmount || 0),
     0
   )
-  const categoryBreakdown = categoryData.map((item, index) => ({
+  const categoryBreakdown = categoryData.map((item) => ({
     ...item,
-    color: pieColors[index % pieColors.length],
+    color: getCategoryColor(item.category),
     percentage:
       categoryTotal > 0
         ? (Number(item.totalAmount || 0) / categoryTotal) * 100

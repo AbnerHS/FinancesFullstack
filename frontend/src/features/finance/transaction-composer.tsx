@@ -1,4 +1,4 @@
-import { createPortal } from "react-dom"
+﻿import { createPortal } from "react-dom"
 import { Save, SendHorizonal, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -133,8 +133,8 @@ function TransactionCommonRow({
             )
           }
         >
-          <option value="EXPENSE">Despesa</option>
-          <option value="REVENUE">Receita</option>
+          <option value="EXPENSE">Entrada</option>
+          <option value="REVENUE">Saída</option>
         </Select>
       </div>
     </div>

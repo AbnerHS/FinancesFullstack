@@ -24,6 +24,7 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Repeat2,
   Save,
   SendHorizonal,
   Trash2,
@@ -44,6 +45,7 @@ import { FormError } from "@/components/ui/form-error.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
   usePeriodInvoiceManager,
   useTransactionLinking,
@@ -136,6 +138,8 @@ function TransactionRowContent({
   onDelete?: (transaction: Transaction) => void
 }) {
   const dueAlert = getTransactionDueAlert(transaction)
+  const categoryLabel = transaction.category?.name || "Sem categoria"
+  const categoryBadgeStyle = getCategoryBadgeStyle(categoryLabel)
   const dueAlertBadge =
     dueAlert === "overdue"
       ? {
@@ -169,10 +173,19 @@ function TransactionRowContent({
               {transaction.description}
             </button>
             <span className="flex items-center gap-1">
-
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase"
+                style={categoryBadgeStyle}
+              >
+                {categoryLabel}
+              </span>
               {transaction.recurringGroupId ? (
-                <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
-                  Recorrente
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/12 text-primary"
+                  title="Recorrente"
+                  aria-label="Recorrente"
+                >
+                  <Repeat2 size={12} />
                 </span>
               ) : null}
               {dueAlertBadge ? (
@@ -194,7 +207,6 @@ function TransactionRowContent({
                 transaction.paymentStatus === "PAID" ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 size={12} />
-                  Pago
                 </span>
               ) : null}
             </span>
