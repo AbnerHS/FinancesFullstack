@@ -5,7 +5,6 @@ import {
   AppShellSidebar,
   MobileSidebarButton,
 } from "@/components/app-shell-sidebar.tsx"
-import { ThemeToggle } from "@/components/theme-toggle.tsx"
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { useDashboardStore } from "@/features/finance/dashboard-store"
 
@@ -78,7 +77,6 @@ export function AppLayout() {
               </div>
             </div>
             <div className="hidden items-center gap-3 md:flex">
-              <ThemeToggle />
               <div className="rounded-full border border-border bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-xl">
                 {user?.name || "Usuário"}
               </div>
