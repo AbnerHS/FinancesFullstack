@@ -35,5 +35,6 @@ public record TransactionResponseDTO(
         LocalDate dueDate,
         @JsonFormat(pattern = "yyyy-MM-dd")
         LocalDate paymentDate,
-        PaymentStatus paymentStatus
+        PaymentStatus paymentStatus,
+        BillingDocumentResponseDTO billingDocument
 ) {}

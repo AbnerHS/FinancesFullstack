@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -17,6 +18,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     @Query("SELECT COALESCE(MAX(t.order), 0) FROM Transaction t WHERE t.period.id = :periodId")
     Integer findMaxOrderByPeriodId(UUID periodId);
+
+    List<Transaction> findByRecurringGroupId(UUID recurringGroupId);
+
+    long countByBillingDocumentStorageKey(String billingDocumentStorageKey);
+
+    Optional<Transaction> findFirstByRecurringGroupId(UUID recurringGroupId);
 
     @Query("SELECT new com.abnerhs.rest_api_finances.dto.FinancialSummaryDTO(" +
            "COALESCE(SUM(CASE WHEN t.type = 'REVENUE' THEN t.amount ELSE 0 END), 0), " +

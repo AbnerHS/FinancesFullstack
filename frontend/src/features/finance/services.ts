@@ -261,6 +261,7 @@ export const transactionService = {
     dueDate?: string | null
     paymentDate?: string | null
     paymentStatus?: "PENDING" | "PAID" | null
+    billingDocument?: { type: "LINK"; url: string } | null
   }) {
     const { data } = await http.post<Transaction>("/transactions", payload)
     return data
@@ -276,6 +277,7 @@ export const transactionService = {
       dueDate?: string | null
       paymentDate?: string | null
       paymentStatus?: "PENDING" | "PAID" | null
+      billingDocument?: { type: "LINK"; url: string } | null
     }
     numberOfPeriods: number
   }) {
@@ -289,6 +291,47 @@ export const transactionService = {
     const { data } = await http.patch<Transaction>(
       `/transactions/${id}`,
       payload
+    )
+    return data
+  },
+  async uploadBillingDocumentFile(
+    id: string,
+    payload: { file: File; scope?: "SINGLE" | "GROUP" }
+  ) {
+    const formData = new FormData()
+    formData.append("file", payload.file)
+
+    const { data } = await http.post<Transaction>(
+      `/transactions/${id}/billing-document/file`,
+      formData,
+      {
+        params: { scope: payload.scope ?? "SINGLE" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    )
+
+    return data
+  },
+  async deleteBillingDocument(
+    id: string,
+    scope: "SINGLE" | "GROUP" = "SINGLE"
+  ) {
+    const { data } = await http.delete<Transaction>(
+      `/transactions/${id}/billing-document`,
+      {
+        params: { scope },
+      }
+    )
+    return data
+  },
+  async downloadBillingDocument(id: string) {
+    const { data } = await http.get<Blob>(
+      `/transactions/${id}/billing-document/download`,
+      {
+        responseType: "blob",
+      }
     )
     return data
   },

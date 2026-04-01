@@ -32,6 +32,7 @@ type TransactionComposerProps = {
   createPending: boolean
   createRecurringPending: boolean
   updatePending: boolean
+  submitPending: boolean
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>
   onCancel: () => void
 }
@@ -50,6 +51,7 @@ type ActionsRowProps = {
   createPending: boolean
   createRecurringPending: boolean
   updatePending: boolean
+  submitPending: boolean
   onCancel: () => void
   formId?: string
 }
@@ -69,6 +71,12 @@ function updateType(
         dueDate: "",
         isPaid: false,
         paymentDate: "",
+        billingDocumentType: current.billingDocumentExisting?.type || "NONE",
+        billingDocumentUrl:
+          current.billingDocumentExisting?.type === "LINK"
+            ? current.billingDocumentExisting.url || ""
+            : "",
+        billingDocumentFile: null,
       }
     }
 
@@ -89,7 +97,27 @@ function updateDueDate(
     hasDueDate: Boolean(nextDueDate),
     isPaid: nextDueDate ? current.isPaid : false,
     paymentDate: nextDueDate ? current.paymentDate : "",
+    billingDocumentType:
+      nextDueDate || current.billingDocumentExisting
+        ? current.billingDocumentType
+        : "NONE",
+    billingDocumentUrl:
+      nextDueDate || current.billingDocumentExisting
+        ? current.billingDocumentUrl
+        : "",
+    billingDocumentFile:
+      nextDueDate || current.billingDocumentExisting
+        ? current.billingDocumentFile
+        : null,
   }))
+}
+
+function shouldShowBillingDocumentField(form: TransactionFormValues) {
+  return Boolean(
+    (form.type === "EXPENSE" && form.dueDate) ||
+    form.billingDocumentExisting ||
+    form.billingDocumentType !== "NONE"
+  )
 }
 
 function TransactionCommonRow({
@@ -272,6 +300,106 @@ function PaymentDateField({
   )
 }
 
+function BillingDocumentField({
+  form,
+  setForm,
+}: Pick<SharedLayoutProps, "form" | "setForm">) {
+  if (!shouldShowBillingDocumentField(form)) {
+    return null
+  }
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
+      <div className="space-y-1">
+        <Label>Documento para pagamento</Label>
+        <p className="text-sm text-muted-foreground">
+          Anexe um arquivo ou informe o link direto do documento a ser pago.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+        <div className={fieldClassName}>
+          <Label>Tipo</Label>
+          <Select
+            value={form.billingDocumentType}
+            onChange={(event) =>
+              setForm((current) => {
+                const nextType = event.target.value as
+                  | TransactionFormValues["billingDocumentType"]
+
+                return {
+                  ...current,
+                  billingDocumentType: nextType,
+                  billingDocumentUrl: nextType === "LINK"
+                    ? current.billingDocumentType === "LINK"
+                      ? current.billingDocumentUrl
+                      : current.billingDocumentExisting?.type === "LINK"
+                        ? current.billingDocumentExisting.url || ""
+                        : ""
+                    : "",
+                  billingDocumentFile: null,
+                }
+              })
+            }
+          >
+            <option value="NONE">Nenhum</option>
+            <option value="LINK">Link</option>
+            <option value="FILE">Arquivo</option>
+          </Select>
+        </div>
+
+        {form.billingDocumentType === "LINK" ? (
+          <div className={fieldClassName}>
+            <Label>URL do documento</Label>
+            <Input
+              type="url"
+              value={form.billingDocumentUrl}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  billingDocumentUrl: event.target.value,
+                }))
+              }
+              placeholder="https://..."
+            />
+          </div>
+        ) : form.billingDocumentType === "FILE" ? (
+          <div className={fieldClassName}>
+            <Label>Arquivo</Label>
+            <Input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  billingDocumentFile: event.target.files?.[0] || null,
+                }))
+              }
+            />
+            {form.billingDocumentFile ? (
+              <p className="text-sm text-foreground">
+                Novo arquivo: {form.billingDocumentFile.name}
+              </p>
+            ) : form.billingDocumentExisting?.type === "FILE" ? (
+              <p className="text-sm text-muted-foreground">
+                Arquivo atual: {form.billingDocumentExisting.fileName || "Documento enviado"}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Selecione um arquivo PDF, PNG, JPG, JPEG ou WEBP de at&eacute; 10 MB.
+              </p>
+            )}
+          </div>
+        ) : form.billingDocumentExisting ? (
+          <div className="flex items-center rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+            Documento atual ser&aacute; removido ao salvar.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function RecurrenceField({
   form,
   setForm,
@@ -356,6 +484,7 @@ function ActionButtons({
   createPending,
   createRecurringPending,
   updatePending,
+  submitPending,
   onCancel,
   formId,
 }: ActionsRowProps) {
@@ -365,19 +494,26 @@ function ActionButtons({
         type="submit"
         form={formId}
         className="h-11 flex-1 lg:min-w-[180px]"
-        disabled={createPending || createRecurringPending || updatePending}
+        disabled={
+          createPending ||
+          createRecurringPending ||
+          updatePending ||
+          submitPending
+        }
       >
-        {editingTransaction
-          ? updatePending
-            ? "Salvando..."
-            : "Salvar"
-          : form.isRecurring
-            ? createRecurringPending
-              ? "Criando..."
-              : "Criar Recorrência"
-            : createPending
-              ? "Criando..."
-              : "Enviar"}
+        {submitPending
+          ? "Salvando..."
+          : editingTransaction
+            ? updatePending
+              ? "Salvando..."
+              : "Salvar"
+            : form.isRecurring
+              ? createRecurringPending
+                ? "Criando..."
+                : "Criar Recorrência"
+              : createPending
+                ? "Criando..."
+                : "Enviar"}
         {editingTransaction ? <Save size={16} /> : <SendHorizonal size={16} />}
       </Button>
       {showCancel ? (
@@ -419,6 +555,10 @@ function TransactionCreateFormLayout({
           responsibleOptions={responsibleOptions}
         />
         <DueDateField form={form} setForm={setForm} />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <BillingDocumentField form={form} setForm={setForm} />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -467,6 +607,10 @@ function TransactionEditFormLayout({
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <BillingDocumentField form={form} setForm={setForm} />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
         <EditScopeField
           editingTransaction={editingTransaction}
           editingScope={editingScope}
@@ -493,6 +637,7 @@ export function TransactionComposer({
   createPending,
   createRecurringPending,
   updatePending,
+  submitPending,
   onSubmit,
   onCancel,
 }: TransactionComposerProps) {
@@ -565,6 +710,7 @@ export function TransactionComposer({
                 createPending={createPending}
                 createRecurringPending={createRecurringPending}
                 updatePending={updatePending}
+                submitPending={submitPending}
                 onCancel={onCancel}
                 formId={formId}
               />
