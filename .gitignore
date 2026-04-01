@@ -70,3 +70,5 @@ application*.yml.example
 # Exclude actual properties/yml files if they contain sensitive data and you use external management
 # application*.properties
 # application*.yml
+
+data/

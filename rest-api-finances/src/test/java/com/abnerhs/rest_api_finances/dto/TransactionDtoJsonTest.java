@@ -34,7 +34,11 @@ class TransactionDtoJsonTest {
                   "isClearedByInvoice": false,
                   "dueDate": "2026-03-20",
                   "paymentDate": "2026-03-18",
-                  "paymentStatus": "PAID"
+                  "paymentStatus": "PAID",
+                  "billingDocument": {
+                    "type": "LINK",
+                    "url": "https://exemplo.com/boleto.pdf"
+                  }
                 }
                 """;
 
@@ -46,6 +50,7 @@ class TransactionDtoJsonTest {
         assertEquals(LocalDate.of(2026, 3, 20), dto.dueDate());
         assertEquals(LocalDate.of(2026, 3, 18), dto.paymentDate());
         assertEquals(PaymentStatus.PAID, dto.paymentStatus());
+        assertEquals("https://exemplo.com/boleto.pdf", dto.billingDocument().url());
     }
 
     @Test
@@ -65,7 +70,8 @@ class TransactionDtoJsonTest {
                 false,
                 LocalDate.of(2026, 3, 20),
                 LocalDate.of(2026, 3, 18),
-                PaymentStatus.PAID
+                PaymentStatus.PAID,
+                null
         );
 
         JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(dto));
@@ -76,5 +82,7 @@ class TransactionDtoJsonTest {
         assertEquals("2026-03-20", json.get("dueDate").asText());
         assertEquals("2026-03-18", json.get("paymentDate").asText());
         assertEquals("PAID", json.get("paymentStatus").asText());
+        assertTrue(json.has("billingDocument"));
+        assertTrue(json.get("billingDocument").isNull());
     }
 }

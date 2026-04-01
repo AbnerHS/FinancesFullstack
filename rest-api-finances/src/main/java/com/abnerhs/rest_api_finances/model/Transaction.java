@@ -1,5 +1,6 @@
 package com.abnerhs.rest_api_finances.model;
 
+import com.abnerhs.rest_api_finances.model.enums.BillingDocumentType;
 import com.abnerhs.rest_api_finances.model.enums.PaymentStatus;
 import com.abnerhs.rest_api_finances.model.enums.TransactionType;
 import jakarta.persistence.*;
@@ -67,6 +68,25 @@ public class Transaction {
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_document_type")
+    private BillingDocumentType billingDocumentType;
+
+    @Column(name = "billing_document_url", length = 2048)
+    private String billingDocumentUrl;
+
+    @Column(name = "billing_document_file_name")
+    private String billingDocumentFileName;
+
+    @Column(name = "billing_document_mime_type")
+    private String billingDocumentMimeType;
+
+    @Column(name = "billing_document_storage_key")
+    private String billingDocumentStorageKey;
+
+    @Column(name = "billing_document_uploaded_at")
+    private LocalDateTime billingDocumentUploadedAt;
 
     public Transaction() {
     }
@@ -189,5 +209,53 @@ public class Transaction {
 
     public void setPaymentStatus(PaymentStatus paymentStatus) {
         this.paymentStatus = paymentStatus;
+    }
+
+    public BillingDocumentType getBillingDocumentType() {
+        return billingDocumentType;
+    }
+
+    public void setBillingDocumentType(BillingDocumentType billingDocumentType) {
+        this.billingDocumentType = billingDocumentType;
+    }
+
+    public String getBillingDocumentUrl() {
+        return billingDocumentUrl;
+    }
+
+    public void setBillingDocumentUrl(String billingDocumentUrl) {
+        this.billingDocumentUrl = billingDocumentUrl;
+    }
+
+    public String getBillingDocumentFileName() {
+        return billingDocumentFileName;
+    }
+
+    public void setBillingDocumentFileName(String billingDocumentFileName) {
+        this.billingDocumentFileName = billingDocumentFileName;
+    }
+
+    public String getBillingDocumentMimeType() {
+        return billingDocumentMimeType;
+    }
+
+    public void setBillingDocumentMimeType(String billingDocumentMimeType) {
+        this.billingDocumentMimeType = billingDocumentMimeType;
+    }
+
+    public String getBillingDocumentStorageKey() {
+        return billingDocumentStorageKey;
+    }
+
+    public void setBillingDocumentStorageKey(String billingDocumentStorageKey) {
+        this.billingDocumentStorageKey = billingDocumentStorageKey;
+    }
+
+    public LocalDateTime getBillingDocumentUploadedAt() {
+        return billingDocumentUploadedAt;
+    }
+
+    public void setBillingDocumentUploadedAt(LocalDateTime billingDocumentUploadedAt) {
+        this.billingDocumentUploadedAt = billingDocumentUploadedAt;
     }
 }

@@ -32,6 +32,10 @@ spring:
     user: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     url: ${SPRING_DATASOURCE_URL}
+  servlet:
+    multipart:
+      max-file-size: ${APP_TRANSACTION_DOCUMENTS_MAX_FILE_SIZE:10MB}
+      max-request-size: ${APP_TRANSACTION_DOCUMENTS_MAX_REQUEST_SIZE:10MB}
 
 logging:
   level:
@@ -55,6 +59,8 @@ app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://192.168.0.115:5173}
     allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:}
+  transaction-documents:
+    dir: ${APP_TRANSACTION_DOCUMENTS_DIR:./data/payment-documents}
 
 google:
   oauth:
