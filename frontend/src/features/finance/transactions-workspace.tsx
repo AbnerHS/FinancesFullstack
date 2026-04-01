@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   Clock3,
   Download,
+  Eye,
   ExternalLink,
   GripVertical,
   Link,
@@ -360,6 +361,7 @@ function TransactionDetailsModal({
   responsibleOptions: ResponsibleOption[]
   onClose: () => void
 }) {
+  const [previewPending, setPreviewPending] = useState(false)
   const [downloadPending, setDownloadPending] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
 
@@ -438,6 +440,28 @@ function TransactionDetailsModal({
     }
   }
 
+  const handlePreviewBillingDocument = async () => {
+    if (!billingDocument || billingDocument.type !== "FILE") {
+      return
+    }
+
+    setPreviewPending(true)
+    setDownloadError(null)
+
+    try {
+      const blob = await transactionService.downloadBillingDocument(transaction.id)
+      const objectUrl = window.URL.createObjectURL(blob)
+      window.open(objectUrl, "_blank", "noopener,noreferrer")
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (error) {
+      setDownloadError(
+        getErrorMessage(error, "Nao foi possivel visualizar o documento.")
+      )
+    } finally {
+      setPreviewPending(false)
+    }
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
       <div className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
@@ -506,6 +530,16 @@ function TransactionDetailsModal({
               >
                 Abrir documento
                 <ExternalLink size={16} />
+              </Button>
+            ) : null}
+            {billingDocument?.type === "FILE" ? (
+              <Button
+                type="button"
+                disabled={previewPending || downloadPending}
+                onClick={handlePreviewBillingDocument}
+              >
+                {previewPending ? "Abrindo..." : "Visualizar documento"}
+                <Eye size={16} />
               </Button>
             ) : null}
             {billingDocument?.type === "FILE" ? (
