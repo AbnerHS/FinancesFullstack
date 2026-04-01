@@ -23,6 +23,7 @@ Exemplo de diretorio remoto:
 
 ## Secrets esperados no GitHub
 
+- `RELEASE_PLEASE_TOKEN` (PAT com permissoes de `contents` e `pull_requests` para que a release dispare o workflow de deploy)
 - `GHCR_USERNAME`
 - `GHCR_TOKEN`
 - `VPS_HOST`
