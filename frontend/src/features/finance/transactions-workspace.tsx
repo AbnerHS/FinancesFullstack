@@ -890,88 +890,7 @@ export function TransactionsWorkspace({
       resetComposer()
       setIsComposerOpen(false)
       return
-      /*
 
-      const amount = parseCurrencyInput(form.amount)
-    if (!form.description.trim()) {
-      throw new Error("Informe a descrição.")
-    }
-    if (Number.isNaN(amount) || amount <= 0) {
-      throw new Error("Informe um valor válido.")
-    }
-
-    if (form.type === "EXPENSE" && form.hasDueDate && !form.dueDate) {
-      throw new Error("Informe a data de vencimento.")
-    }
-
-    const categoryName = form.categoryName.trim()
-    const payload: {
-      description: string
-      amount: number
-      type: Transaction["type"]
-      periodId: string
-      responsibleUserId: string | null
-      category: { id?: string; name?: string } | null
-      dueDate?: string | null
-      paymentDate?: string | null
-      paymentStatus?: PaymentStatus | null
-    } = {
-      description: form.description.trim(),
-      amount,
-      type: form.type,
-      periodId: panel.period.id,
-      responsibleUserId: form.responsibleUserId || null,
-      category: categoryName
-        ? form.categoryId
-          ? { id: form.categoryId }
-          : { name: categoryName }
-        : null,
-    }
-
-    if (form.type === "EXPENSE") {
-      if (form.hasDueDate && form.dueDate) {
-        payload.dueDate = form.dueDate
-        payload.paymentStatus = form.isPaid ? "PAID" : "PENDING"
-        payload.paymentDate =
-          form.isPaid && form.paymentDate ? form.paymentDate : null
-      } else {
-        payload.dueDate = null
-        payload.paymentDate = null
-        payload.paymentStatus = "PENDING"
-      }
-    } else {
-      payload.dueDate = null
-      payload.paymentDate = null
-      payload.paymentStatus = null
-    }
-
-    if (editingTransaction?.id) {
-      const updatePayload: Record<string, unknown> = { ...payload }
-      if (editingScope === "GROUP" && editingTransaction.recurringGroupId) {
-        updatePayload.recurringGroupId = editingTransaction.recurringGroupId
-        updatePayload.editScope = "GROUP"
-      }
-
-      await updateTransaction.mutateAsync({
-        id: editingTransaction.id,
-        payload: updatePayload,
-      })
-    } else if (form.isRecurring) {
-      if (!Number.isFinite(form.numberOfPeriods) || form.numberOfPeriods < 2) {
-        throw new Error("Informe pelo menos 2 períodos para recorrência.")
-      }
-
-      await createRecurringTransaction.mutateAsync({
-        transaction: payload,
-        numberOfPeriods: Number(form.numberOfPeriods),
-      })
-    } else {
-      await createTransaction.mutateAsync(payload)
-    }
-
-      resetComposer()
-      setIsComposerOpen(false)
-      */
     } finally {
       setSubmitPending(false)
     }
@@ -1023,139 +942,6 @@ export function TransactionsWorkspace({
       </div>
 
       <div className="mt-6 space-y-5">
-
-        <div>
-          <TransactionComposer
-            isOpen={isComposerOpen}
-            periodLabel={panel.label}
-            form={form}
-            setForm={setForm}
-            editingTransaction={editingTransaction}
-            showCancel={Boolean(editingTransaction || isComposerOpen)}
-            editingScope={editingScope}
-            setEditingScope={setEditingScope}
-            categoryOptions={categoryOptions}
-            responsibleOptions={shared.responsibleOptions}
-            formError={formError}
-            mutationError={mutationError}
-            createPending={createTransaction.isPending}
-            createRecurringPending={createRecurringTransaction.isPending}
-            updatePending={updateTransaction.isPending}
-            submitPending={submitPending}
-            onSubmit={async (event) => {
-              event.preventDefault()
-              try {
-                await submit()
-              } catch (error) {
-                setFormError(
-                  error instanceof Error
-                    ? error.message
-                    : "Não foi possível salvar a transação."
-                )
-              }
-            }}
-            onCancel={() => {
-              resetComposer()
-              setIsComposerOpen(false)
-            }}
-          />
-        </div>
-
-        <Card className="border-border bg-secondary/40 p-3 sm:p-4">
-          <h4 className="app-eyebrow">Transações por responsável</h4>
-          <div className="mt-3 space-y-4">
-            {panel.transactionsLoading ? (
-              <p className="text-sm text-muted-foreground">
-                Carregando transações...
-              </p>
-            ) : groupedTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma transação cadastrada.
-              </p>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis]}
-                onDragStart={reorder.onDragStart}
-                onDragOver={reorder.onDragOver}
-                onDragCancel={reorder.onDragCancel}
-                onDragEnd={reorder.onDragEnd}
-              >
-                {groupedTransactions.map((group) => (
-                  <div key={group.id} className="space-y-2">
-                    <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                      <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
-                        {group.label}
-                      </p>
-                    </div>
-
-                    <SortableContext
-                      items={group.transactions.map(
-                        (transaction) => transaction.id
-                      )}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {group.transactions.map((transaction) => (
-                        <SortableTransactionRow
-                          key={transaction.id}
-                          transaction={transaction}
-                          isDragOver={
-                            reorder.overId === transaction.id &&
-                            reorder.activeId !== transaction.id
-                          }
-                          reorderPending={reorder.reorderPending}
-                          onOpenDetails={(entry) =>
-                            setDetailsTransaction(entry)
-                          }
-                          onLink={(entry) =>
-                            transactionLinking.openPaymentModal(entry)
-                          }
-                          onEdit={startEditing}
-                          onDelete={(entry) =>
-                            setConfirmationDialog({
-                              confirmLabel: "Excluir Transação",
-                              description: `A transação "${entry.description}" será removida deste mês.`,
-                              title: "Excluir transação?",
-                              onConfirm: () =>
-                                deleteTransaction.mutate(entry.id),
-                              ...(entry.recurringGroupId
-                                ? {
-                                  confirmLabel: "Excluir somente esta",
-                                  description: `A transação "${entry.description}" faz parte de uma recorrência. Você pode remover apenas este mês ou excluir todas as recorrências do grupo.`,
-                                  title: "Excluir transação recorrente?",
-                                  secondaryConfirmLabel: "Excluir todas",
-                                  onSecondaryConfirm: () =>
-                                    deleteTransaction.mutate({
-                                      id: entry.id,
-                                      recurringGroupId:
-                                        entry.recurringGroupId,
-                                      deleteScope: "GROUP",
-                                    }),
-                                }
-                                : {}),
-                            })
-                          }
-                        />
-                      ))}
-                    </SortableContext>
-                  </div>
-                ))}
-              </DndContext>
-            )}
-          </div>
-        </Card>
-        <ConfirmationDialog
-          onClose={() => setConfirmationDialog(null)}
-          state={confirmationDialog}
-        />
-        <TransactionDetailsModal
-          transaction={detailsTransaction}
-          periodLabel={panel.label}
-          responsibleOptions={shared.responsibleOptions}
-          onClose={() => setDetailsTransaction(null)}
-        />
-
         <Card className="border-border bg-secondary/40 p-4">
           <div className="flex items-center justify-between gap-3">
             <h4 className="app-eyebrow">Faturas</h4>
@@ -1338,6 +1124,137 @@ export function TransactionsWorkspace({
           </div>
         </Card>
 
+        <div>
+          <TransactionComposer
+            isOpen={isComposerOpen}
+            periodLabel={panel.label}
+            form={form}
+            setForm={setForm}
+            editingTransaction={editingTransaction}
+            showCancel={Boolean(editingTransaction || isComposerOpen)}
+            editingScope={editingScope}
+            setEditingScope={setEditingScope}
+            categoryOptions={categoryOptions}
+            responsibleOptions={shared.responsibleOptions}
+            formError={formError}
+            mutationError={mutationError}
+            createPending={createTransaction.isPending}
+            createRecurringPending={createRecurringTransaction.isPending}
+            updatePending={updateTransaction.isPending}
+            submitPending={submitPending}
+            onSubmit={async (event) => {
+              event.preventDefault()
+              try {
+                await submit()
+              } catch (error) {
+                setFormError(
+                  error instanceof Error
+                    ? error.message
+                    : "Não foi possível salvar a transação."
+                )
+              }
+            }}
+            onCancel={() => {
+              resetComposer()
+              setIsComposerOpen(false)
+            }}
+          />
+        </div>
+
+        <Card className="border-border bg-secondary/40 p-3 sm:p-4">
+          <h4 className="app-eyebrow">Transações por responsável</h4>
+          <div className="mt-3 space-y-4">
+            {panel.transactionsLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Carregando transações...
+              </p>
+            ) : groupedTransactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma transação cadastrada.
+              </p>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis]}
+                onDragStart={reorder.onDragStart}
+                onDragOver={reorder.onDragOver}
+                onDragCancel={reorder.onDragCancel}
+                onDragEnd={reorder.onDragEnd}
+              >
+                {groupedTransactions.map((group) => (
+                  <div key={group.id} className="space-y-2">
+                    <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
+                      <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
+                        {group.label}
+                      </p>
+                    </div>
+
+                    <SortableContext
+                      items={group.transactions.map(
+                        (transaction) => transaction.id
+                      )}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {group.transactions.map((transaction) => (
+                        <SortableTransactionRow
+                          key={transaction.id}
+                          transaction={transaction}
+                          isDragOver={
+                            reorder.overId === transaction.id &&
+                            reorder.activeId !== transaction.id
+                          }
+                          reorderPending={reorder.reorderPending}
+                          onOpenDetails={(entry) =>
+                            setDetailsTransaction(entry)
+                          }
+                          onLink={(entry) =>
+                            transactionLinking.openPaymentModal(entry)
+                          }
+                          onEdit={startEditing}
+                          onDelete={(entry) =>
+                            setConfirmationDialog({
+                              confirmLabel: "Excluir Transação",
+                              description: `A transação "${entry.description}" será removida deste mês.`,
+                              title: "Excluir transação?",
+                              onConfirm: () =>
+                                deleteTransaction.mutate(entry.id),
+                              ...(entry.recurringGroupId
+                                ? {
+                                  confirmLabel: "Excluir somente esta",
+                                  description: `A transação "${entry.description}" faz parte de uma recorrência. Você pode remover apenas este mês ou excluir todas as recorrências do grupo.`,
+                                  title: "Excluir transação recorrente?",
+                                  secondaryConfirmLabel: "Excluir todas",
+                                  onSecondaryConfirm: () =>
+                                    deleteTransaction.mutate({
+                                      id: entry.id,
+                                      recurringGroupId:
+                                        entry.recurringGroupId,
+                                      deleteScope: "GROUP",
+                                    }),
+                                }
+                                : {}),
+                            })
+                          }
+                        />
+                      ))}
+                    </SortableContext>
+                  </div>
+                ))}
+              </DndContext>
+            )}
+          </div>
+        </Card>
+        <ConfirmationDialog
+          onClose={() => setConfirmationDialog(null)}
+          state={confirmationDialog}
+        />
+        <TransactionDetailsModal
+          transaction={detailsTransaction}
+          periodLabel={panel.label}
+          responsibleOptions={shared.responsibleOptions}
+          onClose={() => setDetailsTransaction(null)}
+        />
         {transactionLinking.paymentModalEntry ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">

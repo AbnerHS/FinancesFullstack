@@ -1,4 +1,4 @@
-﻿import { createPortal } from "react-dom"
+import { createPortal } from "react-dom"
 import { Save, SendHorizonal, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
