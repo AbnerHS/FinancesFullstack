@@ -697,16 +697,6 @@ class TransactionServiceTest {
         );
     }
 
-    private TransactionRequestDTO buildRequest(UUID periodId, String categoryName) {
-        return buildRequest(
-                periodId,
-                categoryName,
-                LocalDate.of(2026, 3, 20),
-                LocalDate.of(2026, 3, 18),
-                PaymentStatus.PAID
-        );
-    }
-
     private TransactionResponseDTO buildResponse() {
         return buildResponse(buildCategory("CASA"));
     }

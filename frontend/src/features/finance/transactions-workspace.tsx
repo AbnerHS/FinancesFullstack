@@ -1141,6 +1141,7 @@ export function TransactionsWorkspace({
             createPending={createTransaction.isPending}
             createRecurringPending={createRecurringTransaction.isPending}
             updatePending={updateTransaction.isPending}
+            submitPending={submitPending}
             onSubmit={async (event) => {
               event.preventDefault()
               try {
