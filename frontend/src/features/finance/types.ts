@@ -2,6 +2,16 @@ import type { EntityModel } from "@/lib/api/types.ts"
 
 export type TransactionType = "REVENUE" | "EXPENSE"
 export type PaymentStatus = "PENDING" | "PAID"
+export type BillingDocumentType = "LINK" | "FILE"
+
+export type BillingDocument = {
+  type: BillingDocumentType
+  url?: string | null
+  fileName?: string | null
+  mimeType?: string | null
+  downloadUrl?: string | null
+  uploadedAt?: string | null
+}
 
 export type User = {
   id: string
@@ -86,6 +96,7 @@ export type Transaction = EntityModel<{
   dueDate?: string | null
   paymentDate?: string | null
   paymentStatus?: PaymentStatus | null
+  billingDocument?: BillingDocument | null
 }>
 
 export type CategorySpending = {
@@ -113,4 +124,8 @@ export type TransactionFormValues = {
   dueDate: string
   isPaid: boolean
   paymentDate: string
+  billingDocumentType: BillingDocumentType | "NONE"
+  billingDocumentUrl: string
+  billingDocumentFile: File | null
+  billingDocumentExisting: BillingDocument | null
 }

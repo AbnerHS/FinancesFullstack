@@ -1,5 +1,6 @@
+import { createPortal } from "react-dom"
 import { Check, ChevronDown } from "lucide-react"
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { cn } from "@/lib/utils.ts"
 
@@ -59,8 +60,14 @@ export function Combobox({
   value,
 }: ComboboxProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [popupStyle, setPopupStyle] = useState<{
+    left: number
+    top: number
+    width: number
+  } | null>(null)
 
   const normalizedValue = useMemo(() => normalize(value), [value])
   const matchedOption = useMemo(
@@ -105,8 +112,38 @@ export function Combobox({
       : null
   const shouldShowPopup = isOpen && filteredOptions.length > 0
 
+  useEffect(() => {
+    if (!shouldShowPopup) {
+      return
+    }
+
+    const updatePopupPosition = () => {
+      const anchor = rootRef.current
+      if (!anchor) {
+        return
+      }
+
+      const rect = anchor.getBoundingClientRect()
+      setPopupStyle({
+        left: rect.left,
+        top: rect.bottom + 8,
+        width: rect.width,
+      })
+    }
+
+    updatePopupPosition()
+
+    window.addEventListener("resize", updatePopupPosition)
+    window.addEventListener("scroll", updatePopupPosition, true)
+
+    return () => {
+      window.removeEventListener("resize", updatePopupPosition)
+      window.removeEventListener("scroll", updatePopupPosition, true)
+    }
+  }, [shouldShowPopup])
+
   return (
-    <div className={cn("relative", className)}>
+    <div ref={rootRef} className={cn("relative", className)}>
       <input
         ref={inputRef}
         autoCapitalize="sentences"
@@ -239,37 +276,47 @@ export function Combobox({
         <ChevronDown size={16} />
       </button>
 
-      {shouldShowPopup ? (
-        <div className="app-field-popup absolute z-[130] mt-2 min-w-full">
-          <div className="max-h-72 overflow-y-auto" role="listbox">
-            {filteredOptions.map((option, index) => {
-              const isSelected = matchedOption?.value === option.value
-              const isHighlighted = highlightedOption?.value === option.value
+      {shouldShowPopup && popupStyle
+        ? createPortal(
+          <div
+            className="app-field-popup fixed z-[140]"
+            style={{
+              left: popupStyle.left,
+              top: popupStyle.top,
+              width: popupStyle.width,
+            }}
+          >
+            <div className="max-h-72 overflow-y-auto" role="listbox">
+              {filteredOptions.map((option, index) => {
+                const isSelected = matchedOption?.value === option.value
+                const isHighlighted = highlightedOption?.value === option.value
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={cn(
-                    "app-field-item flex w-full items-center justify-between text-left",
-                    isHighlighted && "bg-accent text-foreground"
-                  )}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => selectOption(option)}
-                >
-                  <span className="truncate">{option.label}</span>
-                  {isSelected ? (
-                    <span className="text-primary">
-                      <Check size={15} />
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={cn(
+                      "app-field-item flex w-full items-center justify-between text-left",
+                      isHighlighted && "bg-accent text-foreground"
+                    )}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    onClick={() => selectOption(option)}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {isSelected ? (
+                      <span className="text-primary">
+                        <Check size={15} />
+                      </span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          </div>,
+          document.body
+        )
+        : null}
     </div>
   )
 }

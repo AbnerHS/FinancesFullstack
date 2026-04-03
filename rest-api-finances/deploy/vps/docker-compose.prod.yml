@@ -62,6 +62,8 @@ services:
         -XX:MinRAMPercentage=20
         -XX:+UseSerialGC
         -Djava.security.egd=file:/dev/./urandom
+    volumes:
+      - ./payment-documents:/app/data/payment-documents
     restart: unless-stopped
     mem_limit: 320m
     mem_reservation: 192m

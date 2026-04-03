@@ -15,15 +15,21 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
+import { useQueryClient } from "@tanstack/react-query"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Download,
+  Eye,
+  ExternalLink,
   GripVertical,
+  Link,
   Pencil,
   Plus,
+  Repeat2,
   Save,
   SendHorizonal,
   Trash2,
@@ -44,12 +50,14 @@ import { FormError } from "@/components/ui/form-error.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
   usePeriodInvoiceManager,
   useTransactionLinking,
   useTransactionMutations,
 } from "@/features/finance/hooks.ts"
 import { TransactionComposer } from "@/features/finance/transaction-composer.tsx"
+import { financeKeys, transactionService } from "@/features/finance/services.ts"
 import {
   buildTransactionGroups,
   useTransactionReorder,
@@ -118,6 +126,10 @@ const emptyForm = (periodId: string): TransactionFormValues => ({
   dueDate: "",
   isPaid: false,
   paymentDate: "",
+  billingDocumentType: "NONE",
+  billingDocumentUrl: "",
+  billingDocumentFile: null,
+  billingDocumentExisting: null,
 })
 
 function TransactionRowContent({
@@ -136,6 +148,8 @@ function TransactionRowContent({
   onDelete?: (transaction: Transaction) => void
 }) {
   const dueAlert = getTransactionDueAlert(transaction)
+  const categoryLabel = transaction.category?.name || "Sem categoria"
+  const categoryBadgeStyle = getCategoryBadgeStyle(categoryLabel)
   const dueAlertBadge =
     dueAlert === "overdue"
       ? {
@@ -143,13 +157,7 @@ function TransactionRowContent({
         className:
           "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
       }
-      : dueAlert === "dueSoon"
-        ? {
-          label: "Vence em breve",
-          className:
-            "border-orange-500/40 bg-orange-500/12 text-orange-700 dark:text-orange-300",
-        }
-        : null
+      : null
 
   return (
     <>
@@ -169,10 +177,19 @@ function TransactionRowContent({
               {transaction.description}
             </button>
             <span className="flex items-center gap-1">
-
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase"
+                style={categoryBadgeStyle}
+              >
+                {categoryLabel}
+              </span>
               {transaction.recurringGroupId ? (
-                <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-medium text-primary uppercase">
-                  Recorrente
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/12 text-primary"
+                  title="Recorrente"
+                  aria-label="Recorrente"
+                >
+                  <Repeat2 size={12} />
                 </span>
               ) : null}
               {dueAlertBadge ? (
@@ -194,7 +211,6 @@ function TransactionRowContent({
                 transaction.paymentStatus === "PAID" ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 size={12} />
-                  Pago
                 </span>
               ) : null}
             </span>
@@ -223,7 +239,7 @@ function TransactionRowContent({
           onClick={onLink ? () => onLink(transaction) : undefined}
           disabled={!onLink || transaction.type !== "EXPENSE"}
         >
-          <CheckCircle2 size={14} />
+          <Link size={14} />
         </Button>
         <Button
           type="button"
@@ -345,6 +361,10 @@ function TransactionDetailsModal({
   responsibleOptions: ResponsibleOption[]
   onClose: () => void
 }) {
+  const [previewPending, setPreviewPending] = useState(false)
+  const [downloadPending, setDownloadPending] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+
   if (!transaction) {
     return null
   }
@@ -389,6 +409,59 @@ function TransactionDetailsModal({
     },
   ]
 
+  const billingDocument = transaction.billingDocument
+
+  const handleDownloadBillingDocument = async () => {
+    if (!billingDocument || billingDocument.type !== "FILE") {
+      return
+    }
+
+    setDownloadPending(true)
+    setDownloadError(null)
+
+    try {
+      const blob = await transactionService.downloadBillingDocument(transaction.id)
+      const objectUrl = window.URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+
+      anchor.href = objectUrl
+      anchor.download =
+        billingDocument.fileName || `${transaction.description}-documento`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      setDownloadError(
+        getErrorMessage(error, "Nao foi possivel baixar o documento.")
+      )
+    } finally {
+      setDownloadPending(false)
+    }
+  }
+
+  const handlePreviewBillingDocument = async () => {
+    if (!billingDocument || billingDocument.type !== "FILE") {
+      return
+    }
+
+    setPreviewPending(true)
+    setDownloadError(null)
+
+    try {
+      const blob = await transactionService.downloadBillingDocument(transaction.id)
+      const objectUrl = window.URL.createObjectURL(blob)
+      window.open(objectUrl, "_blank", "noopener,noreferrer")
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (error) {
+      setDownloadError(
+        getErrorMessage(error, "Nao foi possivel visualizar o documento.")
+      )
+    } finally {
+      setPreviewPending(false)
+    }
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
       <div className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
@@ -423,9 +496,65 @@ function TransactionDetailsModal({
               </div>
             ))}
           </div>
+
+          {billingDocument ? (
+            <div className="mt-4 rounded-xl border border-border/70 bg-secondary/40 px-4 py-4">
+              <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                Documento para pagamento
+              </p>
+              <p className="mt-2 text-sm text-foreground">
+                {billingDocument.type === "LINK"
+                  ? "Link direto disponivel para abrir o documento."
+                  : billingDocument.fileName || "Arquivo enviado para esta transacao."}
+              </p>
+              {downloadError ? (
+                <p className="mt-2 text-sm text-destructive">{downloadError}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex justify-end border-t border-border/70 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap gap-2">
+            {billingDocument?.type === "LINK" && billingDocument.url ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  window.open(
+                    billingDocument.url!,
+                    "_blank",
+                    "noopener,noreferrer"
+                  )
+                }
+              >
+                Abrir documento
+                <ExternalLink size={16} />
+              </Button>
+            ) : null}
+            {billingDocument?.type === "FILE" ? (
+              <Button
+                type="button"
+                disabled={previewPending || downloadPending}
+                onClick={handlePreviewBillingDocument}
+              >
+                {previewPending ? "Abrindo..." : "Visualizar documento"}
+                <Eye size={16} />
+              </Button>
+            ) : null}
+            {billingDocument?.type === "FILE" ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={downloadPending}
+                onClick={handleDownloadBillingDocument}
+              >
+                {downloadPending ? "Baixando..." : "Baixar documento"}
+                <Download size={16} />
+              </Button>
+            ) : null}
+          </div>
+
           <Button type="button" variant="outline" onClick={onClose}>
             Fechar
           </Button>
@@ -440,6 +569,7 @@ export function TransactionsWorkspace({
   panel,
   shared,
 }: TransactionWorkspaceProps) {
+  const queryClient = useQueryClient()
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [form, setForm] = useState<TransactionFormValues>(() =>
     emptyForm(panel.period.id)
@@ -450,6 +580,7 @@ export function TransactionsWorkspace({
     useState<Transaction | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
   const [formError, setFormError] = useState<string | null>(null)
+  const [submitPending, setSubmitPending] = useState(false)
   const [confirmationDialog, setConfirmationDialog] =
     useState<ConfirmationDialogState | null>(null)
 
@@ -536,7 +667,19 @@ export function TransactionsWorkspace({
     setEditingTransaction(null)
     setEditingScope("SINGLE")
     setFormError(null)
+    setSubmitPending(false)
     setForm(emptyForm(panel.period.id))
+  }
+
+  const refreshTransactionViews = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.periodTransactionsRoot,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["report-spending-by-category"],
+      }),
+    ])
   }
 
   const startCreateTransaction = () => {
@@ -572,21 +715,55 @@ export function TransactionsWorkspace({
       dueDate: transaction.dueDate || "",
       isPaid: transaction.paymentStatus === "PAID",
       paymentDate: transaction.paymentDate || "",
+      billingDocumentType: transaction.billingDocument?.type || "NONE",
+      billingDocumentUrl:
+        transaction.billingDocument?.type === "LINK"
+          ? transaction.billingDocument.url || ""
+          : "",
+      billingDocumentFile: null,
+      billingDocumentExisting: transaction.billingDocument || null,
     })
   }
 
-  const submit = async () => {
-    setFormError(null)
+  const saveTransactionWithBillingDocument = async () => {
     const amount = parseCurrencyInput(form.amount)
     if (!form.description.trim()) {
-      throw new Error("Informe a descrição.")
+      throw new Error("Informe a descricao.")
     }
     if (Number.isNaN(amount) || amount <= 0) {
-      throw new Error("Informe um valor válido.")
+      throw new Error("Informe um valor valido.")
     }
 
     if (form.type === "EXPENSE" && form.hasDueDate && !form.dueDate) {
       throw new Error("Informe a data de vencimento.")
+    }
+
+    const canAttachNewBillingDocument =
+      form.type === "EXPENSE" && Boolean(form.dueDate)
+
+    if (
+      form.billingDocumentType !== "NONE" &&
+      !form.billingDocumentExisting &&
+      !canAttachNewBillingDocument
+    ) {
+      throw new Error(
+        "Adicione um vencimento antes de anexar um documento para pagamento."
+      )
+    }
+
+    if (
+      form.billingDocumentType === "LINK" &&
+      !form.billingDocumentUrl.trim()
+    ) {
+      throw new Error("Informe o link do documento.")
+    }
+
+    if (
+      form.billingDocumentType === "FILE" &&
+      !form.billingDocumentFile &&
+      form.billingDocumentExisting?.type !== "FILE"
+    ) {
+      throw new Error("Selecione o arquivo do documento.")
     }
 
     const categoryName = form.categoryName.trim()
@@ -600,6 +777,7 @@ export function TransactionsWorkspace({
       dueDate?: string | null
       paymentDate?: string | null
       paymentStatus?: PaymentStatus | null
+      billingDocument?: { type: "LINK"; url: string } | null
     } = {
       description: form.description.trim(),
       amount,
@@ -630,6 +808,23 @@ export function TransactionsWorkspace({
       payload.paymentStatus = null
     }
 
+    if (form.billingDocumentType === "LINK") {
+      payload.billingDocument = {
+        type: "LINK",
+        url: form.billingDocumentUrl.trim(),
+      }
+    } else if (
+      form.billingDocumentType === "NONE" &&
+      form.billingDocumentExisting
+    ) {
+      payload.billingDocument = null
+    }
+
+    const fileToUpload =
+      form.billingDocumentType === "FILE" ? form.billingDocumentFile : null
+    let uploadTargetId: string | null = null
+    let uploadTargetScope: "SINGLE" | "GROUP" = "SINGLE"
+
     if (editingTransaction?.id) {
       const updatePayload: Record<string, unknown> = { ...payload }
       if (editingScope === "GROUP" && editingTransaction.recurringGroupId) {
@@ -641,21 +836,64 @@ export function TransactionsWorkspace({
         id: editingTransaction.id,
         payload: updatePayload,
       })
+
+      if (fileToUpload) {
+        uploadTargetId = editingTransaction.id
+        uploadTargetScope =
+          editingScope === "GROUP" && editingTransaction.recurringGroupId
+            ? "GROUP"
+            : "SINGLE"
+      }
     } else if (form.isRecurring) {
       if (!Number.isFinite(form.numberOfPeriods) || form.numberOfPeriods < 2) {
-        throw new Error("Informe pelo menos 2 períodos para recorrência.")
+        throw new Error("Informe pelo menos 2 periodos para recorrencia.")
       }
 
-      await createRecurringTransaction.mutateAsync({
+      const createdTransactions = await createRecurringTransaction.mutateAsync({
         transaction: payload,
         numberOfPeriods: Number(form.numberOfPeriods),
       })
+
+      if (fileToUpload) {
+        uploadTargetId = createdTransactions[0]?.id || null
+        uploadTargetScope = "GROUP"
+      }
     } else {
-      await createTransaction.mutateAsync(payload)
+      const createdTransaction = await createTransaction.mutateAsync(payload)
+
+      if (fileToUpload) {
+        uploadTargetId = createdTransaction.id
+        uploadTargetScope = "SINGLE"
+      }
     }
 
-    resetComposer()
-    setIsComposerOpen(false)
+    if (fileToUpload) {
+      if (!uploadTargetId) {
+        throw new Error(
+          "Nao foi possivel identificar a transacao para enviar o documento."
+        )
+      }
+
+      await transactionService.uploadBillingDocumentFile(uploadTargetId, {
+        file: fileToUpload,
+        scope: uploadTargetScope,
+      })
+      await refreshTransactionViews()
+    }
+  }
+
+  const submit = async () => {
+    setFormError(null)
+    setSubmitPending(true)
+    try {
+      await saveTransactionWithBillingDocument()
+      resetComposer()
+      setIsComposerOpen(false)
+      return
+
+    } finally {
+      setSubmitPending(false)
+    }
   }
 
   return (

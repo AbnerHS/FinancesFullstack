@@ -11,6 +11,7 @@ Exemplo de diretorio remoto:
 |-- docker-compose.prod.yml
 |-- .env
 |-- .deploy.env
+|-- payment-documents/
 ```
 
 ## Bootstrap inicial
@@ -18,11 +19,13 @@ Exemplo de diretorio remoto:
 1. Criar o diretorio remoto configurado em `VPS_DEPLOY_PATH`.
 2. Copiar `docker-compose.prod.yml` para esse diretorio.
 3. Criar o arquivo `.env` na VPS com base em `.env.production.example`.
-4. Instalar Docker Engine com Docker Compose plugin.
-5. Garantir que a porta `8080` esteja liberada no host e que o frontend na Vercel aponte para a URL publica da API.
+4. Garantir que o diretorio `payment-documents/` exista e fique persistido ao lado do `docker-compose.prod.yml`.
+5. Instalar Docker Engine com Docker Compose plugin.
+6. Garantir que a porta `8080` esteja liberada no host e que o frontend na Vercel aponte para a URL publica da API.
 
 ## Secrets esperados no GitHub
 
+- `RELEASE_PLEASE_TOKEN` (PAT com permissoes de `contents` e `pull_requests` para que a release dispare o workflow de deploy)
 - `GHCR_USERNAME`
 - `GHCR_TOKEN`
 - `VPS_HOST`
@@ -37,4 +40,5 @@ Exemplo de diretorio remoto:
 - envia `docker-compose.prod.yml` para a VPS
 - atualiza `.deploy.env` com a imagem e a tag publicada
 - executa `docker compose pull` e `docker compose up -d`
+- mantem os documentos de cobranca em `payment-documents/`, montado no backend como `/app/data/payment-documents`
 - aguarda o healthcheck da aplicacao

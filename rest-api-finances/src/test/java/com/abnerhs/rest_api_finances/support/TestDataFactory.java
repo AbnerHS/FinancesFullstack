@@ -197,7 +197,8 @@ public final class TestDataFactory {
                 true,
                 LocalDate.of(2026, 3, 20),
                 LocalDate.of(2026, 3, 18),
-                PaymentStatus.PAID
+                PaymentStatus.PAID,
+                null
         );
     }
 
@@ -221,7 +222,8 @@ public final class TestDataFactory {
                 true,
                 LocalDate.of(2026, 3, 20),
                 LocalDate.of(2026, 3, 18),
-                PaymentStatus.PAID
+                PaymentStatus.PAID,
+                null
         );
     }
 

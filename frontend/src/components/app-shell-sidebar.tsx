@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react"
 
+import { ThemeToggle } from "@/components/theme-toggle.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { cn } from "@/lib/utils.ts"
 
@@ -161,11 +162,15 @@ export function AppShellSidebar({
             })}
           </nav>
 
-          <div className="border-t border-border px-4 py-4">
+          <div className="space-y-3 border-t border-border px-4 py-4 flex flex-col items-center">
+              <p className="mb-3 text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+                Aparencia
+              </p>
+              <ThemeToggle />
             <Button
               type="button"
               variant="outline"
-              className="h-12 w-full justify-start gap-2 rounded-[1.25rem] bg-card/70 text-foreground"
+              className="h-12 w-full justify-start gap-2 rounded-[1.25rem] bg-card/70 text-foreground pl-4"
               onClick={onLogout}
             >
               <LogOut size={16} />

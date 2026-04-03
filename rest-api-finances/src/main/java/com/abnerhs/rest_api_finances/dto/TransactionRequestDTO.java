@@ -34,5 +34,6 @@ public record TransactionRequestDTO(
         Boolean isClearedByInvoice,
         LocalDate dueDate,
         LocalDate paymentDate,
-        PaymentStatus paymentStatus
+        PaymentStatus paymentStatus,
+        BillingDocumentRequestDTO billingDocument
 ) {}

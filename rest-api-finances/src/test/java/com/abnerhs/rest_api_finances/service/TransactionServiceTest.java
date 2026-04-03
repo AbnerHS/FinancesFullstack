@@ -63,6 +63,9 @@ class TransactionServiceTest {
     @Mock
     private TransactionCategoryRepository transactionCategoryRepository;
 
+    @Mock
+    private FinancialPlanService financialPlanService;
+
     @InjectMocks
     private TransactionService service;
 
@@ -78,6 +81,7 @@ class TransactionServiceTest {
         entity.setPeriod(period);
         TransactionCategory category = buildCategory("CASA");
 
+        when(periodRepository.findById(dto.periodId())).thenReturn(Optional.of(period));
         when(mapper.toEntity(dto)).thenReturn(entity);
         when(transactionCategoryRepository.findByNameIgnoreCase("CASA")).thenReturn(Optional.empty());
         when(transactionCategoryRepository.save(any(TransactionCategory.class))).thenReturn(category);
@@ -99,6 +103,7 @@ class TransactionServiceTest {
         period.setId(UUID.randomUUID());
         entity.setPeriod(period);
 
+        when(periodRepository.findById(dto.periodId())).thenReturn(Optional.of(period));
         when(mapper.toEntity(dto)).thenReturn(entity);
         when(transactionCategoryRepository.findById(category.getId())).thenReturn(Optional.of(category));
         when(repository.findMaxOrderByPeriodId(period.getId())).thenReturn(0);
@@ -118,6 +123,7 @@ class TransactionServiceTest {
         period.setId(dto.periodId());
         entity.setPeriod(period);
 
+        when(periodRepository.findById(dto.periodId())).thenReturn(Optional.of(period));
         when(mapper.toEntity(dto)).thenReturn(entity);
         when(repository.findMaxOrderByPeriodId(dto.periodId())).thenReturn(1);
         when(repository.save(entity)).thenReturn(entity);
@@ -144,13 +150,15 @@ class TransactionServiceTest {
                 false,
                 null,
                 null,
-                PaymentStatus.PENDING
+                PaymentStatus.PENDING,
+                null
         );
         Transaction entity = new Transaction();
         FinancialPeriod period = new FinancialPeriod();
         period.setId(dto.periodId());
         entity.setPeriod(period);
 
+        when(periodRepository.findById(dto.periodId())).thenReturn(Optional.of(period));
         when(mapper.toEntity(dto)).thenReturn(entity);
         when(repository.findMaxOrderByPeriodId(dto.periodId())).thenReturn(0);
         when(repository.save(entity)).thenReturn(entity);
@@ -171,6 +179,7 @@ class TransactionServiceTest {
         period.setId(UUID.randomUUID());
         entity.setPeriod(period);
 
+        when(periodRepository.findById(dto.periodId())).thenReturn(Optional.of(period));
         when(mapper.toEntity(dto)).thenReturn(entity);
         when(transactionCategoryRepository.findById(categoryId)).thenReturn(Optional.empty());
 
@@ -340,6 +349,9 @@ class TransactionServiceTest {
         List<Transaction> transactions = List.of(new Transaction());
         List<TransactionResponseDTO> response = List.of(buildResponse());
 
+        FinancialPeriod period = new FinancialPeriod();
+        period.setId(periodId);
+        when(periodRepository.findById(periodId)).thenReturn(Optional.of(period));
         when(repository.findByPeriodIdOrderByOrderAsc(periodId)).thenReturn(transactions);
         when(mapper.toDtoList(transactions)).thenReturn(response);
 
@@ -400,7 +412,8 @@ class TransactionServiceTest {
                 false,
                 null,
                 null,
-                PaymentStatus.PENDING
+                PaymentStatus.PENDING,
+                null
         );
         Transaction entity = new Transaction();
         entity.setTransactionCategory(buildCategory("CASA"));
@@ -600,17 +613,18 @@ class TransactionServiceTest {
     @Test
     void shouldDeleteTransaction() {
         UUID id = UUID.randomUUID();
-        when(repository.existsById(id)).thenReturn(true);
+        Transaction transaction = new Transaction();
+        when(repository.findById(id)).thenReturn(Optional.of(transaction));
 
         service.delete(id);
 
-        verify(repository).deleteById(id);
+        verify(repository).delete(transaction);
     }
 
     @Test
     void shouldRejectDeletingMissingTransaction() {
         UUID id = UUID.randomUUID();
-        when(repository.existsById(id)).thenReturn(false);
+        when(repository.findById(id)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> service.delete(id));
     }
@@ -649,7 +663,8 @@ class TransactionServiceTest {
                 false,
                 dueDate,
                 paymentDate,
-                paymentStatus
+                paymentStatus,
+                null
         );
     }
 
@@ -665,6 +680,17 @@ class TransactionServiceTest {
                 null,
                 null,
                 false,
+                LocalDate.of(2026, 3, 20),
+                LocalDate.of(2026, 3, 18),
+                PaymentStatus.PAID,
+                null
+        );
+    }
+
+    private TransactionRequestDTO buildRequest(UUID periodId, String categoryName) {
+        return buildRequest(
+                periodId,
+                categoryName,
                 LocalDate.of(2026, 3, 20),
                 LocalDate.of(2026, 3, 18),
                 PaymentStatus.PAID
@@ -701,7 +727,8 @@ class TransactionServiceTest {
                 false,
                 LocalDate.of(2026, 3, 20),
                 LocalDate.of(2026, 3, 18),
-                PaymentStatus.PAID
+                PaymentStatus.PAID,
+                null
         );
     }
 
@@ -722,7 +749,8 @@ class TransactionServiceTest {
                 transaction.isClearedByInvoice(),
                 transaction.getDueDate(),
                 transaction.getPaymentDate(),
-                transaction.getPaymentStatus()
+                transaction.getPaymentStatus(),
+                null
         );
     }
 

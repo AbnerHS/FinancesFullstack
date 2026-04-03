@@ -3,8 +3,10 @@ package com.abnerhs.rest_api_finances.mapper;
 import com.abnerhs.rest_api_finances.dto.TransactionCategoryDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionRequestDTO;
 import com.abnerhs.rest_api_finances.dto.TransactionResponseDTO;
+import com.abnerhs.rest_api_finances.dto.BillingDocumentResponseDTO;
 import com.abnerhs.rest_api_finances.exception.ResourceNotFoundException;
 import com.abnerhs.rest_api_finances.model.Transaction;
+import com.abnerhs.rest_api_finances.model.enums.BillingDocumentType;
 import com.abnerhs.rest_api_finances.repository.CreditCardInvoiceRepository;
 import com.abnerhs.rest_api_finances.repository.FinancialPeriodRepository;
 import com.abnerhs.rest_api_finances.repository.UserRepository;
@@ -35,6 +37,12 @@ public abstract class TransactionMapper {
     @Mapping(target = "creditCardInvoice", expression = "java(dto.creditCardInvoiceId() != null ? invoiceRepository.findById(dto.creditCardInvoiceId())"
             + ".orElseThrow(() -> new ResourceNotFoundException(\"Fatura nÃ£o encontrada\")) : null)")
     @Mapping(target = "transactionCategory", ignore = true)
+    @Mapping(target = "billingDocumentType", ignore = true)
+    @Mapping(target = "billingDocumentUrl", ignore = true)
+    @Mapping(target = "billingDocumentFileName", ignore = true)
+    @Mapping(target = "billingDocumentMimeType", ignore = true)
+    @Mapping(target = "billingDocumentStorageKey", ignore = true)
+    @Mapping(target = "billingDocumentUploadedAt", ignore = true)
     @Mapping(target = "clearedByInvoice", source = "isClearedByInvoice", defaultValue = "false")
     @Mapping(target = "paymentStatus", source = "paymentStatus", defaultValue = "PENDING")
     @Mapping(target = "id", ignore = true)
@@ -44,6 +52,7 @@ public abstract class TransactionMapper {
     @Mapping(source = "period.id", target = "periodId")
     @Mapping(source = "responsibleUser.id", target = "responsibleUserId")
     @Mapping(target = "category", expression = "java(toCategoryDto(entity))")
+    @Mapping(target = "billingDocument", expression = "java(toBillingDocumentDto(entity))")
     @Mapping(source = "clearedByInvoice", target = "isClearedByInvoice")
     @Mapping(source = "creditCardInvoice.id", target = "creditCardInvoiceId")
     public abstract TransactionResponseDTO toDto(Transaction entity);
@@ -56,6 +65,12 @@ public abstract class TransactionMapper {
     @Mapping(target = "period", ignore = true)
     @Mapping(target = "responsibleUser", ignore = true)
     @Mapping(target = "creditCardInvoice", ignore = true)
+    @Mapping(target = "billingDocumentType", ignore = true)
+    @Mapping(target = "billingDocumentUrl", ignore = true)
+    @Mapping(target = "billingDocumentFileName", ignore = true)
+    @Mapping(target = "billingDocumentMimeType", ignore = true)
+    @Mapping(target = "billingDocumentStorageKey", ignore = true)
+    @Mapping(target = "billingDocumentUploadedAt", ignore = true)
     @Mapping(target = "clearedByInvoice", ignore = true)
     @Mapping(target = "paymentStatus", ignore = true)
     public abstract void updateEntityFromDto(TransactionRequestDTO dto, @MappingTarget Transaction entity);
@@ -99,6 +114,26 @@ public abstract class TransactionMapper {
         return new TransactionCategoryDTO(
                 entity.getTransactionCategory().getId(),
                 entity.getTransactionCategory().getName()
+        );
+    }
+
+    protected BillingDocumentResponseDTO toBillingDocumentDto(Transaction entity) {
+        BillingDocumentType type = entity.getBillingDocumentType();
+        if (type == null) {
+            return null;
+        }
+
+        String downloadUrl = type == BillingDocumentType.FILE
+                ? "/api/transactions/" + entity.getId() + "/billing-document/download"
+                : null;
+
+        return new BillingDocumentResponseDTO(
+                type,
+                entity.getBillingDocumentUrl(),
+                entity.getBillingDocumentFileName(),
+                entity.getBillingDocumentMimeType(),
+                downloadUrl,
+                entity.getBillingDocumentUploadedAt()
         );
     }
 }

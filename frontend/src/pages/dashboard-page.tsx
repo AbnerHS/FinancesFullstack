@@ -558,7 +558,7 @@ export function DashboardPage() {
           <div className="relative">
             <div
               ref={transactionsScrollerRef}
-              className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0"
+              className="-mx-4 overflow-hidden px-4 pb-4 sm:mx-0 sm:px-0"
             >
               <div className="flex snap-x snap-mandatory gap-5">
                 {filteredPanels.map((panel, index) => (
