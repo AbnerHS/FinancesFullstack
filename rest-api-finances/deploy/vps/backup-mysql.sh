@@ -4,10 +4,12 @@ set -euo pipefail
 
 CONTAINER_NAME="${CONTAINER_NAME:-mysql-db}"
 
-# Carrega .env se não foram passadas as variáveis como env
-if [[ -f ".env" ]]; then
+# Carrega .env localizado na raiz do projeto (dois níveis acima deste script)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../../.env"
+if [[ -f "$ENV_FILE" ]]; then
   # shellcheck source=/dev/null
-  set -a; source .env; set +a
+  set -a; source "$ENV_FILE"; set +a
 fi
 
 SPRING_DATASOURCE_URL="${SPRING_DATASOURCE_URL:?Defina SPRING_DATASOURCE_URL no .env ou no ambiente.}"
