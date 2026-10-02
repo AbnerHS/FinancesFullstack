@@ -88,8 +88,11 @@ export const planRoutes = new Hono<AppEnv>()
   })
   .get("/:id/transactions", async (c) => {
     const range = parseDateRange(c.req.query())
-    if (!range) throw badRequest("Informe 'month' (AAAA-MM) ou 'from' e 'to' (AAAA-MM-DD)")
-    const list = await transactions.listByPlan(c.var.db, c.var.user, c.req.param("id"), range)
+    const recurringGroupId = c.req.query("recurringGroupId") || undefined
+    if (!range && !recurringGroupId) {
+      throw badRequest("Informe 'month' (AAAA-MM), 'from' e 'to' (AAAA-MM-DD) ou 'recurringGroupId'")
+    }
+    const list = await transactions.listByPlan(c.var.db, c.var.user, c.req.param("id"), { range, recurringGroupId })
     return c.json(collection("transactions", list, selfHref(c.req.url)))
   })
   .put("/:id/transactions/order", validate("json", reorderSchema), async (c) => {

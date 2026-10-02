@@ -128,6 +128,19 @@ describe("recorrência", () => {
     expect(created[0].recurringGroupId).toEqual(expect.any(String))
   })
 
+  it("lista as ocorrências do grupo sem precisar de intervalo", async () => {
+    const { owner, plan, create } = await setup()
+    const created = await json(
+      as(owner).post("/transactions/recurring", { transaction: tx(plan.id, "2026-01-15"), occurrences: 3 }),
+    )
+    await create("2026-02-01") // fora do grupo
+
+    const group = await json(
+      as(owner).get(`/plans/${plan.id}/transactions?recurringGroupId=${created[0].recurringGroupId}`),
+    )
+    expect(group._embedded.transactions.map((t: any) => t.id)).toEqual(created.map((t: any) => t.id))
+  })
+
   it("valida quantidade e não aceita fatura", async () => {
     const { owner, plan } = await setup()
     expect((await as(owner).post("/transactions/recurring", { transaction: tx(plan.id, "2026-01-01"), occurrences: 1 })).status).toBe(400)
@@ -160,7 +173,7 @@ describe("listagem e ordem", () => {
     const range = await json(as(owner).get(`/plans/${plan.id}/transactions?from=2026-09-01&to=2026-11-30`))
     expect(range._embedded.transactions).toHaveLength(4)
 
-    expect((await as(owner).get(`/plans/${plan.id}/transactions`)).status).toBe(400)
+    expect((await as(owner).get(`/plans/${plan.id}/transactions`)).status).toBe(400) // sem filtro
     expect((await as(owner).get(`/plans/${plan.id}/transactions?from=2026-10-31&to=2026-10-01`)).status).toBe(400)
   })
 

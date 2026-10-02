@@ -123,11 +123,26 @@ export async function getAccessibleTransaction(db: Database, user: User, id: str
   return transaction
 }
 
-/** Transações do plano no intervalo, por mês e depois pela ordem manual. */
-export async function listByPlan(db: Database, user: User, planId: string, range: DateRange) {
+/**
+ * Transações do plano por mês e depois pela ordem manual. Filtra por intervalo e/ou por grupo de
+ * recorrência (usado para editar/excluir todas as ocorrências); ao menos um dos dois é exigido na rota.
+ */
+export async function listByPlan(
+  db: Database,
+  user: User,
+  planId: string,
+  filter: { range: DateRange | null; recurringGroupId?: string | undefined },
+) {
   await requirePlanAccess(db, planId, user)
+  const { range, recurringGroupId } = filter
   const rows = await selectWithCategory(db)
-    .where(and(eq(transactions.planId, planId), between(transactions.referenceDate, range.from, range.to)))
+    .where(
+      and(
+        eq(transactions.planId, planId),
+        range ? between(transactions.referenceDate, range.from, range.to) : undefined,
+        recurringGroupId ? eq(transactions.recurringGroupId, recurringGroupId) : undefined,
+      ),
+    )
     .orderBy(
       sql`substr(${transactions.referenceDate}, 1, 7)`,
       sql`${transactions.displayOrder} is null`,
