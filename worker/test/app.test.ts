@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test"
-import { exports } from "cloudflare:workers"
 import { describe, expect, it } from "vitest"
 import { signToken } from "../src/lib/jwt.ts"
-
-const api = (path: string, init?: RequestInit) =>
-  exports.default.fetch(new Request(`https://finances.test/api${path}`, init))
+import { api } from "./helpers.ts"
 
 async function insertUser(email: string) {
   await env.DB.prepare("insert into users (id, email, password, name) values (?, ?, ?, ?)")

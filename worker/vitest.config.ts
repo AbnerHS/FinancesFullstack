@@ -13,7 +13,11 @@ export default defineConfig({
           // Segredos fixos de teste (base64 de 32 bytes), independentes do .dev.vars.
           JWT_ACCESS_TOKEN_SECRET: "YWNjZXNzLXRlc3Qtc2VjcmV0LTMyLWJ5dGVzLWxvbmch",
           JWT_REFRESH_TOKEN_SECRET: "cmVmcmVzaC10ZXN0LXNlY3JldC0zMi1ieXRlcy1sb25n",
+          GOOGLE_OAUTH_CLIENT_ID: "test-client",
           GOOGLE_OAUTH_CLIENT_SECRET: "test",
+          GOOGLE_OAUTH_REDIRECT_URI: "https://finances.test/auth/google/callback",
+          GOOGLE_OAUTH_TOKEN_URI: "https://google.test/token",
+          GOOGLE_OAUTH_USERINFO_URI: "https://google.test/userinfo",
           JWT_REFRESH_COOKIE_SECURE: "false",
         },
       },

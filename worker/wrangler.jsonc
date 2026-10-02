@@ -37,6 +37,8 @@
     "JWT_ACCESS_TOKEN_EXPIRATION_MS": "900000",
     "JWT_REFRESH_TOKEN_EXPIRATION_MS": "604800000",
     "JWT_REFRESH_COOKIE_SECURE": "true",
+    // Lax: frontend e API na mesma origem. Use None só se o frontend ficar em outro domínio.
+    "JWT_REFRESH_COOKIE_SAME_SITE": "Lax",
     "GOOGLE_OAUTH_CLIENT_ID": "",
     "GOOGLE_OAUTH_REDIRECT_URI": "",
     "GOOGLE_OAUTH_TOKEN_URI": "https://oauth2.googleapis.com/token",

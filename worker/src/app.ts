@@ -2,6 +2,8 @@ import { Hono } from "hono"
 import { getDb } from "./db/client.ts"
 import { ApiError } from "./lib/errors.ts"
 import { requireAuth } from "./middleware/auth.ts"
+import { authRoutes } from "./routes/auth.ts"
+import { toUserResponse } from "./services/auth.ts"
 import type { AppEnv } from "./types.ts"
 
 export const app = new Hono<AppEnv>().basePath("/api")
@@ -13,13 +15,12 @@ app.use(async (c, next) => {
 
 app.get("/health", (c) => c.json({ status: "UP" }))
 
-// Rotas públicas (/auth/*) são registradas antes deste middleware nas próximas etapas.
+// Rotas públicas ficam antes do requireAuth.
+app.route("/auth", authRoutes)
+
 app.use("*", requireAuth)
 
-app.get("/users/me", (c) => {
-  const { id, email, name, authProvider } = c.var.user
-  return c.json({ id, email, name, authProvider })
-})
+app.get("/users/me", (c) => c.json(toUserResponse(c.var.user)))
 
 app.notFound((c) =>
   c.json(new ApiError(404, "Recurso não encontrado", "Rota não encontrada").toProblem(c.req.path), 404),

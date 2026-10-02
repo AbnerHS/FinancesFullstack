@@ -3,6 +3,7 @@ import { createMiddleware } from "hono/factory"
 import { users } from "../db/schema.ts"
 import { unauthorized } from "../lib/errors.ts"
 import { verifyToken } from "../lib/jwt.ts"
+import { normalizeEmail } from "../services/auth.ts"
 import type { AppEnv } from "../types.ts"
 
 // Equivalente ao JwtAuthenticationFilter + SecurityConfiguration: exige Bearer access token
@@ -18,7 +19,7 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
     throw unauthorized("Token de acesso inválido ou expirado")
   }
 
-  const user = await c.var.db.query.users.findFirst({ where: eq(users.email, email) })
+  const user = await c.var.db.query.users.findFirst({ where: eq(users.email, normalizeEmail(email)) })
   if (!user) {
     throw unauthorized("Usuário não encontrado")
   }
