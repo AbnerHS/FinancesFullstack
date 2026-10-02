@@ -58,6 +58,74 @@ Depois de alterar `wrangler.jsonc`: `pnpm cf-typegen`.
 
 ## Primeiro deploy
 
+Recursos e segredos (uma vez, localmente):
+
+```bash
+npx wrangler d1 create finances --location enam   # anote o database_id
+npx wrangler r2 bucket create finances-docs
+npx wrangler secret put JWT_ACCESS_TOKEN_SECRET     # use os mesmos do backend Java
+npx wrangler secret put JWT_REFRESH_TOKEN_SECRET
+npx wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET
+```
+
+Depois disso o deploy é feito pelo GitHub Actions (`.github/workflows/deploy-worker.yml`): build do
+frontend, testes, migrations do D1 e `wrangler deploy`. Configure no environment `production`:
+
+| Tipo | Nome | Valor |
+|---|---|---|
+| Secret | `CLOUDFLARE_API_TOKEN` | token com Workers Scripts:Edit e D1:Edit |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | id da conta Cloudflare |
+| Variable | `D1_DATABASE_ID` | id do `wrangler d1 create` (o `wrangler.jsonc` versionado tem um placeholder) |
+| Variable | `GOOGLE_CLIENT_ID` | client id do OAuth do Google |
+| Variable | `GOOGLE_REDIRECT_URI` | `https://<url pública>/auth/google/callback` |
+| Variable | `WORKER_DEPLOY_ENABLED` | `true` para publicar também a cada release |
+
+Sem `WORKER_DEPLOY_ENABLED`, o workflow só roda manualmente (Actions → Deploy Worker → Run
+workflow), porque as releases ainda versionam o backend Java. O `ci-worker.yml` roda typecheck,
+testes e um `wrangler deploy --dry-run` em PRs e pushes que mexem em `worker/`.
+
+Deploy manual, se preciso (troque o `database_id` no `wrangler.jsonc` antes):
+
+```bash
+pnpm db:migrate:remote
+(cd ../frontend && VITE_API_BASE_URL=/api pnpm build) && pnpm deploy
+```
+
+## API
+
+Mesmo contrato do backend Java (HAL com `_links`/`_embedded`, erros em ProblemDetail), exceto:
+
+| Antes (Java) | Agora |
+|---|---|
+| `/periods/*` | removido |
+| `GET /periods/{id}/transactions` | `GET /plans/{id}/transactions?month=AAAA-MM` ou `?from=&to=` (AAAA-MM-DD) |
+| `GET /periods/{id}/invoices` | `GET /plans/{id}/invoices?month=AAAA-MM` (ou `from`/`to` em AAAA-MM; sem filtro, todas) |
+| `GET /periods/{id}/summary` | `GET /plans/{id}/summary` (filtro opcional) |
+| `GET /reports/spending-by-category?periodId=` | `?planId=` + filtro opcional |
+| lista de períodos | `GET /plans/{id}/months`: meses com transações e totais |
+| `PATCH` de `order` em cada transação | também `PUT /plans/{id}/transactions/order` `{ month, transactionIds }` |
+| transação: `periodId`, `dateTime` (`dd/MM/yyyy`), `amount` texto | `planId`, `referenceDate`, `createdAt` (ISO), `amount` número |
+| recorrência: `numberOfPeriods` | `occurrences` (2 a 120) |
+| fatura: `periodId` | `planId` + `referenceMonth` (AAAA-MM) |
+| `GET /users` (todos os usuários) | removido; `/users/{id}` só para quem divide plano |
+| — | `POST /auth/logout` |
+
+## Desenvolvimento
+
+```bash
+pnpm install
+cp .dev.vars.example .dev.vars    # preencher segredos (openssl rand -base64 32)
+pnpm db:migrate:local
+pnpm dev                          # http://localhost:8787
+pnpm test
+pnpm typecheck
+```
+
+Depois de alterar `src/db/schema.ts`: `pnpm db:generate` (gera um novo SQL em `migrations/`).
+Depois de alterar `wrangler.jsonc`: `pnpm cf-typegen`.
+
+## Primeiro deploy
+
 ```bash
 npx wrangler d1 create finances --location enam   # copiar o database_id para wrangler.jsonc
 npx wrangler r2 bucket create finances-docs

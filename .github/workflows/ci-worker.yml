@@ -1,0 +1,60 @@
+name: CI Worker
+
+on:
+  pull_request:
+    paths:
+      - "worker/**"
+      - ".github/workflows/ci-worker.yml"
+  push:
+    branches:
+      - dev
+      - main
+      - master
+    paths:
+      - "worker/**"
+      - ".github/workflows/ci-worker.yml"
+
+jobs:
+  validate:
+    if: |
+      (github.event_name != 'pull_request' || !startsWith(github.event.pull_request.title, 'chore(main): release')) &&
+      (github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(main): release'))
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: worker
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm 11: o worker/pnpm-workspace.yaml usa `allowBuilds` (formato do 11) para liberar
+      # os binários do workerd/esbuild usados pelos testes.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      # Node 22: o script de migração (scripts/*.ts) roda TypeScript direto no Node.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: worker/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      # Valida o bundle sem publicar. O diretório de assets precisa existir.
+      - name: Bundle (dry run)
+        run: |
+          mkdir -p ../frontend/dist
+          pnpm exec wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker-bundle"
