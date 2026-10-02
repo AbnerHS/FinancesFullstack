@@ -1263,8 +1263,9 @@ export function TransactionsWorkspace({
           responsibleOptions={shared.responsibleOptions}
           onClose={() => setDetailsTransaction(null)}
         />
-        {transactionLinking.paymentModalEntry ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+        {/* Portal: dentro do painel do mês, o fixed ficaria preso à coluna em vez da tela. */}
+        {transactionLinking.paymentModalEntry ? createPortal(
+          <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
             <div className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
               <div className="border-b border-border/70 px-4 py-4 sm:px-5">
                 <p className="app-eyebrow">Fatura</p>
@@ -1358,7 +1359,8 @@ export function TransactionsWorkspace({
                 </Button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         ) : null}
       </div>
     </Card>
