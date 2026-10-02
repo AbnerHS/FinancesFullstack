@@ -64,10 +64,15 @@ export const financialPlanPartners = sqliteTable(
   ],
 )
 
-export const transactionCategories = sqliteTable("transaction_categories", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull().unique(),
-})
+export const transactionCategories = sqliteTable(
+  "transaction_categories",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+  },
+  // Java usava findByNameIgnoreCase; a unicidade também ignora maiúsculas.
+  (t) => [uniqueIndex("uk_transaction_categories_name").on(sql`lower(${t.name})`)],
+)
 
 export const creditCards = sqliteTable(
   "credit_cards",
@@ -123,7 +128,8 @@ export const transactions = sqliteTable(
     // fatura, fica dentro do reference_month da fatura.
     referenceDate: text("reference_date").notNull(), // 'YYYY-MM-DD'
     createdAt: text("created_at").notNull(),
-    categoryId: text("category_id").references(() => transactionCategories.id),
+    // Apagar a categoria só descategoriza as transações.
+    categoryId: text("category_id").references(() => transactionCategories.id, { onDelete: "set null" }),
     responsibleUserId: text("responsible_user_id").references(() => users.id),
     recurringGroupId: text("recurring_group_id"),
     // Ordem manual dentro do (plano, mês da reference_date).

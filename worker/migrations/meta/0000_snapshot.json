@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "cae5ddd9-a5f7-478a-aebf-95490a380dcd",
+  "id": "06b58036-43fb-4fa4-9ff0-1026b354c098",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "credit_card_invoices": {
@@ -304,10 +304,10 @@
         }
       },
       "indexes": {
-        "transaction_categories_name_unique": {
-          "name": "transaction_categories_name_unique",
+        "uk_transaction_categories_name": {
+          "name": "uk_transaction_categories_name",
           "columns": [
-            "name"
+            "lower(\"name\")"
           ],
           "isUnique": true
         }
@@ -539,7 +539,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "transactions_responsible_user_id_users_id_fk": {
@@ -676,6 +676,14 @@
     "columns": {}
   },
   "internal": {
-    "indexes": {}
+    "indexes": {
+      "uk_transaction_categories_name": {
+        "columns": {
+          "lower(\"name\")": {
+            "isExpression": true
+          }
+        }
+      }
+    }
   }
 }

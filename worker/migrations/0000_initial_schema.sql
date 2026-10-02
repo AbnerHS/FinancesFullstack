@@ -43,7 +43,7 @@ CREATE TABLE `transaction_categories` (
 	`name` text NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `transaction_categories_name_unique` ON `transaction_categories` (`name`);--> statement-breakpoint
+CREATE UNIQUE INDEX `uk_transaction_categories_name` ON `transaction_categories` (lower("name"));--> statement-breakpoint
 CREATE TABLE `transactions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`plan_id` text NOT NULL,
@@ -68,7 +68,7 @@ CREATE TABLE `transactions` (
 	`billing_document_storage_key` text,
 	`billing_document_uploaded_at` text,
 	FOREIGN KEY (`plan_id`) REFERENCES `financial_plans`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`category_id`) REFERENCES `transaction_categories`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`category_id`) REFERENCES `transaction_categories`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`responsible_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`credit_card_invoice_id`) REFERENCES `credit_card_invoices`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "chk_transactions_type" CHECK("transactions"."type" in ('REVENUE', 'EXPENSE')),
