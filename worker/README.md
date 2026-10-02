@@ -67,3 +67,46 @@ npx wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET
 pnpm db:migrate:remote
 (cd ../frontend && pnpm build) && pnpm deploy
 ```
+
+## Migração dos dados do MySQL
+
+`scripts/migrate-from-mysql.ts` lê o MySQL do backend Java e gera o SQL para o D1, já no modelo
+sem períodos. Ele **não grava nada** se encontrar dados que exigem decisão (lista os registros e
+sai com código 1): e-mails que colidem após normalizar, faturas duplicadas do mesmo cartão no mesmo
+mês e plano, transações sem período, fatura de outro plano, comprovante com extensão não suportada.
+
+Conversões:
+
+- UUID `binary(16)` → texto; valores → centavos (`ROUND` exato do MySQL); datas → ISO-8601 (UTC).
+- E-mails em minúsculas e sem espaços nas pontas.
+- `reference_date`: o vencimento se cair no mês do período, senão a data de criação se cair no mês,
+  senão o dia 1º. Transação ligada a fatura de outro mês vai para o mês da fatura (fim da ordem).
+- Fatura: `plan_id` e `reference_month` vêm do período.
+- Tipo do comprovante recalculado pela extensão (o Java guardava o Content-Type do navegador).
+- Perdem-se: `monthly_balance` (avisado se diferente de zero) e períodos vazios.
+
+Passo a passo (produção):
+
+```bash
+# 1. Pare as escritas no backend Java (ex.: docker compose stop spring-app na VPS).
+# 2. Túnel até o MySQL e cópia dos comprovantes:
+ssh -N -L 3307:127.0.0.1:3306 usuario@vps &
+rsync -a usuario@vps:<VPS_DEPLOY_PATH>/payment-documents/ ./payment-documents/
+
+# 3. Export (valida e gera migration/):
+MYSQL_URL=mysql://finances_user:SENHA@127.0.0.1:3307/finances \
+  pnpm migrate:mysql export --out migration --documents-dir ./payment-documents
+
+# 4. Import no D1 remoto (depois do "Primeiro deploy" acima) e upload dos arquivos para o R2:
+pnpm db:migrate:remote
+npx wrangler d1 execute finances --remote --file migration/d1-import.sql
+./migration/upload-documents.sh ./payment-documents --remote
+
+# 5. Conferência (contagens por tabela, totais por plano, nº de comprovantes):
+pnpm migrate:mysql verify --dir migration --remote
+```
+
+Use os **mesmos** `JWT_ACCESS_TOKEN_SECRET`/`JWT_REFRESH_TOKEN_SECRET` do Java: as sessões abertas
+continuam válidas. Senhas BCrypt são aceitas e regravadas em PBKDF2 no primeiro login.
+Para refazer, apague e recrie o banco D1 (ou use o Time Travel) e repita os passos 3 a 5; o MySQL
+não é alterado pelo script.
