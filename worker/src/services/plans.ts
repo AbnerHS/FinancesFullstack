@@ -4,6 +4,8 @@ import { type FinancialPlan, financialPlanPartners, financialPlans, type User, u
 import { badRequest, notFound } from "../lib/errors.ts"
 import { withLinks } from "../lib/hal.ts"
 import { participantIds, plansOfUser, requirePlanAccess, requirePlanOwner } from "./access.ts"
+import { storageKeysOfPlan } from "./billing-documents.ts"
+import { cleanupUnusedDocuments } from "./documents.ts"
 
 // Porta do FinancialPlanService.
 
@@ -66,11 +68,12 @@ export async function rename(db: Database, user: User, planId: string, name: str
   return plan!
 }
 
-// TODO(documentos): apagar do R2 os comprovantes das transações removidas.
-export async function remove(db: Database, user: User, planId: string) {
+export async function remove(env: Env, db: Database, user: User, planId: string) {
   await requirePlanOwner(db, planId, user)
+  const documentKeys = await storageKeysOfPlan(db, planId)
   // Transações, faturas e parceiros saem por ON DELETE CASCADE.
   await db.delete(financialPlans).where(eq(financialPlans.id, planId))
+  await cleanupUnusedDocuments(env, db, documentKeys)
 }
 
 export async function participants(db: Database, user: User, planId: string) {

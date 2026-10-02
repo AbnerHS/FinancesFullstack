@@ -19,6 +19,8 @@ export default defineConfig({
           GOOGLE_OAUTH_TOKEN_URI: "https://google.test/token",
           GOOGLE_OAUTH_USERINFO_URI: "https://google.test/userinfo",
           JWT_REFRESH_COOKIE_SECURE: "false",
+          // 1 MB nos testes, para testar o limite sem gerar arquivos grandes.
+          TRANSACTION_DOCUMENTS_MAX_FILE_SIZE: "1048576",
         },
       },
     })),

@@ -4,6 +4,8 @@ import { z } from "zod"
 import { paymentStatuses, transactionTypes } from "../db/schema.ts"
 import { id, isoDate } from "../lib/query.ts"
 import { validate } from "../lib/validation.ts"
+import { ApiError, badRequest } from "../lib/errors.ts"
+import * as documents from "../services/billing-documents.ts"
 import * as transactions from "../services/transactions.ts"
 import type { AppEnv } from "../types.ts"
 
@@ -43,6 +45,15 @@ const recurringSchema = z.object({
 
 const ctx = (c: Context<AppEnv>) => ({ env: c.env, db: c.var.db, user: c.var.user })
 
+function scopeOf(c: Context<AppEnv>): documents.DocumentScope {
+  const scope = c.req.query("scope") ?? "SINGLE"
+  if (scope !== "SINGLE" && scope !== "GROUP") throw badRequest("Parâmetro 'scope' inválido (SINGLE ou GROUP)")
+  return scope
+}
+
+// Folga para os cabeçalhos do multipart além do próprio arquivo.
+const MULTIPART_OVERHEAD = 64 * 1024
+
 export const transactionRoutes = new Hono<AppEnv>()
   .post("/", validate("json", createSchema), async (c) => {
     const created = await transactions.create(ctx(c), c.req.valid("json"))
@@ -66,3 +77,18 @@ export const transactionRoutes = new Hono<AppEnv>()
     await transactions.remove(ctx(c), c.req.param("id"))
     return c.body(null, 204)
   })
+  .post("/:id/billing-document/file", async (c) => {
+    const scope = scopeOf(c)
+    // Recusa cedo, antes de o runtime ler o corpo inteiro.
+    const length = Number(c.req.header("Content-Length") ?? 0)
+    if (length > documents.maxFileSize(c.env) + MULTIPART_OVERHEAD) {
+      throw new ApiError(413, "Arquivo muito grande", "O arquivo excede o tamanho máximo permitido.")
+    }
+    const body = await c.req.parseBody()
+    const file = body.file instanceof File ? body.file : null
+    return c.json(await documents.upload(ctx(c), c.req.param("id"), file, scope))
+  })
+  .get("/:id/billing-document/download", (c) => documents.download(ctx(c), c.req.param("id")))
+  .delete("/:id/billing-document", async (c) =>
+    c.json(await documents.remove(ctx(c), c.req.param("id"), scopeOf(c))),
+  )

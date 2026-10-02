@@ -68,7 +68,7 @@ export const planRoutes = new Hono<AppEnv>()
     return c.json(await plans.planModel(c.var.db, plan))
   })
   .delete("/:id", async (c) => {
-    await plans.remove(c.var.db, c.var.user, c.req.param("id"))
+    await plans.remove(c.env, c.var.db, c.var.user, c.req.param("id"))
     return c.body(null, 204)
   })
   .get("/:id/participants", async (c) => c.json(await plans.participants(c.var.db, c.var.user, c.req.param("id"))))
