@@ -12,9 +12,13 @@ name: Deploy Worker
 # vez com `wrangler secret put` e não passam por aqui.
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - main
+    paths:
+      - "worker/**"
+      - "frontend/**"
+      - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
     inputs:
       ref:
@@ -26,7 +30,8 @@ concurrency:
   group: deploy-worker
   cancel-in-progress: false
 
-# Publica a cada GitHub Release (criada pelo release-please ao mergear a Release PR) ou manualmente.
+# Publica a cada push na main que mexa no Worker ou no frontend (com aprovação do environment
+# Production) ou manualmente.
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
@@ -43,7 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Check configuration
         env:
@@ -112,7 +117,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Check configuration
         run: |

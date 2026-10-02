@@ -79,8 +79,8 @@ frontend, testes, migrations do D1 e `wrangler deploy`. Configure no environment
 | Variable | `GOOGLE_CLIENT_ID` | client id do OAuth do Google |
 | Variable | `GOOGLE_REDIRECT_URI` | `https://<url pública>/auth/google/callback` |
 
-O deploy roda a cada GitHub Release (o release-please versiona o pacote `worker/` e abre a Release
-PR; o merge dela publica a release) ou manualmente em Actions → Deploy Worker → Run workflow.
+O deploy roda a cada push na `main` que mexa em `worker/` ou `frontend/` (com aprovação do
+environment `Production`) ou manualmente em Actions → Deploy Worker → Run workflow.
 O `ci-worker.yml` roda typecheck, testes e um `wrangler deploy --dry-run` em PRs e pushes que
 mexem em `worker/`.
 

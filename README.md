@@ -87,17 +87,10 @@ cd frontend && pnpm lint && pnpm typecheck && pnpm build
 
 - `ci-worker.yml`: typecheck, testes e `wrangler deploy --dry-run` em PRs e pushes que mexem em `worker/`.
 - `ci-frontend.yml`: lint, typecheck e build do frontend.
-- `release-please.yml`: versiona o pacote `worker/` a partir de Conventional Commits e abre a Release PR.
-- `deploy-worker.yml`: a cada GitHub Release (ou manualmente), faz o build do frontend, roda os testes, aplica as migrations do D1 e publica o Worker.
+- `deploy-worker.yml`: a cada push na `main` que mexa em `worker/` ou `frontend/` (ou manualmente), com aprovacao do environment `Production`, faz o build do frontend, roda os testes, aplica as migrations do D1 e publica o Worker.
 
 Configuracao do deploy (secrets, variaveis do environment `Production`, recursos na Cloudflare) e migracao de dados do MySQL legado: ver [`worker/README.md`](worker/README.md).
 
-Convencoes de commit:
-
-- `fix:` gera bump de patch
-- `feat:` gera bump de minor
-- `feat!:` ou `BREAKING CHANGE:` gera bump de major
-
 ## Backend legado
 
-O codigo em `rest-api-finances/` (Spring Boot + MySQL, antes publicado em uma VPS Oracle) continua no repositorio apenas como referencia. Ele nao tem mais workflow de deploy; o `ci-backend.yml` segue validando o codigo enquanto ele existir.
+O codigo em `rest-api-finances/` (Spring Boot + MySQL, antes publicado em uma VPS Oracle) continua no repositorio apenas como referencia. Os arquivos e o workflow de deploy na VPS foram removidos; o `ci-backend.yml` segue validando o codigo enquanto ele existir.
