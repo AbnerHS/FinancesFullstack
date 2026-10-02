@@ -416,10 +416,10 @@ function RecurrenceField({
                 setForm((current) => ({
                   ...current,
                   isRecurring: !current.isRecurring,
-                  numberOfPeriods:
-                    !current.isRecurring && current.numberOfPeriods < 2
+                  occurrences:
+                    !current.isRecurring && current.occurrences < 2
                       ? 2
-                      : current.numberOfPeriods,
+                      : current.occurrences,
                 }))
               }
             />
@@ -431,12 +431,13 @@ function RecurrenceField({
                 className="h-8 w-20 xl:w-full"
                 type="number"
                 min={2}
+                max={120}
                 disabled={!form.isRecurring}
-                value={form.numberOfPeriods}
+                value={form.occurrences}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    numberOfPeriods: Number(event.target.value) || 2,
+                    occurrences: Number(event.target.value) || 2,
                   }))
                 }
               />

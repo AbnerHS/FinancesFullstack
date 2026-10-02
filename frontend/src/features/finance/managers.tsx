@@ -15,18 +15,21 @@ import {
   useInvoiceManager,
   usePlanCollaborationManager,
   usePlanDeleteManager,
-  usePeriodsManager,
   usePlanManager,
-  usePlanYearManager,
 } from "@/features/finance/hooks.ts"
 import type {
   CreditCard,
   Period,
   Plan,
+  PlanMonthSummary,
   PlanParticipant,
   TransactionCategory,
 } from "@/features/finance/types.ts"
-import { formatMonthYear, formatPeriodRange } from "@/features/finance/utils.ts"
+import {
+  formatCurrency,
+  formatMonthLabel,
+  formatMonthYear,
+} from "@/features/finance/utils.ts"
 
 type ConfirmationDialogState = {
   confirmLabel: string
@@ -82,14 +85,14 @@ function ConfirmationDialog({
 export function PlanManager({
   plans,
   activePlan,
-  periods,
+  monthSummaries,
   selectedPlanId,
   onSelectPlanId,
   userId,
 }: {
   plans: Plan[]
   activePlan: Plan | null
-  periods: Period[]
+  monthSummaries: PlanMonthSummary[]
   selectedPlanId: string | null
   onSelectPlanId: (id: string | null) => void
   userId: string | null
@@ -103,16 +106,6 @@ export function PlanManager({
     startEdit,
     errorMessage,
   } = usePlanManager({ activePlan, userId, onSelectPlanId })
-  const {
-    addYearMutation,
-    deleteYearErrorMessage,
-    deleteYearMutation,
-    draftYear,
-    errorMessage: addYearErrorMessage,
-    resetDraft,
-    suggestedYear,
-    setDraftYear,
-  } = usePlanYearManager(activePlan, periods)
   const { deletePlanMutation, errorMessage: deletePlanErrorMessage } =
     usePlanDeleteManager({
       activePlan,
@@ -124,16 +117,11 @@ export function PlanManager({
   )
   const [confirmationDialog, setConfirmationDialog] =
     useState<ConfirmationDialogState | null>(null)
-  const yearSummaries = useMemo(() => {
-    const monthCountByYear = periods.reduce((acc, period) => {
-      acc.set(period.year, (acc.get(period.year) ?? 0) + 1)
-      return acc
-    }, new Map<number, number>())
-
-    return [...monthCountByYear.entries()]
-      .sort(([leftYear], [rightYear]) => leftYear - rightYear)
-      .map(([year, monthCount]) => ({ year, monthCount }))
-  }, [periods])
+  // Mais recentes primeiro.
+  const recentMonths = useMemo(
+    () => [...monthSummaries].reverse(),
+    [monthSummaries]
+  )
 
   return (
     <section className="app-panel">
@@ -182,117 +170,52 @@ export function PlanManager({
 
         <Card className="border-border bg-secondary/60 p-5">
           <div>
-            <p className="app-eyebrow">Anos do plano</p>
+            <p className="app-eyebrow">Meses com lançamentos</p>
             <h3 className="mt-2 text-xl font-semibold text-foreground">
-              {activePlan
-                ? `Expandir ${activePlan.name}`
-                : "Selecione um plano"}
+              {activePlan ? activePlan.name : "Selecione um plano"}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
               {activePlan
-                ? "Adicione um novo ano ao plano ativo. Apenas os meses ausentes serão criados."
-                : "Escolha um plano para liberar a criação de um novo ano."}
+                ? "Todos os meses ficam disponíveis no dashboard; aqui aparecem os que já têm transações."
+                : "Escolha um plano para ver o resumo dos meses."}
             </p>
           </div>
 
           {activePlan ? (
-            <>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {yearSummaries.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum ano encontrado ainda para este plano.
-                  </p>
-                ) : (
-                  yearSummaries.map(({ year, monthCount }) => (
-                    <div
-                      key={year}
-                      className="rounded-[1rem] border border-border bg-card/80 px-3 py-2 w-full"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">
-                            {year}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {monthCount}/12 meses
-                          </div>
+            <div className="mt-5 flex max-h-[26rem] flex-col gap-2 overflow-y-auto">
+              {recentMonths.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma transação lançada neste plano ainda.
+                </p>
+              ) : (
+                recentMonths.map((summary) => (
+                  <div
+                    key={summary.month}
+                    className="w-full rounded-[1rem] border border-border bg-card/80 px-3 py-2"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">
+                          {formatMonthLabel(Number(summary.month.slice(5, 7)))}/
+                          {summary.month.slice(0, 4)}
                         </div>
-
-                        {isPlanOwner ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 text-rose-600 hover:text-rose-700"
-                            disabled={deleteYearMutation.isPending}
-                            onClick={() =>
-                              setConfirmationDialog({
-                                confirmLabel: "Excluir Ano",
-                                description: `Todos os meses de ${year} serão removidos do plano "${activePlan.name}".`,
-                                title: `Excluir o ano ${year}?`,
-                                onConfirm: () =>
-                                  deleteYearMutation.mutate(year),
-                              })
-                            }
-                          >
-                            <Trash2 size={14} />
-                            Excluir
-                          </Button>
-                        ) : null}
+                        <div className="text-xs text-muted-foreground">
+                          {summary.transactionCount}{" "}
+                          {summary.transactionCount === 1
+                            ? "lançamento"
+                            : "lançamentos"}
+                        </div>
+                      </div>
+                      <div
+                        className={`text-sm font-semibold ${summary.balance < 0 ? "text-rose-600" : "text-emerald-600"}`}
+                      >
+                        {formatCurrency(summary.balance)}
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-
-              <form
-                className="mt-5 space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  addYearMutation.mutate()
-                }}
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="plan-year">Novo ano</Label>
-                  <Input
-                    id="plan-year"
-                    type="number"
-                    value={draftYear}
-                    onChange={(event) =>
-                      setDraftYear(
-                        Number(event.target.value) || suggestedYear
-                      )
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Sugestão automática: {suggestedYear}
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    className="h-11 flex-1"
-                    disabled={addYearMutation.isPending}
-                  >
-                    <Plus size={16} />
-                    {addYearMutation.isPending
-                      ? "Adicionando..."
-                      : "Adicionar Ano"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11"
-                    onClick={resetDraft}
-                  >
-                    Resetar
-                  </Button>
-                </div>
-                <FormError message={addYearErrorMessage} />
-                <FormError message={deleteYearErrorMessage} />
-              </form>
-            </>
+                  </div>
+                ))
+              )}
+            </div>
           ) : null}
         </Card>
 
@@ -337,12 +260,6 @@ export function PlanManager({
                 placeholder="Ex.: Casa e rotina"
               />
             </div>
-            {mode === "create" ? (
-              <div className="rounded-[1.25rem] border border-border bg-card/80 p-3 text-sm text-muted-foreground">
-                O plano novo sempre nasce com Janeiro a Dezembro do ano atual
-                para deixar o dashboard pronto para uso.
-              </div>
-            ) : null}
             <Button
               type="submit"
               className="h-11 w-full"
@@ -398,193 +315,6 @@ export function PlanManager({
         onClose={() => setConfirmationDialog(null)}
         state={confirmationDialog}
       />
-    </section>
-  )
-}
-
-export function PeriodsManager({
-  activePlan,
-  periods,
-  selectedPeriodIds,
-  selectedStartPeriodId,
-  selectedEndPeriodId,
-  onSelectStartPeriodId,
-  onSelectEndPeriodId,
-}: {
-  activePlan: Plan | null
-  periods: Period[]
-  selectedPeriodIds: string[]
-  selectedStartPeriodId: string | null
-  selectedEndPeriodId: string | null
-  onSelectStartPeriodId: (periodId: string) => void
-  onSelectEndPeriodId: (periodId: string) => void
-}) {
-  const { draft, setDraft, saveMutation, errorMessage } =
-    usePeriodsManager(activePlan)
-  const selectedStartPeriod = useMemo(
-    () => periods.find((period) => period.id === selectedStartPeriodId) || null,
-    [periods, selectedStartPeriodId]
-  )
-  const selectedEndPeriod = useMemo(
-    () => periods.find((period) => period.id === selectedEndPeriodId) || null,
-    [periods, selectedEndPeriodId]
-  )
-  const rangeLabel = formatPeriodRange(selectedStartPeriod, selectedEndPeriod)
-  const months = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-  ]
-
-  return (
-    <section className="app-panel">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="app-eyebrow">Períodos</p>
-          <h2 className="font-serif text-3xl font-semibold text-foreground">
-            Comparação mensal e manutenção
-          </h2>
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/70 px-4 py-2 text-sm text-muted-foreground">
-          {selectedPeriodIds.length} períodos no intervalo
-        </div>
-      </div>
-
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_22rem]">
-        <Card className="border-border bg-secondary/60 p-5">
-          <p className="app-eyebrow">Intervalo ativo</p>
-          <h3 className="mt-2 text-xl font-semibold text-foreground">
-            {rangeLabel}
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Escolha o mês inicial e o mês final para definir os painéis e
-            comparações do dashboard.
-          </p>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Mês inicial</Label>
-              <Select
-                disabled={periods.length === 0}
-                value={selectedStartPeriodId || ""}
-                onChange={(event) => onSelectStartPeriodId(event.target.value)}
-              >
-                {periods.length === 0 ? (
-                  <option value="">Sem períodos</option>
-                ) : null}
-                {periods.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {formatMonthYear(period)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Mês final</Label>
-              <Select
-                disabled={periods.length === 0}
-                value={selectedEndPeriodId || ""}
-                onChange={(event) => onSelectEndPeriodId(event.target.value)}
-              >
-                {periods.length === 0 ? (
-                  <option value="">Sem períodos</option>
-                ) : null}
-                {periods.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {formatMonthYear(period)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {periods.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Crie um período para começar a trabalhar por mês.
-              </p>
-            ) : (
-              periods.map((period) => {
-                const selected = selectedPeriodIds.includes(period.id)
-                return (
-                  <span
-                    key={period.id}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium ${selected
-                      ? "border-primary/20 bg-primary/10 text-primary"
-                      : "border-border bg-card/80 text-muted-foreground"
-                      }`}
-                  >
-                    {formatMonthYear(period)}
-                  </span>
-                )
-              })
-            )}
-          </div>
-        </Card>
-
-        <Card className="border-border bg-secondary/60 p-5">
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              saveMutation.mutate()
-            }}
-          >
-            <div className="space-y-2">
-              <Label>Mês</Label>
-              <Select
-                value={String(draft.month)}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    month: Number(event.target.value),
-                  }))
-                }
-              >
-                {months.map((month, index) => (
-                  <option key={month} value={index + 1}>
-                    {month}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Ano</Label>
-              <Input
-                type="number"
-                value={draft.year}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    year: Number(event.target.value),
-                  }))
-                }
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="h-11 w-full"
-              disabled={saveMutation.isPending}
-            >
-              <Plus size={16} />
-              {saveMutation.isPending ? "Criando..." : "Criar Período"}
-            </Button>
-            <FormError message={errorMessage} />
-          </form>
-        </Card>
-      </div>
     </section>
   )
 }
@@ -754,9 +484,9 @@ export function InvoiceManager({
             setForm((current) => ({ ...current, periodId: event.target.value }))
           }
         >
-          {periods.length === 0 ? <option value="">Sem períodos</option> : null}
+          {periods.length === 0 ? <option value="">Sem meses</option> : null}
           {periods.length > 0 ? (
-            <option value="">Selecione o período</option>
+            <option value="">Selecione o mês</option>
           ) : null}
           {periods.map((period) => (
             <option key={period.id} value={period.id}>

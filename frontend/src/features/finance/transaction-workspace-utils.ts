@@ -8,7 +8,11 @@ import type {
 } from "@dnd-kit/core"
 
 import { financeKeys, transactionService } from "@/features/finance/services.ts"
-import type { ResponsibleOption, Transaction } from "@/features/finance/types.ts"
+import type {
+  Period,
+  ResponsibleOption,
+  Transaction,
+} from "@/features/finance/types.ts"
 
 const UNASSIGNED_GROUP_ID = "__unassigned__"
 
@@ -165,10 +169,10 @@ export function buildTransactionGroups(
 }
 
 export function useTransactionReorder({
-  activePeriodId,
+  period,
   transactions,
 }: {
-  activePeriodId: string
+  period: Period
   transactions: Transaction[]
 }) {
   const queryClient = useQueryClient()
@@ -192,31 +196,24 @@ export function useTransactionReorder({
     [activeId, orderedTransactions]
   )
 
-  const reorderMutation = useMutation({
-    mutationFn: async (orderedNextTransactions: Transaction[]) => {
-      const updates = orderedNextTransactions.map((entry, index) => ({
-        id: entry.id,
-        order: index + 1,
-        current: entry.order ?? null,
-      }))
+  const queryKey = financeKeys.periodTransactions(period)
 
-      const changed = updates.filter((item) => item.order !== item.current)
-      if (changed.length === 0) {
-        return []
+  const reorderMutation = useMutation({
+    // Uma chamada grava a ordem do mês inteiro (posição na lista = nova ordem).
+    mutationFn: async (orderedNextTransactions: Transaction[]) => {
+      const unchanged = orderedNextTransactions.every(
+        (entry, index) => entry.order === index + 1
+      )
+      if (unchanged) {
+        return
       }
 
-      await Promise.all(
-        changed.map((item) =>
-          transactionService.updatePartial(item.id, {
-            order: item.order,
-          })
-        )
+      await transactionService.reorder(
+        period,
+        orderedNextTransactions.map((entry) => entry.id)
       )
-
-      return changed
     },
     onMutate: async (orderedNextTransactions) => {
-      const queryKey = financeKeys.periodTransactions(activePeriodId)
       const previousTransactions =
         queryClient.getQueryData<Transaction[]>(queryKey) ?? transactions
 
@@ -230,15 +227,15 @@ export function useTransactionReorder({
       const previousTransactions = context?.previousTransactions ?? transactions
 
       setOptimisticTransactions(previousTransactions)
-      queryClient.setQueryData<Transaction[]>(
-        financeKeys.periodTransactions(activePeriodId),
-        previousTransactions
-      )
+      queryClient.setQueryData<Transaction[]>(queryKey, previousTransactions)
     },
     onSuccess: (_result, orderedNextTransactions) => {
       queryClient.setQueryData<Transaction[]>(
-        financeKeys.periodTransactions(activePeriodId),
-        orderedNextTransactions
+        queryKey,
+        orderedNextTransactions.map((entry, index) => ({
+          ...entry,
+          order: index + 1,
+        }))
       )
     },
   })

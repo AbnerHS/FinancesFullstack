@@ -53,13 +53,22 @@ export type PlanInvitation = {
   owner: boolean
 }
 
-export type Period = EntityModel<{
+// Mês de um plano. Não existe mais período no backend: os meses são gerados no cliente e as
+// transações/faturas são buscadas por mês (`id` no formato AAAA-MM).
+export type Period = {
   id: string
+  planId: string
   month: number
   year: number
-  monthlyBalance?: number | null
-  financialPlanId: string
-}>
+}
+
+export type PlanMonthSummary = {
+  month: string
+  transactionCount: number
+  totalRevenue: number
+  totalExpense: number
+  balance: number
+}
 
 export type TransactionCategory = EntityModel<{
   id: string
@@ -74,20 +83,22 @@ export type CreditCard = EntityModel<{
 
 export type Invoice = EntityModel<{
   id: string
+  planId: string
   creditCardId: string
   creditCardName?: string | null
-  periodId: string
-  amount: number | string
+  referenceMonth: string
+  amount: number
 }>
 
 export type Transaction = EntityModel<{
   id: string
   description: string
-  amount: number | string
-  dateTime?: string | null
+  amount: number
+  referenceDate: string
+  createdAt?: string | null
   type: TransactionType
   category?: TransactionCategory | null
-  periodId: string
+  planId: string
   responsibleUserId?: string | null
   order?: number | null
   recurringGroupId?: string | null
@@ -113,12 +124,11 @@ export type TransactionFormValues = {
   description: string
   amount: string
   type: TransactionType
-  periodId: string
   responsibleUserId: string
   categoryId: string
   categoryName: string
   isRecurring: boolean
-  numberOfPeriods: number
+  occurrences: number
   recurringGroupId?: string | null
   hasDueDate: boolean
   dueDate: string

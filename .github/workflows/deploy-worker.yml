@@ -1,0 +1,176 @@
+name: Deploy Worker
+
+# Publica frontend + API no Cloudflare Workers (worker/wrangler.jsonc).
+#
+# Configuração no GitHub (Settings → Environments → production):
+#   Secrets:   CLOUDFLARE_API_TOKEN  (permissões: Workers Scripts:Edit, D1:Edit)
+#              CLOUDFLARE_ACCOUNT_ID
+#   Variables: D1_DATABASE_ID        (id retornado por `wrangler d1 create finances`)
+#              GOOGLE_CLIENT_ID      (o mesmo client id do OAuth do Google)
+#              GOOGLE_REDIRECT_URI   (https://<url pública>/auth/google/callback)
+#              WORKER_DEPLOY_ENABLED ("true" para publicar também a cada release)
+# Os segredos do próprio Worker (JWT_*_SECRET, GOOGLE_OAUTH_CLIENT_SECRET) são definidos uma
+# vez com `wrangler secret put` e não passam por aqui.
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag ou SHA a publicar. Vazio = ref selecionada acima."
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  build-frontend:
+    # Releases ainda versionam o backend Java: até o corte, o deploy automático fica desligado.
+    if: github.event_name == 'workflow_dispatch' || vars.WORKER_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+
+      - name: Check configuration
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
+        run: |
+          missing=0
+          for name in GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Variável $name não configurada no environment production."
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # A API fica na mesma origem do frontend.
+      - name: Build
+        env:
+          VITE_API_BASE_URL: /api
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
+        run: pnpm build
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  deploy:
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: worker
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
+      GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+      GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+
+      - name: Check configuration
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name não configurado no environment production."
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: worker/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      # O wrangler.jsonc versionado tem um id de exemplo; o real vem da variável do environment.
+      - name: Set D1 database id
+        run: |
+          placeholder='"database_id": "00000000-0000-0000-0000-000000000000"'
+          if ! grep -qF "$placeholder" wrangler.jsonc; then
+            echo "::error::Placeholder do database_id não encontrado em worker/wrangler.jsonc."
+            exit 1
+          fi
+          sed -i "s/\"database_id\": \"00000000-0000-0000-0000-000000000000\"/\"database_id\": \"$D1_DATABASE_ID\"/" wrangler.jsonc
+
+      # Migrations antes do deploy: o código novo pode depender do schema novo.
+      - name: Apply D1 migrations
+        run: pnpm exec wrangler d1 migrations apply finances --remote
+
+      - name: Deploy
+        run: |
+          pnpm exec wrangler deploy \
+            --var "GOOGLE_OAUTH_CLIENT_ID:$GOOGLE_CLIENT_ID" \
+            --var "GOOGLE_OAUTH_REDIRECT_URI:$GOOGLE_REDIRECT_URI" \
+            --message "${GITHUB_REF_NAME} (${GITHUB_SHA::7})"

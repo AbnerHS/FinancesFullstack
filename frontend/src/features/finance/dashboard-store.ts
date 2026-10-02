@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 
+// Os ids de início/fim são meses no formato AAAA-MM.
 type DashboardPeriodRange = {
   startPeriodId: string | null
   endPeriodId: string | null
@@ -10,7 +11,6 @@ type DashboardStoreState = {
   selectedPlanId: string | null
   selectedStartPeriodId: string | null
   selectedEndPeriodId: string | null
-  selectedPeriodIds: string[]
   setSelectedPlanId: (selectedPlanId: string | null) => void
   setSelectedPeriodRange: (
     nextOrUpdater:
@@ -26,7 +26,6 @@ export const useDashboardStore = create<DashboardStoreState>()(
       selectedPlanId: null,
       selectedStartPeriodId: null,
       selectedEndPeriodId: null,
-      selectedPeriodIds: [],
       setSelectedPlanId: (selectedPlanId) => set({ selectedPlanId }),
       setSelectedPeriodRange: (nextOrUpdater) =>
         set((state) => {
@@ -48,11 +47,12 @@ export const useDashboardStore = create<DashboardStoreState>()(
           selectedPlanId: null,
           selectedStartPeriodId: null,
           selectedEndPeriodId: null,
-          selectedPeriodIds: [],
         })
       }
     }),
     {
+      // Ids salvos antes da migração (UUIDs de período) não batem com nenhum mês e são
+      // trocados pelo mês padrão em useDashboard; o plano selecionado é preservado.
       name: "dashboard-selection",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({

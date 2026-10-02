@@ -1,0 +1,53 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "finances",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Frontend (Vite build) servido pelo mesmo Worker; /api/* vai para o código da API.
+  "assets": {
+    "directory": "../frontend/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Executa o Worker perto do D1 em vez de perto do usuário (várias queries por request).
+  "placement": { "mode": "smart" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "finances",
+      // Substituir pelo id retornado por `wrangler d1 create finances --location enam`
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "DOCS",
+      "bucket_name": "finances-docs"
+    }
+  ],
+
+  // Valores não sensíveis. Segredos via `wrangler secret put` (ver .dev.vars.example).
+  "vars": {
+    "JWT_ACCESS_TOKEN_EXPIRATION_MS": "900000",
+    "JWT_REFRESH_TOKEN_EXPIRATION_MS": "604800000",
+    "JWT_REFRESH_COOKIE_SECURE": "true",
+    // Lax: frontend e API na mesma origem. Use None só se o frontend ficar em outro domínio.
+    "JWT_REFRESH_COOKIE_SAME_SITE": "Lax",
+    "GOOGLE_OAUTH_CLIENT_ID": "",
+    "GOOGLE_OAUTH_REDIRECT_URI": "",
+    "GOOGLE_OAUTH_TOKEN_URI": "https://oauth2.googleapis.com/token",
+    "GOOGLE_OAUTH_USERINFO_URI": "https://openidconnect.googleapis.com/v1/userinfo",
+    "TRANSACTION_DOCUMENTS_MAX_FILE_SIZE": "10485760",
+    // Iterações do PBKDF2 das senhas. Baixo para caber nos 10 ms de CPU do plano gratuito
+    // (~9 ms medidos em CPU sem SHA-NI). Ajustar olhando o CPU time p99 de /api/auth/login.
+    "PASSWORD_PBKDF2_ITERATIONS": "20000"
+  },
+
+  "observability": { "enabled": true }
+}
