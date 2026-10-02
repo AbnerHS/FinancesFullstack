@@ -1,0 +1,7 @@
+# Copie para .dev.vars (desenvolvimento local). Em produção use `wrangler secret put <NOME>`.
+# Mesmo formato do backend Java: chave HMAC-SHA256 em base64 (ex.: `openssl rand -base64 32`).
+JWT_ACCESS_TOKEN_SECRET=
+JWT_REFRESH_TOKEN_SECRET=
+GOOGLE_OAUTH_CLIENT_SECRET=
+# Local roda em http://localhost:8787, sem HTTPS
+JWT_REFRESH_COOKIE_SECURE=false

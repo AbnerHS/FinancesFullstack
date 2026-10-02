@@ -1,0 +1,25 @@
+import path from "node:path"
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers"
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  plugins: [
+    cloudflareTest(async () => ({
+      main: "./src/index.ts",
+      wrangler: { configPath: "./wrangler.jsonc" },
+      miniflare: {
+        bindings: {
+          TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "migrations")),
+          // Segredos fixos de teste (base64 de 32 bytes), independentes do .dev.vars.
+          JWT_ACCESS_TOKEN_SECRET: "YWNjZXNzLXRlc3Qtc2VjcmV0LTMyLWJ5dGVzLWxvbmch",
+          JWT_REFRESH_TOKEN_SECRET: "cmVmcmVzaC10ZXN0LXNlY3JldC0zMi1ieXRlcy1sb25n",
+          GOOGLE_OAUTH_CLIENT_SECRET: "test",
+          JWT_REFRESH_COOKIE_SECURE: "false",
+        },
+      },
+    })),
+  ],
+  test: {
+    setupFiles: ["./test/apply-migrations.ts"],
+  },
+})
