@@ -3,7 +3,7 @@ import type { Database } from "../db/client.ts"
 import { type User, users } from "../db/schema.ts"
 import { ApiError, unauthorized } from "../lib/errors.ts"
 import { signToken, verifyToken } from "../lib/jwt.ts"
-import { hashPassword, needsRehash, verifyPassword } from "../lib/password.ts"
+import { hashPassword, needsRehash, resolveIterations, verifyPassword } from "../lib/password.ts"
 import type { GoogleUserProfile } from "./google-oauth.ts"
 
 // Porta do AuthenticationService.
@@ -29,6 +29,8 @@ export const toUserResponse = ({ id, name, email, authProvider }: User): UserRes
   email,
   authProvider,
 })
+
+const iterations = (env: Env) => resolveIterations(env.PASSWORD_PBKDF2_ITERATIONS)
 
 const findByEmail = (db: Database, email: string) =>
   db.query.users.findFirst({ where: eq(users.email, normalizeEmail(email)) })
@@ -57,7 +59,7 @@ export async function register(
       id: crypto.randomUUID(),
       email,
       name: input.name.trim(),
-      password: await hashPassword(input.password),
+      password: await hashPassword(input.password, iterations(env)),
       authProvider: "LOCAL",
     })
     .returning()
@@ -78,11 +80,11 @@ export async function login(
     throw unauthorized("Usuário ou senha inválidos")
   }
 
-  // Migração gradual: hash BCrypt legado (ou PBKDF2 com parâmetros antigos) é regravado.
-  if (needsRehash(user.password)) {
+  // Migração gradual: hash BCrypt legado (ou PBKDF2 com outras iterações) é regravado.
+  if (needsRehash(user.password, iterations(env))) {
     await db
       .update(users)
-      .set({ password: await hashPassword(input.password) })
+      .set({ password: await hashPassword(input.password, iterations(env)) })
       .where(eq(users.id, user.id))
   }
 

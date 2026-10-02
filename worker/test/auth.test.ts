@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs"
 import { env } from "cloudflare:test"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { signToken } from "../src/lib/jwt.ts"
+import { hashPassword } from "../src/lib/password.ts"
 import { api, postJson, refreshCookie } from "./helpers.ts"
 
 const uniqueEmail = () => `${crypto.randomUUID()}@example.com`
@@ -33,7 +34,7 @@ describe("POST /api/auth/register", () => {
     expect(cookie).toContain("Path=/api/auth")
     expect(cookie).toContain("SameSite=Lax")
 
-    expect((await getUser(email))?.password).toMatch(/^pbkdf2_sha256\$/)
+    expect((await getUser(email))?.password).toMatch(/^pbkdf2_sha256\$20000\$/)
   })
 
   it("normaliza o e-mail e recusa duplicado com 409", async () => {
@@ -93,7 +94,7 @@ describe("POST /api/auth/login", () => {
 
     const res = await postJson("/auth/login", { email, password: "senha-antiga" })
     expect(res.status).toBe(200)
-    expect((await getUser(email))?.password).toMatch(/^pbkdf2_sha256\$/)
+    expect((await getUser(email))?.password).toMatch(/^pbkdf2_sha256\$20000\$/)
 
     const again = await postJson("/auth/login", { email, password: "senha-antiga" })
     expect(again.status).toBe(200)
@@ -110,6 +111,17 @@ describe("POST /api/auth/login", () => {
     const res = await postJson("/auth/login", { email, password: "qualquer" })
     expect(res.status).toBe(401)
     expect(await res.json()).toMatchObject({ detail: "Esta conta utiliza login exclusivo com Google" })
+  })
+
+  it("regrava hash PBKDF2 com iterações antigas no login", async () => {
+    const email = uniqueEmail()
+    const old = await hashPassword("segredo1", 1_000)
+    await env.DB.prepare("insert into users (id, email, password, name) values (?, ?, ?, 'Antigo')")
+      .bind(crypto.randomUUID(), email, old)
+      .run()
+
+    expect((await postJson("/auth/login", { email, password: "segredo1" })).status).toBe(200)
+    expect((await getUser(email))?.password).toMatch(/^pbkdf2_sha256\$20000\$/)
   })
 })
 

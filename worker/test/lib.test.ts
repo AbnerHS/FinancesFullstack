@@ -4,7 +4,7 @@ import { SignJWT } from "jose"
 import { describe, expect, it } from "vitest"
 import { addMonths, isIsoDate, isYearMonth, monthBounds, moveToMonth } from "../src/lib/dates.ts"
 import { fromCents, toCents } from "../src/lib/money.ts"
-import { hashPassword, needsRehash, verifyPassword } from "../src/lib/password.ts"
+import { hashPassword, needsRehash, resolveIterations, verifyPassword } from "../src/lib/password.ts"
 import { signToken, verifyToken } from "../src/lib/jwt.ts"
 
 describe("money", () => {
@@ -50,19 +50,36 @@ describe("dates", () => {
 })
 
 describe("password", () => {
-  it("gera e verifica hash PBKDF2", async () => {
-    const hash = await hashPassword("s3nha-forte")
-    expect(hash.startsWith("pbkdf2_sha256$100000$")).toBe(true)
+  it("gera e verifica hash PBKDF2 com as iterações informadas", async () => {
+    const hash = await hashPassword("s3nha-forte", 20_000)
+    expect(hash.startsWith("pbkdf2_sha256$20000$")).toBe(true)
     expect(await verifyPassword("s3nha-forte", hash)).toBe(true)
     expect(await verifyPassword("errada", hash)).toBe(false)
-    expect(needsRehash(hash)).toBe(false)
+    expect(needsRehash(hash, 20_000)).toBe(false)
+  })
+
+  it("pede rehash quando as iterações configuradas mudam", async () => {
+    const hash = await hashPassword("s3nha-forte", 1_000)
+    expect(await verifyPassword("s3nha-forte", hash)).toBe(true)
+    expect(needsRehash(hash, 20_000)).toBe(true)
+  })
+
+  it("valida a configuração de iterações", () => {
+    expect(resolveIterations("20000")).toBe(20_000)
+    expect(() => resolveIterations("0")).toThrow(RangeError)
+    expect(() => resolveIterations("100001")).toThrow(RangeError)
+    expect(() => resolveIterations(undefined)).toThrow(RangeError)
+  })
+
+  it("recusa hash PBKDF2 com iterações fora do limite", async () => {
+    expect(await verifyPassword("x", "pbkdf2_sha256$999999$AAAA$AAAA")).toBe(false)
   })
 
   it("aceita hash BCrypt legado do Spring e pede rehash", async () => {
     const legacy = bcrypt.hashSync("senha-antiga", 4).replace(/^\$2b\$/, "$2a$")
     expect(await verifyPassword("senha-antiga", legacy)).toBe(true)
     expect(await verifyPassword("outra", legacy)).toBe(false)
-    expect(needsRehash(legacy)).toBe(true)
+    expect(needsRehash(legacy, 20_000)).toBe(true)
   })
 })
 

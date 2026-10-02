@@ -43,7 +43,10 @@
     "GOOGLE_OAUTH_REDIRECT_URI": "",
     "GOOGLE_OAUTH_TOKEN_URI": "https://oauth2.googleapis.com/token",
     "GOOGLE_OAUTH_USERINFO_URI": "https://openidconnect.googleapis.com/v1/userinfo",
-    "TRANSACTION_DOCUMENTS_MAX_FILE_SIZE": "10485760"
+    "TRANSACTION_DOCUMENTS_MAX_FILE_SIZE": "10485760",
+    // Iterações do PBKDF2 das senhas. Baixo para caber nos 10 ms de CPU do plano gratuito
+    // (~9 ms medidos em CPU sem SHA-NI). Ajustar olhando o CPU time p99 de /api/auth/login.
+    "PASSWORD_PBKDF2_ITERATIONS": "20000"
   },
 
   "observability": { "enabled": true }
