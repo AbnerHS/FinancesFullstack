@@ -1,369 +1,96 @@
 # Sistema de gestao financeira pessoal e compartilhada
 
-Projeto de pratica e estudo com backend Java/Spring Boot e frontend React para controle financeiro pessoal e compartilhado.
+Projeto de pratica e estudo para controle financeiro pessoal e compartilhado: planos financeiros com parceiros, transacoes por mes, cartoes, faturas e comprovantes de pagamento.
+
+Producao: **https://finances.abnerh.workers.dev**
 
 ## Visao geral
 
-O projeto esta dividido em duas aplicacoes principais:
+Frontend e API rodam juntos em um unico **Cloudflare Worker**: o build do React e servido como assets estaticos e a API responde em `/api` na mesma origem.
 
-- `rest-api-finances`: API REST responsavel por autenticacao, usuarios, planos financeiros, periodos, transacoes, cartoes e faturas.
-- `frontend`: interface web atual do projeto.
+- `worker`: API (Hono) com banco D1, arquivos no R2, scripts de migracao e configuracao do Worker. Detalhes em [`worker/README.md`](worker/README.md).
+- `frontend`: interface web em React.
+- `rest-api-finances`: backend Java/Spring Boot original, **legado** — mantido apenas como referencia; nao e mais publicado.
 
-## Stack tecnologica
+O modelo de dados nao tem mais "periodos": o mes de uma transacao vem da data de competencia (`reference_date`) e o de uma fatura do mes de referencia (`reference_month`).
 
-### Backend
+## Stack
 
-- Java 21
-- Spring Boot
-- Spring Web MVC
-- Spring Data JPA / Hibernate
-- Spring Security com JWT
-- Spring HATEOAS
-- Flyway
-- MapStruct
-- MySQL 8 (inicialmente desenvolvido com Oracle Databrase Free 21c)
-- Docker e Docker Compose
-- Swagger / OpenAPI via Springdoc
+### Worker (API)
+
+- Cloudflare Workers
+- Hono
+- Drizzle ORM + D1 (SQLite)
+- R2 (comprovantes)
+- Zod
+- jose (JWT, compativel com os tokens do backend legado)
+- Vitest + `@cloudflare/vitest-pool-workers`
 
 ### Frontend
 
 - React 19
 - TypeScript 5
 - Vite 7
-- TanStack Router
-- TanStack Query
-- shadcn/ui
-- Tailwind CSS 4
+- TanStack Router e TanStack Query
+- shadcn/ui e Tailwind CSS 4
 - Zustand
 - Axios
 - React Hook Form
-- Lucide React
-- ESLint
-- Prettier
-
-## Estado atual do projeto
-
-### Backend
-
-O backend possui:
-
-- autenticacao com access token e refresh token em cookie HttpOnly
-- endpoints para usuarios, planos financeiros, periodos, transacoes, cartoes e faturas
-- documentacao interativa com Swagger
-- persistencia com MySQL, JPA/Hibernate e migracoes com Flyway
-- estrutura REST com HATEOAS
-
-### Frontend
-
-O frontend ativo esta em desenvolvimento em `frontend/`. Atualmente a aplicacao usa:
-
-- React com TypeScript
-- roteamento com TanStack Router
-- componentes base com shadcn/ui
-- Tailwind CSS para estilos
-- gerenciamento de estado com Zustand
-- integracoes assincoras com TanStack Query e Axios
-
-A estrutura principal do frontend inclui:
-
-- `frontend/src/components`
-- `frontend/src/features`
-- `frontend/src/layouts`
-- `frontend/src/lib`
-- `frontend/src/pages`
-- `frontend/src/routes`
-- `frontend/src/stores`
-
-## Documentacao da API
-
-A documentacao da API com Swagger esta implementada no backend.
-
-Depois de iniciar a API, a documentacao pode ser acessada em:
-
-- `http://localhost:8080/swagger-ui.html`
-- `http://localhost:8080/swagger-ui/index.html`
-
-## Testes
-
-Os testes estao em desenvolvimento.
-
-### Stack de testes atual
-
-- JUnit 5
-- Mockito
-- Spring Boot Test
-- MockMvc
-- JaCoCo para coverage
-- H2 em perfil de teste para execucao local da suite
-
-### Escopo atual
-
-Ja existem testes unitarios e de integracao cobrindo parte dos servicos centrais, autenticacao e fluxos HTTP principais. A suite segue evoluindo com foco em:
-
-- casos de sucesso e erro
-- cobertura de regras de negocio
-- validacao de respostas HTTP e tratamento de excecoes
-- aumento progressivo de coverage
 
 ## Estrutura do repositorio
 
 ```text
-finances/
-|-- rest-api-finances/
-|-- frontend/
-|-- frontend-finances/
-|-- README.md
+FinancesFullstack/
+|-- worker/              API + configuracao do Worker (wrangler.jsonc)
+|-- frontend/            React (build servido pelo Worker)
+|-- rest-api-finances/   backend Java legado
+|-- .github/workflows/   CI e deploy
 ```
 
 ## Como iniciar
 
 ### Pre-requisitos
 
-- Java 21
-- Node.js 20+
+- Node.js 22+
 - pnpm
-- Docker e Docker Compose
 
-### 1. Iniciar o backend com Docker
-
-No diretorio `rest-api-finances`:
+### 1. API + frontend juntos (como em producao)
 
 ```bash
-docker compose up -d
-```
-
-Isso usa automaticamente:
-
-- `docker-compose.yml` como base compartilhada
-- `docker-compose.override.yml` para desenvolvimento local
-
-Para a instancia Oracle Cloud, use o arquivo especifico do ambiente:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.oci.yml up -d --build
-```
-
-### CI/CD do backend
-
-O fluxo de producao do backend agora deve seguir o modelo:
-
-- CI em toda PR e push relevante via GitHub Actions
-- build da imagem Docker no CI
-- publicacao da imagem no GHCR com tag imutavel por commit
-- release semantica automatica na `main` com Release Please
-- deploy na VPS por SSH quando uma GitHub Release for publicada
-
-### Semantic version do backend
-
-O backend agora esta preparado para release automatica com Release Please.
-
-Arquivos principais:
-
-- `.github/workflows/release-please.yml`
-- `release-please-config.json`
-- `.release-please-manifest.json`
-
-Como funciona:
-
-- pushes na `main` executam o Release Please
-- commits seguindo Conventional Commits geram ou atualizam uma Release PR
-- ao fazer merge dessa Release PR, o GitHub cria a release semantica e a tag correspondente
-- no backend Maven, o `pom.xml` passa a ser atualizado automaticamente entre versoes de release e `-SNAPSHOT`
-- a publicacao da release dispara o workflow de deploy do backend, evitando deploy duplicado no push original e no merge da Release PR
-
-Convencoes de commit recomendadas:
-
-- `fix:` gera bump de patch
-- `feat:` gera bump de minor
-- `feat!:` ou `BREAKING CHANGE:` gera bump de major
-
-Exemplos:
-
-```text
-fix: corrige validacao do refresh token
-feat: adiciona endpoint de relatorio mensal
-feat!: altera contrato do endpoint de autenticacao
-```
-
-Arquivos principais:
-
-- `.github/workflows/ci-backend.yml`
-- `.github/workflows/ci-frontend.yml`
-- `.github/workflows/deploy-backend.yml`
-- `rest-api-finances/deploy/vps/docker-compose.prod.yml`
-- `rest-api-finances/deploy/vps/.env.production.example`
-
-### Secrets necessarios no GitHub
-
-Para o deploy do backend na VPS, configurar os seguintes secrets:
-
-- `GHCR_USERNAME`
-- `GHCR_TOKEN`
-- `VPS_HOST`
-- `VPS_USERNAME`
-- `VPS_PORT`
-- `VPS_SSH_PRIVATE_KEY`
-- `VPS_DEPLOY_PATH`
-
-Tambem configure o GitHub Environment `production` com aprovacao manual obrigatoria.
-
-### Bootstrap da VPS
-
-No host remoto, manter um diretorio estavel para deploy, por exemplo `/opt/finances`, contendo:
-
-- `docker-compose.prod.yml`
-- `.env`
-- `.deploy.env` gerado pelo workflow
-
-Passos iniciais:
-
-1. instalar Docker Engine com Docker Compose plugin
-2. criar o diretorio informado em `VPS_DEPLOY_PATH`
-3. copiar `rest-api-finances/deploy/vps/docker-compose.prod.yml`
-4. criar `.env` com base em `rest-api-finances/deploy/vps/.env.production.example`
-5. garantir acesso da VPS ao GHCR com um token de leitura em `GHCR_TOKEN`
-
-Organizacao recomendada dos arquivos:
-
-- `rest-api-finances/docker-compose.yml`: servicos comuns
-- `rest-api-finances/docker-compose.override.yml`: portas e ajustes locais
-- `rest-api-finances/docker-compose.oci.yml`: ajustes da instancia Oracle/Ubuntu
-- `rest-api-finances/deploy/vps/docker-compose.prod.yml`: stack de producao na VPS
-- `rest-api-finances/.env.example`: exemplo de configuracao
-- `rest-api-finances/.env`: configuracao real de cada maquina
-
-Isso sobe:
-
-- MySQL
-- aplicacao Spring Boot
-
-API padrao:
-
-```text
-http://localhost:8080
-```
-
-Swagger:
-
-```text
-http://localhost:8080/swagger-ui.html
-```
-
-### 2. Iniciar o frontend
-
-No diretorio `frontend`, instale as dependencias:
-
-```bash
+cd worker
 pnpm install
+cp .dev.vars.example .dev.vars        # preencher os segredos locais
+pnpm db:migrate:local
+(cd ../frontend && pnpm install && VITE_API_BASE_URL=/api VITE_GOOGLE_CLIENT_ID=... VITE_GOOGLE_REDIRECT_URI=http://localhost:8787/auth/google/callback pnpm build)
+pnpm dev                              # http://localhost:8787
 ```
 
-Configure o ambiente do frontend com a URL base da API, por exemplo:
+### 2. Frontend com hot reload
 
-```env
-VITE_API_BASE_URL=http://localhost:8080/api
-VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
-VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
-```
-
-Depois inicie o servidor de desenvolvimento:
+Com o `pnpm dev` do Worker rodando, em outro terminal:
 
 ```bash
-pnpm dev
+cd frontend
+pnpm dev                              # http://localhost:5173, proxy de /api para :8787
 ```
 
-O frontend sera servido pelo Vite, normalmente em:
+O `frontend/.env.development` ja aponta o proxy (`VITE_API_PROXY_TARGET`) para o Worker local.
 
-```text
-http://localhost:5173
-```
-
-### Deploy do frontend na Vercel
-
-Para publicar apenas o frontend na Vercel, use `frontend/` como Root Directory do projeto.
-
-Arquivos de referencia disponiveis:
-
-- `frontend/.env.example`: desenvolvimento local com proxy do Vite
-- `frontend/.env.production.example`: producao apontando para a API publica
-- `frontend/vercel.json`: rewrite para SPA com TanStack Router
-
-Variavel obrigatoria na Vercel:
-
-```env
-VITE_API_BASE_URL=https://SUA_API_PUBLICA/api
-VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
-VITE_GOOGLE_REDIRECT_URI=https://SEU_FRONTEND_PUBLICO/auth/google/callback
-```
-
-Importante:
-
-- se o frontend estiver na Vercel, a API precisa estar acessivel por `https`; um IP publico servido apenas por `http` sera bloqueado pelo navegador por mixed content
-- como o frontend usa `withCredentials`, o backend precisa permitir CORS com a origem da Vercel em `APP_CORS_ALLOWED_ORIGINS`
-- para o refresh token funcionar entre dominios, configure no backend:
-
-```env
-JWT_REFRESH_COOKIE_SECURE=true
-JWT_REFRESH_COOKIE_SAME_SITE=None
-APP_CORS_ALLOWED_ORIGINS=https://SEU-PROJETO.vercel.app
-```
-
-Exemplo para o dominio que voce esta usando agora:
-
-```env
-APP_CORS_ALLOWED_ORIGINS=https://finances-fullstack.vercel.app
-JWT_REFRESH_COOKIE_SECURE=true
-JWT_REFRESH_COOKIE_SAME_SITE=None
-```
-
-Se quiser deixar a VM aceitar mais de um dominio temporario, tambem pode usar patterns:
-
-```env
-APP_CORS_ALLOWED_ORIGIN_PATTERNS=https://*.vercel.app,https://*.ngrok-free.dev
-```
-
-Exemplo de desenvolvimento local mantendo o proxy do Vite:
-
-```env
-VITE_API_BASE_URL=/api
-VITE_API_PROXY_TARGET=http://SEU_IP_PUBLICO:8080
-VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
-VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
-```
-
-No backend, `GOOGLE_OAUTH_REDIRECT_URI` deve apontar exatamente para o mesmo callback configurado no frontend:
-
-```env
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:5173/auth/google/callback
-```
-
-### 3. Rodar os testes do backend
-
-No diretorio `rest-api-finances`:
+## Testes e checks
 
 ```bash
-mvn test
+cd worker && pnpm test && pnpm typecheck
+cd frontend && pnpm lint && pnpm typecheck && pnpm build
 ```
 
-### 4. Rodar os checks do frontend
+## CI/CD
 
-No diretorio `frontend`:
+- `ci-worker.yml`: typecheck, testes e `wrangler deploy --dry-run` em PRs e pushes que mexem em `worker/`.
+- `ci-frontend.yml`: lint, typecheck e build do frontend.
+- `deploy-worker.yml`: a cada push na `main` que mexa em `worker/` ou `frontend/` (ou manualmente), com aprovacao do environment `Production`, faz o build do frontend, roda os testes, aplica as migrations do D1 e publica o Worker.
 
-```bash
-pnpm lint
-pnpm typecheck
-pnpm build
-```
+Configuracao do deploy (secrets, variaveis do environment `Production`, recursos na Cloudflare) e migracao de dados do MySQL legado: ver [`worker/README.md`](worker/README.md).
 
-Relatorio de coverage JaCoCo:
+## Backend legado
 
-```text
-rest-api-finances/target/site/jacoco/index.html
-```
-
-## Proximos passos
-
-- ampliar a cobertura de testes unitarios e de integracao
-- evoluir a cobertura dos controllers e filtros de seguranca
-- continuar a evolucao do frontend em `frontend/`
-- melhorar a experiencia visual e os fluxos de uso da interface
-- reduzir diferencas entre o ambiente MySQL e o ambiente de testes
+O codigo em `rest-api-finances/` (Spring Boot + MySQL, antes publicado em uma VPS Oracle) continua no repositorio apenas como referencia. Os arquivos e o workflow de deploy na VPS foram removidos; o `ci-backend.yml` segue validando o codigo enquanto ele existir.

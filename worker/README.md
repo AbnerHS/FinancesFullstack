@@ -78,11 +78,11 @@ frontend, testes, migrations do D1 e `wrangler deploy`. Configure no environment
 | Variable | `D1_DATABASE_ID` | id do `wrangler d1 create` (o `wrangler.jsonc` versionado tem um placeholder) |
 | Variable | `GOOGLE_CLIENT_ID` | client id do OAuth do Google |
 | Variable | `GOOGLE_REDIRECT_URI` | `https://<url pública>/auth/google/callback` |
-| Variable | `WORKER_DEPLOY_ENABLED` | `true` para publicar também a cada release |
 
-Sem `WORKER_DEPLOY_ENABLED`, o workflow só roda manualmente (Actions → Deploy Worker → Run
-workflow), porque as releases ainda versionam o backend Java. O `ci-worker.yml` roda typecheck,
-testes e um `wrangler deploy --dry-run` em PRs e pushes que mexem em `worker/`.
+O deploy roda a cada push na `main` que mexa em `worker/` ou `frontend/` (com aprovação do
+environment `Production`) ou manualmente em Actions → Deploy Worker → Run workflow.
+O `ci-worker.yml` roda typecheck, testes e um `wrangler deploy --dry-run` em PRs e pushes que
+mexem em `worker/`.
 
 Deploy manual, se preciso (troque o `database_id` no `wrangler.jsonc` antes):
 

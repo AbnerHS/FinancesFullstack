@@ -8,14 +8,17 @@ name: Deploy Worker
 #   Variables: D1_DATABASE_ID        (id retornado por `wrangler d1 create finances`)
 #              GOOGLE_CLIENT_ID      (o mesmo client id do OAuth do Google)
 #              GOOGLE_REDIRECT_URI   (https://<url pública>/auth/google/callback)
-#              WORKER_DEPLOY_ENABLED ("true" para publicar também a cada release)
 # Os segredos do próprio Worker (JWT_*_SECRET, GOOGLE_OAUTH_CLIENT_SECRET) são definidos uma
 # vez com `wrangler secret put` e não passam por aqui.
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - main
+    paths:
+      - "worker/**"
+      - "frontend/**"
+      - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
     inputs:
       ref:
@@ -27,10 +30,10 @@ concurrency:
   group: deploy-worker
   cancel-in-progress: false
 
+# Publica a cada push na main que mexa no Worker ou no frontend (com aprovação do environment
+# Production) ou manualmente.
 jobs:
   build-frontend:
-    # Releases ainda versionam o backend Java: até o corte, o deploy automático fica desligado.
-    if: github.event_name == 'workflow_dispatch' || vars.WORKER_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -45,7 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Check configuration
         env:
@@ -114,7 +117,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Check configuration
         run: |
