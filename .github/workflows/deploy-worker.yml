@@ -8,7 +8,6 @@ name: Deploy Worker
 #   Variables: D1_DATABASE_ID        (id retornado por `wrangler d1 create finances`)
 #              GOOGLE_CLIENT_ID      (o mesmo client id do OAuth do Google)
 #              GOOGLE_REDIRECT_URI   (https://<url pública>/auth/google/callback)
-#              WORKER_DEPLOY_ENABLED ("true" para publicar também a cada release)
 # Os segredos do próprio Worker (JWT_*_SECRET, GOOGLE_OAUTH_CLIENT_SECRET) são definidos uma
 # vez com `wrangler secret put` e não passam por aqui.
 
@@ -27,10 +26,9 @@ concurrency:
   group: deploy-worker
   cancel-in-progress: false
 
+# Publica a cada GitHub Release (criada pelo release-please ao mergear a Release PR) ou manualmente.
 jobs:
   build-frontend:
-    # Releases ainda versionam o backend Java: até o corte, o deploy automático fica desligado.
-    if: github.event_name == 'workflow_dispatch' || vars.WORKER_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: production
