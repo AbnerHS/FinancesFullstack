@@ -1,30 +1,30 @@
 import {
-  ChevronLeft,
-  ChevronRight,
   ArrowRight,
+  ChevronDown,
+  SlidersHorizontal,
   Sparkles,
   TrendingDown,
   TrendingUp,
-  Users,
 } from "lucide-react"
-import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Select } from "@/components/ui/select.tsx"
 import { DashboardCharts } from "@/features/finance/charts.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
 import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
+import { MonthCarousel } from "@/features/finance/month-carousel.tsx"
+import { MonthSummary } from "@/features/finance/month-summary.tsx"
 import { TransactionsWorkspace } from "@/features/finance/transactions-workspace.tsx"
+import type { Period } from "@/features/finance/types.ts"
 import {
   formatCurrency,
   formatMonthLabel,
   formatMonthYear,
+  toMonthId,
   toneForBalance,
 } from "@/features/finance/utils.ts"
 import MetricCard from "@/features/finance/metric-card"
-
-const isDefinedPanel = (
-  panel: HTMLDivElement | null
-): panel is HTMLDivElement => panel !== null
+import { cn } from "@/lib/utils"
 
 export function DashboardPage() {
   const {
@@ -41,6 +41,7 @@ export function DashboardPage() {
     setSelectedPlanId,
     setSelectedStartPeriodId,
     setSelectedEndPeriodId,
+    setSelectedRange,
     periodPanels,
     combinedStats,
     categorySpending,
@@ -55,9 +56,8 @@ export function DashboardPage() {
     buildCategoryChartData,
   } = useDashboard()
   const [responsibleFilter, setResponsibleFilter] = useState("")
-  const transactionsScrollerRef = useRef<HTMLDivElement | null>(null)
-  const transactionPanelRefs = useRef<Array<HTMLDivElement | null>>([])
-  const [transactionsEdgeSpacing, setTransactionsEdgeSpacing] = useState(0)
+  const [activeMonthId, setActiveMonthId] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const filteredPanels = useMemo(() => {
     if (!responsibleFilter) {
@@ -103,13 +103,17 @@ export function DashboardPage() {
           acc.incomes += panel.stats.incomes
           acc.expenses += panel.stats.expenses
           acc.balance += panel.stats.balance
-          acc.transactionCount += panel.transactions.length
           return acc
         },
-        { incomes: 0, expenses: 0, balance: 0, transactionCount: 0 }
+        { incomes: 0, expenses: 0, balance: 0 }
       ),
     [filteredPanels]
   )
+
+  const activePanel =
+    filteredPanels.find((panel) => panel.period.id === activeMonthId) ??
+    filteredPanels[0] ??
+    null
 
   const categoryData = responsibleFilter
     ? buildCategoryChartData(responsibleFilter)
@@ -122,148 +126,15 @@ export function DashboardPage() {
     () => periods.find((period) => period.id === selectedEndPeriodId) || null,
     [periods, selectedEndPeriodId]
   )
-  const availableYears = useMemo(
-    () =>
-      [...new Set(periods.map((period) => period.year))].sort(
-        (left, right) => left - right
-      ),
-    [periods]
-  )
-  const startMonthOptions = useMemo(
-    () =>
-      selectedStartPeriod
-        ? periods
-            .filter((period) => period.year === selectedStartPeriod.year)
-            .map((period) => ({ id: period.id, month: period.month }))
-        : [],
-    [periods, selectedStartPeriod]
-  )
-  const endMonthOptions = useMemo(
-    () =>
-      selectedEndPeriod
-        ? periods
-            .filter((period) => period.year === selectedEndPeriod.year)
-            .map((period) => ({ id: period.id, month: period.month }))
-        : [],
-    [periods, selectedEndPeriod]
-  )
 
-  const selectPeriodForYear = (
-    year: number,
-    currentPeriodId: string | null,
-    fallbackPeriodId: string | null,
-    setter: (periodId: string) => void
-  ) => {
-    const yearPeriods = periods.filter((period) => period.year === year)
-    if (yearPeriods.length === 0) {
-      return
-    }
+  const rangeLabel =
+    selectedStartPeriod && selectedEndPeriod
+      ? selectedStartPeriod.id === selectedEndPeriod.id
+        ? formatMonthYear(selectedStartPeriod)
+        : `${formatMonthYear(selectedStartPeriod)} – ${formatMonthYear(selectedEndPeriod)}`
+      : "Sem meses"
 
-    const currentPeriod =
-      periods.find((period) => period.id === currentPeriodId) ||
-      periods.find((period) => period.id === fallbackPeriodId) ||
-      null
-    const preferredMonth = currentPeriod?.month ?? yearPeriods[0]?.month
-    const nextPeriod =
-      yearPeriods.find((period) => period.month === preferredMonth) ||
-      yearPeriods[0]
-
-    if (nextPeriod) {
-      setter(nextPeriod.id)
-    }
-  }
-
-  const selectPeriodForMonth = (
-    month: number,
-    currentYear: number | null,
-    setter: (periodId: string) => void
-  ) => {
-    if (!currentYear) {
-      return
-    }
-
-    const nextPeriod = periods.find(
-      (period) => period.year === currentYear && period.month === month
-    )
-
-    if (nextPeriod) {
-      setter(nextPeriod.id)
-    }
-  }
-
-  useLayoutEffect(() => {
-    transactionPanelRefs.current = transactionPanelRefs.current.slice(
-      0,
-      filteredPanels.length
-    )
-
-    const updateSpacing = () => {
-      const container = transactionsScrollerRef.current
-      const firstPanel = transactionPanelRefs.current[0]
-
-      if (!container || !firstPanel) {
-        setTransactionsEdgeSpacing(0)
-        return
-      }
-
-      setTransactionsEdgeSpacing(
-        Math.max((container.clientWidth - firstPanel.clientWidth) / 2, 0)
-      )
-    }
-
-    updateSpacing()
-    window.addEventListener("resize", updateSpacing)
-
-    return () => {
-      window.removeEventListener("resize", updateSpacing)
-    }
-  }, [filteredPanels.length])
-
-  const scrollTransactions = (direction: "previous" | "next") => {
-    const container = transactionsScrollerRef.current
-    const panels = transactionPanelRefs.current.filter(isDefinedPanel)
-    if (!container || panels.length === 0) {
-      return
-    }
-
-    const currentCenter = container.scrollLeft + container.clientWidth / 2
-    const currentIndex = panels.reduce((closestIndex, panel, index) => {
-      const panelCenter = panel.offsetLeft + panel.clientWidth / 2
-      const closestPanel = panels[closestIndex]
-      const closestCenter =
-        closestPanel.offsetLeft + closestPanel.clientWidth / 2
-
-      return Math.abs(panelCenter - currentCenter) <
-        Math.abs(closestCenter - currentCenter)
-        ? index
-        : closestIndex
-    }, 0)
-
-    const targetIndex =
-      direction === "next"
-        ? Math.min(currentIndex + 1, panels.length - 1)
-        : Math.max(currentIndex - 1, 0)
-
-    const targetPanel = panels[targetIndex]
-    const containerRect = container.getBoundingClientRect()
-    const targetPanelRect = targetPanel.getBoundingClientRect()
-    const left =
-      container.scrollLeft +
-      (targetPanelRect.left - containerRect.left) -
-      (container.clientWidth - targetPanel.clientWidth) / 2
-
-    container.scrollTo({
-      left,
-      behavior: "smooth",
-    })
-  }
-
-  const selectedPeriodsLabel =
-    selectedPeriodIds.length === 0
-      ? "Nenhum mês disponível"
-      : selectedPeriodIds.length === 1
-        ? "1 mês no intervalo"
-        : `${selectedPeriodIds.length} meses no intervalo`
+  const metrics = responsibleFilter ? filteredMetrics : combinedStats
 
   if (plansLoading) {
     return (
@@ -274,327 +145,221 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 lg:pb-0">
       <section className="app-panel">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_22rem]">
-          <div>
-            <label className="app-label">Plano financeiro</label>
-            <Select
-              className="mt-2"
-              disabled={plans.length === 0}
-              value={selectedPlanId || ""}
-              onChange={(event) => setSelectedPlanId(event.target.value)}
-            >
-              {plans.length === 0 ? (
-                <option value="">Nenhum plano ainda</option>
-              ) : null}
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className="app-label">Responsável</label>
-            <Select
-              className="mt-2"
-              disabled={responsibleOptions.length === 0}
-              value={responsibleFilter}
-              onChange={(event) => setResponsibleFilter(event.target.value)}
-            >
-              <option value="">Todos os participantes</option>
-              {responsibleOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <DashboardPlanQuickCreate
-            activePlan={activePlan}
-            hasPlans={plans.length > 0}
-            onSelectPlanId={setSelectedPlanId}
-            userId={userId}
+        {/* Mobile: filtros recolhidos num resumo clicável. */}
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 text-left lg:hidden"
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+          aria-controls="dashboard-filters"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="rounded-full bg-primary/12 p-2.5 text-primary">
+              <SlidersHorizontal size={16} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-foreground">
+                {activePlan?.name || "Sem plano"}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground capitalize">
+                {periodsLoading ? "Carregando meses..." : rangeLabel}
+              </span>
+            </span>
+          </span>
+          <ChevronDown
+            size={18}
+            className={cn(
+              "shrink-0 text-muted-foreground transition",
+              filtersOpen && "rotate-180"
+            )}
           />
-        </div>
+        </button>
 
-        {plans.length === 0 ? (
-          <div className="mt-5 rounded-[1.5rem] border border-dashed border-border bg-secondary/50 px-5 py-4">
-            <p className="font-semibold text-foreground">
-              Seu dashboard começa por um plano financeiro.
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Crie seu primeiro plano para liberar meses, transações,
-              categorias e cartões.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="mt-5 rounded-[1.5rem] border border-border bg-secondary/35 p-3 sm:p-4">
-          <div className="flex flex-col gap-3">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="app-label">Ano inicial</label>
-                  <Select
-                    className="mt-2"
-                    disabled={periodsLoading || availableYears.length === 0}
-                    value={
-                      selectedStartPeriod?.year
-                        ? String(selectedStartPeriod.year)
-                        : ""
-                    }
-                    onChange={(event) =>
-                      selectPeriodForYear(
-                        Number(event.target.value),
-                        selectedStartPeriodId,
-                        selectedEndPeriodId,
-                        setSelectedStartPeriodId
-                      )
-                    }
-                  >
-                    {availableYears.length === 0 ? (
-                      <option value="">Sem meses</option>
-                    ) : null}
-                    {availableYears.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="app-label">Mês inicial</label>
-                  <Select
-                    className="mt-2"
-                    disabled={periodsLoading || startMonthOptions.length === 0}
-                    value={
-                      selectedStartPeriod?.month
-                        ? String(selectedStartPeriod.month)
-                        : ""
-                    }
-                    onChange={(event) =>
-                      selectPeriodForMonth(
-                        Number(event.target.value),
-                        selectedStartPeriod?.year ?? null,
-                        setSelectedStartPeriodId
-                      )
-                    }
-                  >
-                    {startMonthOptions.length === 0 ? (
-                      <option value="">Sem meses</option>
-                    ) : null}
-                    {startMonthOptions.map((option) => (
-                      <option key={option.id} value={option.month}>
-                        {formatMonthLabel(option.month)}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="app-label">Ano final</label>
-                  <Select
-                    className="mt-2"
-                    disabled={periodsLoading || availableYears.length === 0}
-                    value={
-                      selectedEndPeriod?.year
-                        ? String(selectedEndPeriod.year)
-                        : ""
-                    }
-                    onChange={(event) =>
-                      selectPeriodForYear(
-                        Number(event.target.value),
-                        selectedEndPeriodId,
-                        selectedStartPeriodId,
-                        setSelectedEndPeriodId
-                      )
-                    }
-                  >
-                    {availableYears.length === 0 ? (
-                      <option value="">Sem meses</option>
-                    ) : null}
-                    {availableYears.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="app-label">Mês final</label>
-                  <Select
-                    className="mt-2"
-                    disabled={periodsLoading || endMonthOptions.length === 0}
-                    value={
-                      selectedEndPeriod?.month
-                        ? String(selectedEndPeriod.month)
-                        : ""
-                    }
-                    onChange={(event) =>
-                      selectPeriodForMonth(
-                        Number(event.target.value),
-                        selectedEndPeriod?.year ?? null,
-                        setSelectedEndPeriodId
-                      )
-                    }
-                  >
-                    {endMonthOptions.length === 0 ? (
-                      <option value="">Sem meses</option>
-                    ) : null}
-                    {endMonthOptions.map((option) => (
-                      <option key={option.id} value={option.month}>
-                        {formatMonthLabel(option.month)}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-
-              <div className="rounded-[1.25rem] border border-border bg-card/80 px-4 py-1">
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {periodsLoading
-                    ? "Carregando meses..."
-                    : selectedPeriodsLabel}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  O workspace acompanha todos os meses entre{" "}
-                  {formatMonthYear(selectedStartPeriod) || "--"} e{" "}
-                  {formatMonthYear(selectedEndPeriod) || "--"}.
-                </p>
-              </div>
+        <div
+          id="dashboard-filters"
+          className={cn("mt-4 space-y-4 lg:mt-0 lg:block", !filtersOpen && "hidden")}
+        >
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_18rem_22rem]">
+            <div>
+              <label className="app-label" htmlFor="dashboard-plan">
+                Plano financeiro
+              </label>
+              <Select
+                id="dashboard-plan"
+                className="mt-2"
+                disabled={plans.length === 0}
+                value={selectedPlanId || ""}
+                onChange={(event) => setSelectedPlanId(event.target.value)}
+              >
+                {plans.length === 0 ? (
+                  <option value="">Nenhum plano ainda</option>
+                ) : null}
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </Select>
             </div>
+
+            <div>
+              <label className="app-label" htmlFor="dashboard-responsible">
+                Responsável
+              </label>
+              <Select
+                id="dashboard-responsible"
+                className="mt-2"
+                disabled={responsibleOptions.length === 0}
+                value={responsibleFilter}
+                onChange={(event) => setResponsibleFilter(event.target.value)}
+              >
+                <option value="">Todos os participantes</option>
+                {responsibleOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-1">
+              <DashboardPlanQuickCreate
+                activePlan={activePlan}
+                hasPlans={plans.length > 0}
+                onSelectPlanId={setSelectedPlanId}
+                userId={userId}
+              />
+            </div>
+          </div>
+
+          {plans.length === 0 ? (
+            <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/50 px-5 py-4">
+              <p className="font-semibold text-foreground">
+                Seu dashboard começa por um plano financeiro.
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Crie seu primeiro plano para liberar meses, transações,
+                categorias e cartões.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="rounded-[1.5rem] border border-border bg-secondary/35 p-3 sm:p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MonthYearPicker
+                  label="De"
+                  periods={periods}
+                  value={selectedStartPeriod}
+                  disabled={periodsLoading}
+                  onChange={setSelectedStartPeriodId}
+                />
+                <MonthYearPicker
+                  label="Até"
+                  periods={periods}
+                  value={selectedEndPeriod}
+                  disabled={periodsLoading}
+                  onChange={setSelectedEndPeriodId}
+                />
+              </div>
+
+              <RangePresets
+                periods={periods}
+                disabled={periodsLoading || periods.length === 0}
+                onSelect={setSelectedRange}
+              />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {selectedPeriodIds.length === 0
+                ? "Nenhum mês no intervalo."
+                : `${selectedPeriodIds.length} ${selectedPeriodIds.length === 1 ? "mês" : "meses"} no intervalo: `}
+              {selectedPeriodIds.length > 0 ? (
+                <span className="font-medium text-foreground capitalize">
+                  {rangeLabel}
+                </span>
+              ) : null}
+            </p>
           </div>
         </div>
       </section>
 
+      <MonthSummary
+        panel={activePanel}
+        periods={periods}
+        responsibleOptions={responsibleOptions}
+        responsibleFilter={responsibleFilter}
+      />
+
       {selectedPeriodIds.length > 1 && (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            title="Receitas"
-            value={formatCurrency(
-              responsibleFilter
-                ? filteredMetrics.incomes
-                : combinedStats.incomes
-            )}
-            tone="positive"
-            icon={<TrendingUp size={18} />}
-          />
-          <MetricCard
-            title="Despesas"
-            value={formatCurrency(
-              responsibleFilter
-                ? filteredMetrics.expenses
-                : combinedStats.expenses
-            )}
-            tone="negative"
-            icon={<TrendingDown size={18} />}
-          />
-          <MetricCard
-            title="Saldo"
-            value={formatCurrency(
-              responsibleFilter
-                ? filteredMetrics.balance
-                : combinedStats.balance
-            )}
-            tone={toneForBalance(
-              responsibleFilter
-                ? filteredMetrics.balance
-                : combinedStats.balance
-            )}
-            icon={<ArrowRight size={18} />}
-          />
-          <MetricCard
-            title="Variação"
-            value={variation === null ? "--" : `${variation.toFixed(1)}%`}
-            tone={variation !== null && variation < 0 ? "negative" : "positive"}
-            icon={<Sparkles size={18} />}
-          />
+        <section aria-label="Totais do intervalo">
+          <p className="app-eyebrow mb-3">Totais do intervalo</p>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <MetricCard
+              title="Receitas"
+              value={formatCurrency(metrics.incomes)}
+              tone="positive"
+              icon={<TrendingUp size={18} />}
+              size="sm"
+            />
+            <MetricCard
+              title="Despesas"
+              value={formatCurrency(metrics.expenses)}
+              tone="negative"
+              icon={<TrendingDown size={18} />}
+              size="sm"
+            />
+            <MetricCard
+              title="Saldo"
+              value={formatCurrency(metrics.balance)}
+              tone={toneForBalance(metrics.balance)}
+              icon={<ArrowRight size={18} />}
+              size="sm"
+            />
+            <MetricCard
+              title="Saldo vs. 1º mês"
+              value={variation === null ? "--" : `${variation.toFixed(1)}%`}
+              tone={variation !== null && variation < 0 ? "negative" : "positive"}
+              icon={<Sparkles size={18} />}
+              size="sm"
+            />
+          </div>
         </section>
       )}
 
-      <section className="space-y-5">
+      <section className="space-y-4" aria-label="Transações por mês">
         <div>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-serif text-3xl font-semibold text-foreground">
-                Transações
-              </h3>
-              <p className="mt-2 hidden text-sm text-muted-foreground xl:block">
-                Painéis de transações, faturas e manutenção estrutural do
-                dashboard.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/85 text-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
-                onClick={() => scrollTransactions("previous")}
-                disabled={filteredPanels.length <= 1}
-                aria-label="Ir para o mês anterior"
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card/85 text-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
-                onClick={() => scrollTransactions("next")}
-                disabled={filteredPanels.length <= 1}
-                aria-label="Ir para o próximo mês"
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          </div>
+          <h3 className="font-serif text-2xl font-semibold text-foreground sm:text-3xl">
+            Transações
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Deslize entre os meses ou use as setas. Arraste pela alça para
+            reordenar as transações.
+          </p>
         </div>
 
-        <div className="space-y-3">
-          <div className="relative">
-            <div
-              ref={transactionsScrollerRef}
-              className="-mx-4 overflow-hidden px-4 pb-4 sm:mx-0 sm:px-0"
-            >
-              <div className="flex snap-x snap-mandatory gap-5">
-                {filteredPanels.map((panel, index) => (
-                  <div
-                    key={panel.period.id}
-                    ref={(element) => {
-                      transactionPanelRefs.current[index] = element
-                    }}
-                    className="w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] snap-center sm:w-[min(50rem,calc(100vw-3rem))] sm:min-w-[min(50rem,calc(100vw-3rem))] xl:min-w-[50rem] xl:flex-1"
-                  >
-                    <TransactionsWorkspace
-                      panel={panel}
-                      shared={{
-                        creditCards,
-                        transactionCategories,
-                        responsibleOptions,
-                      }}
-                    />
-                  </div>
-                ))}
-                <div
-                  aria-hidden="true"
-                  className="shrink-0"
-                  style={{ width: `${transactionsEdgeSpacing}px` }}
-                />
-
-                {periods.length > 0 && filteredPanels.length === 0 ? (
-                  <div className="flex w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground sm:w-[min(28rem,calc(100vw-3rem))] sm:min-w-[min(28rem,calc(100vw-3rem))] xl:min-w-[22rem]">
-                    Selecione ao menos um mês para ativar o workspace.
-                  </div>
-                ) : null}
-              </div>
-            </div>
+        {periods.length > 0 && filteredPanels.length === 0 ? (
+          <div className="rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
+            Selecione ao menos um mês para ativar o workspace.
           </div>
-        </div>
+        ) : (
+          <MonthCarousel
+            panels={filteredPanels}
+            activeId={activeMonthId}
+            onActiveIdChange={setActiveMonthId}
+            renderPanel={(panel) => (
+              <TransactionsWorkspace
+                panel={panel}
+                shared={{
+                  creditCards,
+                  transactionCategories,
+                  responsibleOptions,
+                }}
+              />
+            )}
+          />
+        )}
       </section>
 
       <DashboardCharts
@@ -602,52 +367,144 @@ export function DashboardPage() {
         categoryData={categoryData}
       />
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)]">
-        <section className="app-panel">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="app-eyebrow">Contexto do plano</p>
-              <h3 className="font-serif text-2xl font-semibold text-foreground">
-                Leitura Rápida
-              </h3>
-            </div>
-            <div className="rounded-full bg-primary/12 p-3 text-primary">
-              <Users size={18} />
-            </div>
-          </div>
-          <dl className="mt-6 space-y-4">
-            <InfoRow
-              label="Plano ativo"
-              value={activePlan?.name || "Sem plano"}
-            />
-            <InfoRow
-              label="Meses com lançamentos"
-              value={String(monthSummaries.length)}
-            />
-            <InfoRow
-              label="Cartões cadastrados"
-              value={String(creditCards.length)}
-            />
-            <InfoRow
-              label="Lançamentos visíveis"
-              value={String(allTransactions.length)}
-            />
-            <InfoRow
-              label="Participantes"
-              value={String(participants.length)}
-            />
-          </dl>
-        </section>
+      <section className="app-panel" aria-label="Leitura rápida do plano">
+        <p className="app-eyebrow">Contexto do plano</p>
+        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <InfoTile label="Plano ativo" value={activePlan?.name || "Sem plano"} />
+          <InfoTile
+            label="Meses com lançamentos"
+            value={String(monthSummaries.length)}
+          />
+          <InfoTile
+            label="Cartões cadastrados"
+            value={String(creditCards.length)}
+          />
+          <InfoTile
+            label="Lançamentos visíveis"
+            value={String(allTransactions.length)}
+          />
+          <InfoTile label="Participantes" value={String(participants.length)} />
+        </dl>
       </section>
     </div>
   )
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+/** Mês + ano lado a lado; trocar o ano mantém o mês escolhido quando ele existe. */
+function MonthYearPicker({
+  label,
+  periods,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string
+  periods: Period[]
+  value: Period | null
+  disabled: boolean
+  onChange: (periodId: string) => void
+}) {
+  const years = useMemo(
+    () => [...new Set(periods.map((period) => period.year))].sort((a, b) => a - b),
+    [periods]
+  )
+  const id = `range-${label.toLowerCase()}`
+  const select = (year: number, month: number) => {
+    const target =
+      periods.find((period) => period.year === year && period.month === month) ??
+      periods.find((period) => period.year === year)
+    if (target) onChange(target.id)
+  }
+
   return (
-    <div className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-border bg-secondary/60 px-4 py-3">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-semibold text-foreground">{value}</dd>
+    <fieldset disabled={disabled || periods.length === 0} className="min-w-0">
+      <legend className="app-label">{label}</legend>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2">
+        <Select
+          id={`${id}-month`}
+          aria-label={`${label}: mês`}
+          value={value ? String(value.month) : ""}
+          onChange={(event) =>
+            value && select(value.year, Number(event.target.value))
+          }
+        >
+          {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+            <option key={month} value={month}>
+              {formatMonthLabel(month)}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id={`${id}-year`}
+          aria-label={`${label}: ano`}
+          value={value ? String(value.year) : ""}
+          onChange={(event) =>
+            select(Number(event.target.value), value?.month ?? 1)
+          }
+        >
+          {years.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </Select>
+      </div>
+    </fieldset>
+  )
+}
+
+/** Atalhos de intervalo relativos ao mês atual. */
+function RangePresets({
+  periods,
+  disabled,
+  onSelect,
+}: {
+  periods: Period[]
+  disabled: boolean
+  onSelect: (startPeriodId: string, endPeriodId: string) => void
+}) {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = today.getMonth() + 1
+  const current = toMonthId(year, month)
+  const threeMonthsAgo = new Date(year, month - 3, 1)
+  const presets = [
+    { label: "Mês atual", start: current, end: current },
+    {
+      label: "Últimos 3 meses",
+      start: toMonthId(threeMonthsAgo.getFullYear(), threeMonthsAgo.getMonth() + 1),
+      end: current,
+    },
+    { label: "Este ano", start: toMonthId(year, 1), end: toMonthId(year, 12) },
+  ].filter((preset) =>
+    periods.some((period) => period.id === preset.start) &&
+    periods.some((period) => period.id === preset.end)
+  )
+
+  return (
+    <div className="flex flex-wrap gap-2" aria-label="Atalhos de período">
+      {presets.map((preset) => (
+        <button
+          key={preset.label}
+          type="button"
+          disabled={disabled}
+          onClick={() => onSelect(preset.start, preset.end)}
+          className="h-10 rounded-full border border-border bg-card/85 px-4 text-sm font-medium text-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-50"
+        >
+          {preset.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.25rem] border border-border bg-secondary/60 px-4 py-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-semibold text-foreground">
+        {value}
+      </dd>
     </div>
   )
 }

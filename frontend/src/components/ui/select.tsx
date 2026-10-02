@@ -32,6 +32,7 @@ function parseOptions(children: ReactNode): ParsedOption[] {
 }
 
 export function Select({
+  "aria-label": ariaLabel,
   children,
   className,
   defaultValue,
@@ -66,7 +67,7 @@ export function Select({
       required={required}
       value={value === undefined ? undefined : String(value)}
     >
-      <BaseSelect.Trigger className={cn("app-field-trigger", className)}>
+      <BaseSelect.Trigger aria-label={ariaLabel} className={cn("app-field-trigger", className)}>
         <BaseSelect.Value placeholder={placeholder || placeholderOption?.label || "Selecione"} />
         <BaseSelect.Icon className="text-muted-foreground transition data-[open]:rotate-180">
           <ChevronDown size={16} />

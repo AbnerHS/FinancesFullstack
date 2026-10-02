@@ -350,3 +350,209 @@ export function toneForBalance(value: number): TransactionType | "NEUTRAL" {
   }
   return "NEUTRAL"
 }
+
+// ---------------------------------------------------------------------------------------------
+// Resumo do mês / semana
+
+/** Data local de hoje em AAAA-MM-DD (sem fuso: o app trabalha com datas de calendário). */
+export function todayIso(today = new Date()) {
+  return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+}
+
+export function addDaysIso(date: string, days: number) {
+  const [year, month, day] = date.split("-").map(Number)
+  return todayIso(new Date(year, month - 1, day + days))
+}
+
+/** Segunda e domingo da semana de `date` (AAAA-MM-DD). */
+export function weekBounds(date: string) {
+  const [year, month, day] = date.split("-").map(Number)
+  const weekday = new Date(year, month - 1, day).getDay() // 0 = domingo
+  const monday = addDaysIso(date, weekday === 0 ? -6 : 1 - weekday)
+  return { from: monday, to: addDaysIso(monday, 6) }
+}
+
+/** Variação percentual; null quando não há base de comparação. */
+export function percentChange(current: number, previous: number | null | undefined) {
+  if (previous == null || previous === 0) {
+    return null
+  }
+  return ((current - previous) / Math.abs(previous)) * 100
+}
+
+const isCountedExpense = (transaction: Transaction) =>
+  transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
+
+export type MonthInsights = {
+  incomes: number
+  expenses: number
+  balance: number
+  /** Saldo ÷ receitas (null sem receitas). */
+  savingsRate: number | null
+  /** Despesas ÷ receitas (null sem receitas). */
+  committedRate: number | null
+  incomesChange: number | null
+  expensesChange: number | null
+  bills: {
+    paidTotal: number
+    pendingTotal: number
+    paidCount: number
+    pendingCount: number
+    overdueCount: number
+    overdueTotal: number
+    /** Fração paga do total com vencimento (0–1), null sem contas. */
+    paidRatio: number | null
+  }
+  /** Mês atual: saldo disponível por dia até o fim do mês; outros meses: gasto médio por dia. */
+  daily: { kind: "available" | "average"; value: number; days: number }
+  topCategory: { name: string; total: number; share: number } | null
+  invoices: { total: number; share: number | null; count: number }
+  byResponsible: Array<{ id: string; label: string; total: number; share: number }>
+}
+
+export function buildMonthInsights({
+  period,
+  stats,
+  transactions,
+  invoices,
+  previousStats,
+  responsibleOptions,
+  today = todayIso(),
+}: {
+  period: Period
+  stats: { incomes: number; expenses: number; balance: number }
+  transactions: Transaction[]
+  invoices: Array<{ amount: number | string }>
+  previousStats: { incomes: number; expenses: number } | null
+  responsibleOptions: Array<{ id: string; label: string }>
+  today?: string
+}): MonthInsights {
+  const { incomes, expenses, balance } = stats
+
+  const bills = transactions.filter((t) => isCountedExpense(t) && t.dueDate)
+  const paid = bills.filter((t) => t.paymentStatus === "PAID")
+  const pending = bills.filter((t) => t.paymentStatus !== "PAID")
+  const overdue = pending.filter((t) => getTransactionDueAlert(t) === "overdue")
+  const sum = (items: Array<{ amount: number | string }>) =>
+    items.reduce((total, item) => total + Number(item.amount || 0), 0)
+  const paidTotal = sum(paid)
+  const pendingTotal = sum(pending)
+
+  const monthDays = daysInMonth(period.year, period.month)
+  const isCurrentMonth = today.startsWith(period.id)
+  const remainingDays = isCurrentMonth ? monthDays - Number(today.slice(8, 10)) + 1 : 0
+  const daily = isCurrentMonth
+    ? { kind: "available" as const, value: Math.max(balance, 0) / remainingDays, days: remainingDays }
+    : { kind: "average" as const, value: expenses / monthDays, days: monthDays }
+
+  const categoryTotals = new Map<string, number>()
+  transactions.filter(isCountedExpense).forEach((t) => {
+    const name = t.category?.name || "Sem categoria"
+    categoryTotals.set(name, (categoryTotals.get(name) ?? 0) + Number(t.amount || 0))
+  })
+  const [topName, topTotal] =
+    [...categoryTotals.entries()].sort((a, b) => b[1] - a[1])[0] ?? []
+
+  const invoicesTotal = sum(invoices)
+
+  const responsibleTotals = new Map<string, number>()
+  transactions.filter(isCountedExpense).forEach((t) => {
+    const id = t.responsibleUserId || ""
+    responsibleTotals.set(id, (responsibleTotals.get(id) ?? 0) + Number(t.amount || 0))
+  })
+  const responsibleExpenses = [...responsibleTotals.values()].reduce((a, b) => a + b, 0)
+  const byResponsible = [...responsibleTotals.entries()]
+    .map(([id, total]) => ({
+      id: id || "__unassigned__",
+      label: responsibleOptions.find((option) => option.id === id)?.label || "Geral",
+      total,
+      share: responsibleExpenses > 0 ? total / responsibleExpenses : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
+
+  return {
+    incomes,
+    expenses,
+    balance,
+    savingsRate: incomes > 0 ? balance / incomes : null,
+    committedRate: incomes > 0 ? expenses / incomes : null,
+    incomesChange: percentChange(incomes, previousStats?.incomes),
+    expensesChange: percentChange(expenses, previousStats?.expenses),
+    bills: {
+      paidTotal,
+      pendingTotal,
+      paidCount: paid.length,
+      pendingCount: pending.length,
+      overdueCount: overdue.length,
+      overdueTotal: sum(overdue),
+      paidRatio: paidTotal + pendingTotal > 0 ? paidTotal / (paidTotal + pendingTotal) : null,
+    },
+    daily,
+    topCategory:
+      topName && topTotal && topTotal > 0
+        ? { name: topName, total: topTotal, share: expenses > 0 ? topTotal / expenses : 0 }
+        : null,
+    invoices: {
+      total: invoicesTotal,
+      share: expenses > 0 ? invoicesTotal / expenses : null,
+      count: invoices.length,
+    },
+    byResponsible,
+  }
+}
+
+export type WeekDue = {
+  from: string
+  to: string
+  /** Pendentes com vencimento de hoje até domingo. */
+  upcoming: Transaction[]
+  upcomingTotal: number
+  paid: Transaction[]
+  paidTotal: number
+  /** Pendentes vencidas antes de hoje (qualquer mês). */
+  overdue: Transaction[]
+  overdueTotal: number
+}
+
+/** Vencimentos da semana (segunda a domingo) a partir das despesas com vencimento. */
+export function buildWeekDue({
+  weekTransactions,
+  overdueTransactions,
+  today = todayIso(),
+}: {
+  weekTransactions: Transaction[]
+  overdueTransactions: Transaction[]
+  today?: string
+}): WeekDue {
+  const { from, to } = weekBounds(today)
+  const byDueDate = (a: Transaction, b: Transaction) =>
+    (a.dueDate ?? "").localeCompare(b.dueDate ?? "")
+  const expenses = weekTransactions.filter((t) => t.type === "EXPENSE" && t.dueDate)
+  const upcoming = expenses
+    .filter((t) => t.paymentStatus !== "PAID" && (t.dueDate ?? "") >= today)
+    .sort(byDueDate)
+  const paid = expenses.filter((t) => t.paymentStatus === "PAID").sort(byDueDate)
+  const overdue = overdueTransactions
+    .filter((t) => t.type === "EXPENSE" && t.paymentStatus !== "PAID")
+    .sort((a, b) => byDueDate(b, a))
+  const sum = (items: Transaction[]) =>
+    items.reduce((total, item) => total + Number(item.amount || 0), 0)
+
+  return {
+    from,
+    to,
+    upcoming,
+    upcomingTotal: sum(upcoming),
+    paid,
+    paidTotal: sum(paid),
+    overdue,
+    overdueTotal: sum(overdue),
+  }
+}
+
+export function formatPercent(value: number | null | undefined, fractionDigits = 0) {
+  if (value == null || !Number.isFinite(value)) {
+    return "--"
+  }
+  return `${(value * 100).toFixed(fractionDigits)}%`
+}
