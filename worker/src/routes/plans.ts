@@ -4,7 +4,8 @@ import { badRequest } from "../lib/errors.ts"
 import { collection } from "../lib/hal.ts"
 import { id, parseDateRange, yearMonth } from "../lib/query.ts"
 import { validate } from "../lib/validation.ts"
-import { isYearMonth } from "../lib/dates.ts"
+import { isIsoDate, isYearMonth } from "../lib/dates.ts"
+import { paymentStatuses } from "../db/schema.ts"
 import { requirePlanAccess, requirePlanOwner } from "../services/access.ts"
 import * as cards from "../services/cards.ts"
 import * as invoices from "../services/invoices.ts"
@@ -87,12 +88,30 @@ export const planRoutes = new Hono<AppEnv>()
     return c.json(collection("creditCards", list.map(cards.cardModel), `/api/plans/${c.req.param("id")}/credit-cards`))
   })
   .get("/:id/transactions", async (c) => {
-    const range = parseDateRange(c.req.query())
-    const recurringGroupId = c.req.query("recurringGroupId") || undefined
-    if (!range && !recurringGroupId) {
-      throw badRequest("Informe 'month' (AAAA-MM), 'from' e 'to' (AAAA-MM-DD) ou 'recurringGroupId'")
+    const query = c.req.query()
+    const range = parseDateRange(query)
+    const recurringGroupId = query.recurringGroupId || undefined
+    const dueFrom = query.dueFrom || undefined
+    const dueTo = query.dueTo || undefined
+    const paymentStatus = query.paymentStatus || undefined
+    for (const [name, value] of [["dueFrom", dueFrom], ["dueTo", dueTo]] as const) {
+      if (value && !isIsoDate(value)) throw badRequest(`Parâmetro '${name}' inválido (use AAAA-MM-DD)`)
     }
-    const list = await transactions.listByPlan(c.var.db, c.var.user, c.req.param("id"), { range, recurringGroupId })
+    if (paymentStatus && !paymentStatuses.includes(paymentStatus as never)) {
+      throw badRequest("Parâmetro 'paymentStatus' inválido (PENDING ou PAID)")
+    }
+    if (!range && !recurringGroupId && !dueFrom && !dueTo) {
+      throw badRequest(
+        "Informe 'month' (AAAA-MM), 'from' e 'to' (AAAA-MM-DD), 'recurringGroupId' ou 'dueFrom'/'dueTo' (AAAA-MM-DD)",
+      )
+    }
+    const list = await transactions.listByPlan(c.var.db, c.var.user, c.req.param("id"), {
+      range,
+      recurringGroupId,
+      dueFrom,
+      dueTo,
+      paymentStatus: paymentStatus as (typeof paymentStatuses)[number] | undefined,
+    })
     return c.json(collection("transactions", list, selfHref(c.req.url)))
   })
   .put("/:id/transactions/order", validate("json", reorderSchema), async (c) => {
