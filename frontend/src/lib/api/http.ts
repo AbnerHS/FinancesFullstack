@@ -41,7 +41,8 @@ http.interceptors.response.use(
     const originalRequest = error.config as RetriableConfig | undefined
     const statusCode = error.response?.status
 
-    if (!originalRequest || statusCode !== 403 || originalRequest._retry) {
+    // A API responde 401 para token ausente/expirado (403 é acesso negado de verdade).
+    if (!originalRequest || statusCode !== 401 || originalRequest._retry) {
       return Promise.reject(error)
     }
 
@@ -49,7 +50,8 @@ http.interceptors.response.use(
       originalRequest.url?.includes("/auth/login") ||
       originalRequest.url?.includes("/auth/google") ||
       originalRequest.url?.includes("/auth/refresh") ||
-      originalRequest.url?.includes("/auth/register")
+      originalRequest.url?.includes("/auth/register") ||
+      originalRequest.url?.includes("/auth/logout")
     ) {
       return Promise.reject(error)
     }

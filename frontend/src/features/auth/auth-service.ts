@@ -19,6 +19,10 @@ export const authService = {
     const { data } = await http.post<AuthResponse>("/auth/register", payload)
     return data
   },
+  /** Apaga o cookie de refresh no servidor. */
+  async logout() {
+    await http.post("/auth/logout")
+  },
   async refreshAuthToken() {
     const { data } = await http.post<AuthResponse>("/auth/refresh", {})
     return data

@@ -3,7 +3,6 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  redirect,
 } from "@tanstack/react-router"
 
 import { GoogleAuthCallback } from "@/features/auth/google-auth-callback.tsx"
@@ -78,15 +77,6 @@ const plansRoute = createRoute({
   component: PlansPage,
 })
 
-const periodsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/periods",
-  beforeLoad: () => {
-    throw redirect({ to: "/plans" })
-  },
-  component: Outlet,
-})
-
 const cardsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/cards",
@@ -107,7 +97,6 @@ const routeTree = rootRoute.addChildren([
     dashboardRoute,
     profileRoute,
     plansRoute,
-    periodsRoute,
     cardsRoute,
     partnerRoute,
   ]),

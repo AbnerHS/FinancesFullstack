@@ -31,6 +31,7 @@ export function DashboardPage() {
     plans,
     plansLoading,
     periods,
+    monthSummaries,
     periodsLoading,
     selectedPlanId,
     activePlan,
@@ -326,7 +327,7 @@ export function DashboardPage() {
               Seu dashboard começa por um plano financeiro.
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Crie seu primeiro plano para liberar períodos, transações,
+              Crie seu primeiro plano para liberar meses, transações,
               categorias e cartões.
             </p>
           </div>
@@ -356,7 +357,7 @@ export function DashboardPage() {
                     }
                   >
                     {availableYears.length === 0 ? (
-                      <option value="">Sem períodos</option>
+                      <option value="">Sem meses</option>
                     ) : null}
                     {availableYears.map((year) => (
                       <option key={year} value={year}>
@@ -417,7 +418,7 @@ export function DashboardPage() {
                     }
                   >
                     {availableYears.length === 0 ? (
-                      <option value="">Sem períodos</option>
+                      <option value="">Sem meses</option>
                     ) : null}
                     {availableYears.map((year) => (
                       <option key={year} value={year}>
@@ -460,7 +461,7 @@ export function DashboardPage() {
               <div className="rounded-[1.25rem] border border-border bg-card/80 px-4 py-1">
                 <p className="mt-2 text-sm font-semibold text-foreground">
                   {periodsLoading
-                    ? "Carregando períodos..."
+                    ? "Carregando meses..."
                     : selectedPeriodsLabel}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -573,7 +574,6 @@ export function DashboardPage() {
                       panel={panel}
                       shared={{
                         creditCards,
-                        periods,
                         transactionCategories,
                         responsibleOptions,
                       }}
@@ -588,7 +588,7 @@ export function DashboardPage() {
 
                 {periods.length > 0 && filteredPanels.length === 0 ? (
                   <div className="flex w-[calc(100vw-2rem)] min-w-[calc(100vw-2rem)] items-center rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground sm:w-[min(28rem,calc(100vw-3rem))] sm:min-w-[min(28rem,calc(100vw-3rem))] xl:min-w-[22rem]">
-                    Selecione ao menos um período para ativar o workspace.
+                    Selecione ao menos um mês para ativar o workspace.
                   </div>
                 ) : null}
               </div>
@@ -621,8 +621,8 @@ export function DashboardPage() {
               value={activePlan?.name || "Sem plano"}
             />
             <InfoRow
-              label="Períodos disponíveis"
-              value={String(periods.length)}
+              label="Meses com lançamentos"
+              value={String(monthSummaries.length)}
             />
             <InfoRow
               label="Cartões cadastrados"

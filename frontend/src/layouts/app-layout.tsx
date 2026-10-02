@@ -5,6 +5,7 @@ import {
   AppShellSidebar,
   MobileSidebarButton,
 } from "@/components/app-shell-sidebar.tsx"
+import { authService } from "@/features/auth/auth-service.ts"
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { useDashboardStore } from "@/features/finance/dashboard-store"
 
@@ -21,10 +22,6 @@ const routeMeta: Record<string, { title: string; description: string }> = {
   "/plans": {
     title: "Planos Financeiros",
     description: "Organize os planos e escolha o contexto ativo do produto.",
-  },
-  "/periods": {
-    title: "Planos Financeiros",
-    description: "A rota de períodos redireciona para a gestão do plano ativo.",
   },
   "/cards": {
     title: "Cartões e Faturas",
@@ -57,6 +54,8 @@ export function AppLayout() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onLogout={async () => {
+          // Apaga o cookie de refresh no servidor; se falhar, sai localmente mesmo assim.
+          await authService.logout().catch(() => undefined)
           clearTokens()
           clearSelections()
           await navigate({ to: "/login" })

@@ -77,6 +77,7 @@ import {
   formatDateOnly,
   formatDateTime,
   getTransactionDueAlert,
+  defaultReferenceDate,
   parseCurrencyInput,
   toneForBalance,
 } from "@/features/finance/utils.ts"
@@ -95,7 +96,6 @@ type TransactionWorkspaceProps = {
   }
   shared: {
     creditCards: CreditCard[]
-    periods: Period[]
     transactionCategories: TransactionCategory[]
     responsibleOptions: ResponsibleOption[]
   }
@@ -111,16 +111,15 @@ type TransactionRowProps = {
   onDelete: (transaction: Transaction) => void
 }
 
-const emptyForm = (periodId: string): TransactionFormValues => ({
+const emptyForm = (): TransactionFormValues => ({
   description: "",
   amount: "",
   type: "EXPENSE",
-  periodId,
   responsibleUserId: "",
   categoryId: "",
   categoryName: "",
   isRecurring: false,
-  numberOfPeriods: 2,
+  occurrences: 2,
   recurringGroupId: null,
   hasDueDate: false,
   dueDate: "",
@@ -375,7 +374,11 @@ function TransactionDetailsModal({
     )?.label ?? "Geral"
 
   const details = [
-    { label: "Período", value: periodLabel },
+    { label: "Mês", value: periodLabel },
+    {
+      label: "Competência",
+      value: formatDateOnly(transaction.referenceDate) || "Não informado",
+    },
     { label: "Tipo", value: transaction.type === "REVENUE" ? "Receita" : "Despesa" },
     {
       label: "Categoria",
@@ -403,8 +406,8 @@ function TransactionDetailsModal({
     },
     {
       label: "Lançamento",
-      value: transaction.dateTime
-        ? formatDateTime(transaction.dateTime)
+      value: transaction.createdAt
+        ? formatDateTime(transaction.createdAt)
         : "Não informado",
     },
   ]
@@ -571,9 +574,7 @@ export function TransactionsWorkspace({
 }: TransactionWorkspaceProps) {
   const queryClient = useQueryClient()
   const [isComposerOpen, setIsComposerOpen] = useState(false)
-  const [form, setForm] = useState<TransactionFormValues>(() =>
-    emptyForm(panel.period.id)
-  )
+  const [form, setForm] = useState<TransactionFormValues>(emptyForm)
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null)
   const [detailsTransaction, setDetailsTransaction] =
@@ -589,16 +590,16 @@ export function TransactionsWorkspace({
     createRecurringTransaction,
     updateTransaction,
     deleteTransaction,
-  } = useTransactionMutations(panel.period.id, shared.periods)
-  const transactionLinking = useTransactionLinking(panel.period.id)
+  } = useTransactionMutations(panel.period)
+  const transactionLinking = useTransactionLinking(panel.period)
   const invoiceManager = usePeriodInvoiceManager({
     creditCards: shared.creditCards,
     invoices: panel.invoices,
-    periodId: panel.period.id,
+    period: panel.period,
   })
 
   const reorder = useTransactionReorder({
-    activePeriodId: panel.period.id,
+    period: panel.period,
     transactions: panel.transactions,
   })
 
@@ -668,7 +669,7 @@ export function TransactionsWorkspace({
     setEditingScope("SINGLE")
     setFormError(null)
     setSubmitPending(false)
-    setForm(emptyForm(panel.period.id))
+    setForm(emptyForm())
   }
 
   const refreshTransactionViews = async () => {
@@ -700,12 +701,11 @@ export function TransactionsWorkspace({
         })
       ),
       type: transaction.type,
-      periodId: panel.period.id,
       responsibleUserId: transaction.responsibleUserId || "",
       categoryId: transaction.category?.id || "",
       categoryName: transaction.category?.name || "",
       isRecurring: false,
-      numberOfPeriods: 2,
+      occurrences: 2,
       recurringGroupId: transaction.recurringGroupId || null,
       hasDueDate: Boolean(
         transaction.dueDate ||
@@ -767,11 +767,11 @@ export function TransactionsWorkspace({
     }
 
     const categoryName = form.categoryName.trim()
+    // Sem plano/mês: na edição a transação continua onde está.
     const payload: {
       description: string
       amount: number
       type: Transaction["type"]
-      periodId: string
       responsibleUserId: string | null
       category: { id?: string; name?: string } | null
       dueDate?: string | null
@@ -782,7 +782,6 @@ export function TransactionsWorkspace({
       description: form.description.trim(),
       amount,
       type: form.type,
-      periodId: panel.period.id,
       responsibleUserId: form.responsibleUserId || null,
       category: categoryName
         ? form.categoryId
@@ -820,6 +819,12 @@ export function TransactionsWorkspace({
       payload.billingDocument = null
     }
 
+    // Transação nova nasce no mês do painel.
+    const newTransactionPlacement = {
+      planId: panel.period.planId,
+      referenceDate: defaultReferenceDate(panel.period, payload.dueDate),
+    }
+
     const fileToUpload =
       form.billingDocumentType === "FILE" ? form.billingDocumentFile : null
     let uploadTargetId: string | null = null
@@ -845,13 +850,13 @@ export function TransactionsWorkspace({
             : "SINGLE"
       }
     } else if (form.isRecurring) {
-      if (!Number.isFinite(form.numberOfPeriods) || form.numberOfPeriods < 2) {
-        throw new Error("Informe pelo menos 2 periodos para recorrencia.")
+      if (!Number.isFinite(form.occurrences) || form.occurrences < 2) {
+        throw new Error("Informe pelo menos 2 meses para a recorrência.")
       }
 
       const createdTransactions = await createRecurringTransaction.mutateAsync({
-        transaction: payload,
-        numberOfPeriods: Number(form.numberOfPeriods),
+        transaction: { ...payload, ...newTransactionPlacement },
+        occurrences: Number(form.occurrences),
       })
 
       if (fileToUpload) {
@@ -859,7 +864,10 @@ export function TransactionsWorkspace({
         uploadTargetScope = "GROUP"
       }
     } else {
-      const createdTransaction = await createTransaction.mutateAsync(payload)
+      const createdTransaction = await createTransaction.mutateAsync({
+        ...payload,
+        ...newTransactionPlacement,
+      })
 
       if (fileToUpload) {
         uploadTargetId = createdTransaction.id

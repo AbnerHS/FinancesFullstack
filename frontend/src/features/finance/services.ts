@@ -1,14 +1,13 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query"
 
 import { http } from "@/lib/api/http.ts"
-import { resolveLink } from "@/lib/api/hateoas.ts"
 import type { EmbeddedCollection } from "@/lib/api/types.ts"
 import type {
-  CategorySpending,
   CreditCard,
   Invoice,
   Period,
   Plan,
+  PlanMonthSummary,
   PlanInvitation,
   PlanInviteLink,
   PlanParticipant,
@@ -19,7 +18,8 @@ import type {
 
 export const financeKeys = {
   plans: ["plans-me"] as const,
-  periods: (planId?: string | null) => ["plan-periods", planId] as const,
+  // Meses com lançamentos (e totais) do plano.
+  months: (planId?: string | null) => ["plan-months", planId] as const,
   participants: (planId?: string | null) =>
     ["plan-participants", planId] as const,
   inviteLink: (planId?: string | null) => ["plan-invite-link", planId] as const,
@@ -29,14 +29,13 @@ export const financeKeys = {
   planCards: (planId?: string | null) =>
     ["credit-cards", "plan", planId] as const,
   categories: ["transaction-categories"] as const,
-  users: ["users-all"] as const,
+  // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
   periodTransactionsRoot: ["period-transactions"] as const,
-  periodTransactions: (periodId?: string | null) =>
-    ["period-transactions", periodId] as const,
-  periodInvoices: (periodId?: string | null) =>
-    ["period-invoices", periodId] as const,
-  categoryReport: (periodId?: string | null) =>
-    ["report-spending-by-category", periodId] as const,
+  periodTransactions: (period?: Pick<Period, "planId" | "id"> | null) =>
+    ["period-transactions", period?.planId, period?.id] as const,
+  periodInvoicesRoot: ["period-invoices"] as const,
+  periodInvoices: (period?: Pick<Period, "planId" | "id"> | null) =>
+    ["period-invoices", period?.planId, period?.id] as const,
 }
 
 function embedded<T, Key extends string>(
@@ -63,22 +62,15 @@ export const planService = {
   async delete(id: string) {
     await http.delete(`/plans/${id}`)
   },
-  async getPeriodsByPlan(planOrPlanId: Plan | string | null | undefined) {
-    const periodsPath =
-      resolveLink(
-        typeof planOrPlanId === "string" ? null : planOrPlanId?._links?.periods
-      ) ||
-      (planOrPlanId
-        ? `/plans/${typeof planOrPlanId === "string" ? planOrPlanId : planOrPlanId.id}/periods`
-        : null)
-
-    if (!periodsPath) {
+  async getMonths(planId?: string | null) {
+    if (!planId) {
       return []
     }
 
-    const { data } =
-      await http.get<EmbeddedCollection<Period, "periods">>(periodsPath)
-    return embedded(data, "periods")
+    const { data } = await http.get<PlanMonthSummary[]>(
+      `/plans/${planId}/months`
+    )
+    return data ?? []
   },
   async getParticipants(planId?: string | null) {
     if (!planId) {
@@ -137,62 +129,32 @@ export const planService = {
 }
 
 export const periodService = {
-  async create(payload: {
-    month: number
-    year: number
-    financialPlanId: string
-  }) {
-    const { data } = await http.post<Period>("/periods", payload)
-    return data
-  },
-  async delete(id: string) {
-    await http.delete(`/periods/${id}`)
-  },
-  async getTransactionsByPeriod(
-    periodOrPeriodId: Period | string | null | undefined
-  ) {
-    const periodId =
-      typeof periodOrPeriodId === "string"
-        ? periodOrPeriodId
-        : periodOrPeriodId?.id
-    const transactionsPath =
-      resolveLink(
-        typeof periodOrPeriodId === "string"
-          ? null
-          : periodOrPeriodId?._links?.transactions
-      ) || (periodId ? `/periods/${periodId}/transactions` : null)
-
-    if (!transactionsPath) {
+  async getTransactionsByPeriod(period: Period | null | undefined) {
+    if (!period) {
       return []
     }
 
-    const { data } =
-      await http.get<EmbeddedCollection<Transaction, "transactions">>(
-        transactionsPath
-      )
+    const { data } = await http.get<
+      EmbeddedCollection<Transaction, "transactions">
+    >(`/plans/${period.planId}/transactions`, { params: { month: period.id } })
     return embedded(data, "transactions")
   },
-  async getInvoicesByPeriod(
-    periodOrPeriodId: Period | string | null | undefined
-  ) {
-    const periodId =
-      typeof periodOrPeriodId === "string"
-        ? periodOrPeriodId
-        : periodOrPeriodId?.id
-    const invoicesPath =
-      resolveLink(
-        typeof periodOrPeriodId === "string"
-          ? null
-          : periodOrPeriodId?._links?.invoices
-      ) || (periodId ? `/periods/${periodId}/invoices` : null)
-
-    if (!invoicesPath) {
+  async getInvoicesByPeriod(period: Period | null | undefined) {
+    if (!period) {
       return []
     }
 
-    const { data } =
-      await http.get<EmbeddedCollection<Invoice, "invoices">>(invoicesPath)
+    const { data } = await http.get<EmbeddedCollection<Invoice, "invoices">>(
+      `/plans/${period.planId}/invoices`,
+      { params: { month: period.id } }
+    )
     return embedded(data, "invoices")
+  },
+  async getRecurringGroup(planId: string, recurringGroupId: string) {
+    const { data } = await http.get<
+      EmbeddedCollection<Transaction, "transactions">
+    >(`/plans/${planId}/transactions`, { params: { recurringGroupId } })
+    return embedded(data, "transactions")
   },
 }
 
@@ -215,8 +177,9 @@ export const creditCardService = {
 
 export const invoiceService = {
   async create(payload: {
+    planId: string
     creditCardId: string
-    periodId: string
+    referenceMonth: string
     amount: number
   }) {
     const { data } = await http.post<Invoice>("/credit-card-invoices", payload)
@@ -224,7 +187,7 @@ export const invoiceService = {
   },
   async update(
     id: string,
-    payload: { creditCardId: string; periodId: string; amount: number }
+    payload: { creditCardId: string; referenceMonth: string; amount: number }
   ) {
     const { data } = await http.put<Invoice>(
       `/credit-card-invoices/${id}`,
@@ -255,7 +218,8 @@ export const transactionService = {
     description: string
     amount: number
     type: "REVENUE" | "EXPENSE"
-    periodId: string
+    planId: string
+    referenceDate: string
     responsibleUserId?: string | null
     category?: { id?: string; name?: string } | null
     dueDate?: string | null
@@ -271,7 +235,8 @@ export const transactionService = {
       description: string
       amount: number
       type: "REVENUE" | "EXPENSE"
-      periodId: string
+      planId: string
+      referenceDate: string
       responsibleUserId?: string | null
       category?: { id?: string; name?: string } | null
       dueDate?: string | null
@@ -279,13 +244,20 @@ export const transactionService = {
       paymentStatus?: "PENDING" | "PAID" | null
       billingDocument?: { type: "LINK"; url: string } | null
     }
-    numberOfPeriods: number
+    occurrences: number
   }) {
     const { data } = await http.post<Transaction[]>(
       "/transactions/recurring",
       payload
     )
     return data
+  },
+  /** Grava a ordem do mês inteiro de uma vez. */
+  async reorder(period: Period, transactionIds: string[]) {
+    await http.put(`/plans/${period.planId}/transactions/order`, {
+      month: period.id,
+      transactionIds,
+    })
   },
   async updatePartial(id: string, payload: Record<string, unknown>) {
     const { data } = await http.patch<Transaction>(
@@ -345,10 +317,6 @@ export const userService = {
     const { data } = await http.get<User>("/users/me")
     return data
   },
-  async getAll() {
-    const { data } = await http.get<EmbeddedCollection<User, "users">>("/users")
-    return embedded(data, "users")
-  },
   async updateMe(payload: { name: string; email: string }) {
     const { data } = await http.patch<User>("/users/me", payload)
     return data
@@ -361,23 +329,6 @@ export const userService = {
   },
 }
 
-export const reportService = {
-  async getSpendingByCategory(periodId?: string | null) {
-    if (!periodId) {
-      return []
-    }
-
-    const { data } = await http.get<CategorySpending[]>(
-      "/reports/spending-by-category",
-      {
-        params: { periodId },
-      }
-    )
-
-    return data ?? []
-  },
-}
-
 export const financeQueries = {
   plans: () =>
     queryOptions({
@@ -385,10 +336,10 @@ export const financeQueries = {
       queryFn: planService.getMyPlans,
       staleTime: 1000 * 60 * 5,
     }),
-  periods: (plan: Plan | null) =>
+  months: (plan: Plan | null) =>
     queryOptions({
-      queryKey: financeKeys.periods(plan?.id),
-      queryFn: () => planService.getPeriodsByPlan(plan),
+      queryKey: financeKeys.months(plan?.id),
+      queryFn: () => planService.getMonths(plan?.id),
       enabled: Boolean(plan),
       staleTime: 1000 * 60 * 5,
       placeholderData: keepPreviousData,

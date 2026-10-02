@@ -30,14 +30,16 @@ import type {
   Transaction,
 } from "@/features/finance/types.ts"
 import {
+  addMonthsToDate,
   buildCategoryChartData,
   buildComparisonChartData,
+  buildPlanMonths,
   calculateStats,
   computeVariation,
   findDefaultPeriod,
   formatMonthYear,
+  monthsBetween,
   parseCurrencyInput,
-  sortPeriods,
 } from "@/features/finance/utils.ts"
 
 type PeriodRange = {
@@ -57,57 +59,21 @@ function rangesEqual(left: PeriodRange, right: PeriodRange) {
   )
 }
 
-function buildLegacyPeriodRange(ids: string[]) {
-  return {
-    startPeriodId: ids[0] ?? null,
-    endPeriodId: ids.length > 0 ? ids[ids.length - 1] : null,
-  }
-}
-
-function shiftIsoDateToPeriod(
-  dateValue: unknown,
-  period: Pick<Period, "month" | "year">
-) {
-  if (typeof dateValue !== "string" || !dateValue) {
-    return null
-  }
-
-  const [year, month, day] = dateValue.split("-").map(Number)
-  if (
-    Number.isNaN(year) ||
-    Number.isNaN(month) ||
-    Number.isNaN(day) ||
-    year <= 0 ||
-    month <= 0 ||
-    day <= 0
-  ) {
-    return null
-  }
-
-  const resolvedDay = Math.min(
-    day,
-    new Date(period.year, period.month, 0).getDate()
-  )
-
-  return `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}-${String(
-    resolvedDay
-  ).padStart(2, "0")}`
-}
-
+/**
+ * Payload de uma ocorrência ao editar o grupo recorrente inteiro. A ocorrência editada recebe o
+ * payload como veio; as demais não herdam o pagamento e mantêm a distância entre vencimento e
+ * competência (o vencimento anda junto com o mês de cada ocorrência).
+ */
 function buildRecurringGroupPayload({
   transaction,
+  anchor,
   basePayload,
-  anchorDueDate,
-  period,
-  currentTransactionId,
 }: {
   transaction: Transaction
+  anchor: Transaction
   basePayload: Record<string, unknown>
-  anchorDueDate: unknown
-  period: Period | undefined
-  currentTransactionId: string
 }) {
-  if (transaction.id === currentTransactionId) {
+  if (transaction.id === anchor.id) {
     return basePayload
   }
 
@@ -119,16 +85,14 @@ function buildRecurringGroupPayload({
     return groupPayload
   }
 
-  if (anchorDueDate == null) {
-    groupPayload.dueDate = null
-    return groupPayload
-  }
-
-  if (!period) {
-    return groupPayload
-  }
-
-  groupPayload.dueDate = shiftIsoDateToPeriod(anchorDueDate, period)
+  const anchorDueDate = basePayload.dueDate
+  groupPayload.dueDate =
+    typeof anchorDueDate === "string" && anchorDueDate
+      ? addMonthsToDate(
+          anchorDueDate,
+          monthsBetween(anchor.referenceDate, transaction.referenceDate)
+        )
+      : null
   return groupPayload
 }
 
@@ -174,54 +138,6 @@ function normalizePeriodRange(
       }
 }
 
-function getCurrentYear() {
-  return new Date().getFullYear()
-}
-
-function getSuggestedNextYear(periods: Period[]) {
-  if (periods.length === 0) {
-    return getCurrentYear()
-  }
-
-  return Math.max(...periods.map((period) => period.year)) + 1
-}
-
-async function createMissingPeriodsForYear({
-  financialPlanId,
-  year,
-  periods,
-}: {
-  financialPlanId: string
-  year: number
-  periods: Period[]
-}) {
-  const existingMonths = new Set(
-    periods
-      .filter((period) => period.year === year)
-      .map((period) => period.month)
-  )
-  const missingMonths = Array.from(
-    { length: 12 },
-    (_, index) => index + 1
-  ).filter((month) => !existingMonths.has(month))
-
-  if (missingMonths.length === 0) {
-    return 0
-  }
-
-  await Promise.all(
-    missingMonths.map((month) =>
-      periodService.create({
-        month,
-        year,
-        financialPlanId,
-      })
-    )
-  )
-
-  return missingMonths.length
-}
-
 export function usePlans() {
   const isAuthenticated = Boolean(useAuthStore((state) => state.user?.id))
   return useQuery({
@@ -230,8 +146,41 @@ export function usePlans() {
   })
 }
 
+/** Meses do plano que têm lançamentos, com totais. */
+export function usePlanMonths(plan: Plan | null) {
+  return useQuery(financeQueries.months(plan))
+}
+
+/** Meses selecionáveis do plano (gerados no cliente; não existem mais períodos no backend). */
 export function usePeriods(plan: Plan | null) {
-  return useQuery(financeQueries.periods(plan))
+  const { data: monthSummaries, isLoading, isFetched } = usePlanMonths(plan)
+  const data = useMemo(
+    () =>
+      plan
+        ? buildPlanMonths(
+            plan.id,
+            (monthSummaries ?? []).map((summary) => summary.month)
+          )
+        : [],
+    [monthSummaries, plan]
+  )
+
+  return { data, monthSummaries: monthSummaries ?? [], isLoading, isFetched }
+}
+
+/** Invalida tudo que depende das transações de um plano (podem mudar de mês ao vincular fatura). */
+async function invalidateTransactionViews(
+  queryClient: ReturnType<typeof useQueryClient>,
+  planId: string | null | undefined
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: financeKeys.periodTransactionsRoot,
+    }),
+    queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoicesRoot }),
+    queryClient.invalidateQueries({ queryKey: financeKeys.months(planId) }),
+    queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
+  ])
 }
 
 export function useCreditCards() {
@@ -276,9 +225,6 @@ export function useDashboard() {
   const selectedEndPeriodId = useDashboardStore(
     (state) => state.selectedEndPeriodId
   )
-  const legacySelectedPeriodIds = useDashboardStore(
-    (state) => state.selectedPeriodIds
-  )
   const setSelectedPlanId = useDashboardStore(
     (state) => state.setSelectedPlanId
   )
@@ -303,15 +249,13 @@ export function useDashboard() {
     if (
       selectedPlanId !== null ||
       selectedStartPeriodId !== null ||
-      selectedEndPeriodId !== null ||
-      legacySelectedPeriodIds.length > 0
+      selectedEndPeriodId !== null
     ) {
       clearSelections()
     }
   }, [
     clearSelections,
     isAuthenticated,
-    legacySelectedPeriodIds.length,
     selectedEndPeriodId,
     selectedPlanId,
     selectedStartPeriodId,
@@ -333,16 +277,13 @@ export function useDashboard() {
     setSelectedPlanId,
   ])
 
+  // Já vêm em ordem cronológica.
   const {
-    data: periods = [],
+    data: sortedPeriods,
+    monthSummaries,
     isLoading: periodsLoading,
     isFetched: periodsFetched,
   } = usePeriods(activePlan)
-  const sortedPeriods = useMemo(() => sortPeriods(periods), [periods])
-  const legacyPeriodRange = useMemo(
-    () => buildLegacyPeriodRange(legacySelectedPeriodIds),
-    [legacySelectedPeriodIds]
-  )
 
   useEffect(() => {
     if (!isAuthenticated || !activePlan || !periodsFetched || periodsLoading) {
@@ -357,13 +298,10 @@ export function useDashboard() {
     }
 
     const defaultPeriodId = findDefaultPeriod(sortedPeriods)?.id ?? null
-    const requestedRange =
-      selectedStartPeriodId || selectedEndPeriodId
-        ? {
-            startPeriodId: selectedStartPeriodId,
-            endPeriodId: selectedEndPeriodId,
-          }
-        : legacyPeriodRange
+    const requestedRange = {
+      startPeriodId: selectedStartPeriodId,
+      endPeriodId: selectedEndPeriodId,
+    }
     const normalizedRange = normalizePeriodRange(
       requestedRange,
       sortedPeriods,
@@ -381,7 +319,6 @@ export function useDashboard() {
   }, [
     activePlan,
     isAuthenticated,
-    legacyPeriodRange,
     periodsFetched,
     periodsLoading,
     selectedEndPeriodId,
@@ -470,9 +407,8 @@ export function useDashboard() {
 
   const transactionQueries = useQueries({
     queries: selectedPeriods.map((period) => ({
-      queryKey: financeKeys.periodTransactions(period.id),
+      queryKey: financeKeys.periodTransactions(period),
       queryFn: () => periodService.getTransactionsByPeriod(period),
-      enabled: Boolean(period.id),
       staleTime: 1000 * 60 * 2,
       placeholderData: [] as Transaction[],
     })),
@@ -480,17 +416,10 @@ export function useDashboard() {
 
   const invoiceQueries = useQueries({
     queries: selectedPeriods.map((period) => ({
-      queryKey: financeKeys.periodInvoices(period.id),
+      queryKey: financeKeys.periodInvoices(period),
       queryFn: () => periodService.getInvoicesByPeriod(period),
-      enabled: Boolean(period.id),
       staleTime: 1000 * 60 * 2,
-      placeholderData: [] as Array<{
-        id: string
-        amount: number | string
-        creditCardId: string
-        creditCardName?: string | null
-        periodId: string
-      }>,
+      placeholderData: [] as Invoice[],
     })),
   })
 
@@ -515,13 +444,7 @@ export function useDashboard() {
       selectedPeriods.map((period, index) => {
         const transactions = (transactionQueries[index]?.data ??
           []) as Transaction[]
-        const invoices = (invoiceQueries[index]?.data ?? []) as Array<{
-          id: string
-          amount: number | string
-          creditCardId: string
-          creditCardName?: string | null
-          periodId: string
-        }>
+        const invoices = (invoiceQueries[index]?.data ?? []) as Invoice[]
         const invoicesAmount = invoices.reduce(
           (total, invoice) => total + Number(invoice.amount || 0),
           0
@@ -620,6 +543,7 @@ export function useDashboard() {
     plans,
     plansLoading,
     periods: sortedPeriods,
+    monthSummaries,
     periodsLoading,
     selectedPlanId,
     activePlan,
@@ -780,8 +704,9 @@ export function useInvoiceManager({
       if (!resolvedForm.creditCardId) {
         throw new Error("Selecione um cartão.")
       }
-      if (!resolvedForm.periodId) {
-        throw new Error("Selecione um período.")
+      const period = periods.find((item) => item.id === resolvedForm.periodId)
+      if (!period) {
+        throw new Error("Selecione o mês.")
       }
 
       const amountNumber = parseCurrencyInput(resolvedForm.amount)
@@ -790,14 +715,17 @@ export function useInvoiceManager({
       }
 
       return invoiceService.create({
+        planId: period.planId,
         creditCardId: resolvedForm.creditCardId,
-        periodId: resolvedForm.periodId,
+        referenceMonth: period.id,
         amount: amountNumber,
       })
     },
     onSuccess: async () => {
       setForm((current) => ({ ...current, amount: "" }))
-      await queryClient.invalidateQueries({ queryKey: ["period-invoices"] })
+      await queryClient.invalidateQueries({
+        queryKey: financeKeys.periodInvoicesRoot,
+      })
     },
   })
 
@@ -814,11 +742,11 @@ export function useInvoiceManager({
 export function usePeriodInvoiceManager({
   creditCards,
   invoices,
-  periodId,
+  period,
 }: {
   creditCards: CreditCard[]
   invoices: Invoice[]
-  periodId: string
+  period: Period
 }) {
   const queryClient = useQueryClient()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -843,7 +771,7 @@ export function usePeriodInvoiceManager({
 
   const invalidatePeriodInvoices = async () => {
     await queryClient.invalidateQueries({
-      queryKey: financeKeys.periodInvoices(periodId),
+      queryKey: financeKeys.periodInvoices(period),
     })
   }
 
@@ -859,8 +787,9 @@ export function usePeriodInvoiceManager({
       }
 
       return invoiceService.create({
+        planId: period.planId,
         creditCardId: resolvedCreateForm.creditCardId,
-        periodId,
+        referenceMonth: period.id,
         amount: amountNumber,
       })
     },
@@ -889,7 +818,7 @@ export function usePeriodInvoiceManager({
 
       return invoiceService.update(editingInvoiceId, {
         creditCardId: invoice.creditCardId,
-        periodId: invoice.periodId,
+        referenceMonth: invoice.referenceMonth,
         amount: amountNumber,
       })
     },
@@ -982,25 +911,11 @@ export function usePlanManager({
         throw new Error("Usuário não identificado.")
       }
 
-      const createdPlan = await planService.create({ name })
-
-      await createMissingPeriodsForYear({
-        financialPlanId: createdPlan.id,
-        year: getCurrentYear(),
-        periods: [],
-      })
-
-      return createdPlan
+      // Sem períodos para criar: os meses do plano ficam disponíveis direto.
+      return planService.create({ name })
     },
     onSuccess: async (response) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
-        response?.id
-          ? queryClient.invalidateQueries({
-              queryKey: financeKeys.periods(response.id),
-            })
-          : Promise.resolve(),
-      ])
+      await queryClient.invalidateQueries({ queryKey: financeKeys.plans })
       if (response?.id) {
         onSelectPlanId(response.id)
       }
@@ -1025,111 +940,6 @@ export function usePlanManager({
     errorMessage: saveMutation.error
       ? getErrorMessage(saveMutation.error, "Não foi possível salvar o plano.")
       : null,
-  }
-}
-
-export function usePlanYearManager(activePlan: Plan | null, periods: Period[]) {
-  const queryClient = useQueryClient()
-  const activePlanId = activePlan?.id ?? null
-  const suggestedYear = useMemo(() => getSuggestedNextYear(periods), [periods])
-  // Keep the year draft keyed by plan id so changing plans resets the visible
-  // value without triggering a setState from inside an effect. Do not
-  // reintroduce this with useEffect(setState), because it causes cascading
-  // renders and trips the React lint rule.
-  const [draftYearState, setDraftYearState] = useState(() => ({
-    planId: activePlanId,
-    value: suggestedYear,
-  }))
-  const draftYear =
-    draftYearState.planId === activePlanId
-      ? draftYearState.value
-      : suggestedYear
-  const setDraftYear = (value: number) =>
-    setDraftYearState({
-      planId: activePlanId,
-      value,
-    })
-
-  const addYearMutation = useMutation({
-    mutationFn: async () => {
-      if (!activePlan?.id) {
-        throw new Error("Selecione um plano antes de adicionar um ano.")
-      }
-
-      const year = Number(draftYear)
-      if (!Number.isInteger(year) || year < 2000) {
-        throw new Error("Informe um ano válido.")
-      }
-
-      const createdCount = await createMissingPeriodsForYear({
-        financialPlanId: activePlan.id,
-        year,
-        periods,
-      })
-
-      if (createdCount === 0) {
-        throw new Error(`O ano ${year} já possui todos os 12 meses.`)
-      }
-
-      return { year, createdCount }
-    },
-    onSuccess: async ({ year }) => {
-      setDraftYearState({
-        planId: activePlanId,
-        value: year + 1,
-      })
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periods(activePlan?.id),
-      })
-    },
-  })
-  const deleteYearMutation = useMutation({
-    mutationFn: async (year: number) => {
-      if (!activePlan?.id) {
-        throw new Error("Selecione um plano antes de excluir um ano.")
-      }
-
-      const periodsForYear = periods.filter((period) => period.year === year)
-      if (periodsForYear.length === 0) {
-        throw new Error(`O ano ${year} não existe neste plano.`)
-      }
-
-      await Promise.all(
-        periodsForYear.map((period) => periodService.delete(period.id))
-      )
-
-      return { year }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periods(activePlan?.id),
-      })
-    },
-  })
-
-  return {
-    draftYear,
-    setDraftYear,
-    suggestedYear,
-    addYearMutation,
-    deleteYearMutation,
-    errorMessage: addYearMutation.error
-      ? getErrorMessage(
-          addYearMutation.error,
-          "Não foi possível adicionar o ano ao plano."
-        )
-      : null,
-    deleteYearErrorMessage: deleteYearMutation.error
-      ? getErrorMessage(
-          deleteYearMutation.error,
-          "Não foi possível excluir o ano do plano."
-        )
-      : null,
-    resetDraft: () =>
-      setDraftYearState({
-        planId: activePlanId,
-        value: getSuggestedNextYear(periods),
-      }),
   }
 }
 
@@ -1162,7 +972,7 @@ export function usePlanDeleteManager({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: financeKeys.plans }),
         queryClient.invalidateQueries({
-          queryKey: financeKeys.periods(deletedPlanId),
+          queryKey: financeKeys.months(deletedPlanId),
         }),
       ])
     },
@@ -1174,46 +984,6 @@ export function usePlanDeleteManager({
       ? getErrorMessage(
           deletePlanMutation.error,
           "Não foi possível excluir o plano."
-        )
-      : null,
-  }
-}
-
-export function usePeriodsManager(activePlan: Plan | null) {
-  const queryClient = useQueryClient()
-  const currentYear = new Date().getFullYear()
-  const [draft, setDraft] = useState({
-    month: new Date().getMonth() + 1,
-    year: currentYear,
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!activePlan?.id) {
-        throw new Error("Selecione um plano antes de criar um período.")
-      }
-
-      return periodService.create({
-        month: Number(draft.month),
-        year: Number(draft.year),
-        financialPlanId: activePlan.id,
-      })
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periods(activePlan?.id),
-      })
-    },
-  })
-
-  return {
-    draft,
-    setDraft,
-    saveMutation,
-    errorMessage: saveMutation.error
-      ? getErrorMessage(
-          saveMutation.error,
-          "Não foi possível salvar o período."
         )
       : null,
   }
@@ -1336,25 +1106,19 @@ export function useCategoryManager() {
   }
 }
 
-export function useTransactionMutations(
-  periodId: string,
-  periods: Period[] = []
-) {
+export function useTransactionMutations(period: Period) {
   const queryClient = useQueryClient()
+  const invalidate = () => invalidateTransactionViews(queryClient, period.planId)
 
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: financeKeys.periodTransactions(periodId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: financeKeys.periodInvoices(periodId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: financeKeys.categoryReport(periodId),
-      }),
-      queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
-    ])
+  const loadRecurringGroup = async (recurringGroupId: string) => {
+    const group = await periodService.getRecurringGroup(
+      period.planId,
+      recurringGroupId
+    )
+    if (group.length === 0) {
+      throw new Error("Nenhuma transação recorrente encontrada para este grupo.")
+    }
+    return group
   }
 
   const createTransaction = useMutation({
@@ -1364,20 +1128,7 @@ export function useTransactionMutations(
 
   const createRecurringTransaction = useMutation({
     mutationFn: transactionService.createRecurring,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: financeKeys.periodTransactionsRoot,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["report-spending-by-category"],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: financeKeys.periodInvoices(periodId),
-        }),
-        queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
-      ])
-    },
+    onSuccess: invalidate,
   })
 
   const updateTransaction = useMutation({
@@ -1398,56 +1149,28 @@ export function useTransactionMutations(
         return transactionService.updatePartial(id, normalizedPayload)
       }
 
-      const transactionsByPeriod = await Promise.all(
-        periods.map((period) => periodService.getTransactionsByPeriod(period))
-      )
-
-      const periodById = new Map(periods.map((period) => [period.id, period]))
-      const recurringTransactions = transactionsByPeriod
-        .flatMap((transactions, index) =>
-          transactions.map((transaction) => ({
-            period: periods[index],
-            transaction,
-          }))
-        )
-        .filter(
-          ({ transaction }) => transaction.recurringGroupId === recurringGroupId
-        )
-
-      if (recurringTransactions.length === 0) {
-        throw new Error(
-          "Nenhuma transação recorrente encontrada para este grupo."
-        )
+      const group = await loadRecurringGroup(recurringGroupId)
+      const anchor = group.find((transaction) => transaction.id === id)
+      if (!anchor) {
+        throw new Error("A transação editada não pertence ao grupo recorrente.")
       }
 
       await Promise.all(
-        recurringTransactions.map(({ transaction, period }) =>
+        group.map((transaction) =>
           transactionService.updatePartial(
             transaction.id,
             buildRecurringGroupPayload({
               transaction,
+              anchor,
               basePayload: normalizedPayload,
-              anchorDueDate: normalizedPayload.dueDate,
-              period: period ?? periodById.get(transaction.periodId),
-              currentTransactionId: id,
             })
           )
         )
       )
 
-      return recurringTransactions.map(({ transaction }) => transaction)
+      return group
     },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: financeKeys.periodTransactionsRoot,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["report-spending-by-category"],
-        }),
-        queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
-      ])
-    },
+    onSuccess: invalidate,
   })
 
   const deleteTransaction = useMutation({
@@ -1470,52 +1193,15 @@ export function useTransactionMutations(
 
       if (deleteScope !== "GROUP" || !recurringGroupId) {
         await transactionService.delete(id)
-        return { deleteScope: "SINGLE" as const }
-      }
-
-      const transactionsByPeriod = await Promise.all(
-        periods.map((period) => periodService.getTransactionsByPeriod(period))
-      )
-
-      const recurringTransactions = transactionsByPeriod
-        .flat()
-        .filter(
-          (transaction) => transaction.recurringGroupId === recurringGroupId
-        )
-
-      if (recurringTransactions.length === 0) {
-        throw new Error(
-          "Nenhuma transação recorrente encontrada para este grupo."
-        )
-      }
-
-      await Promise.all(
-        recurringTransactions.map((transaction) =>
-          transactionService.delete(transaction.id)
-        )
-      )
-
-      return { deleteScope: "GROUP" as const }
-    },
-    onSuccess: async (result) => {
-      if (result.deleteScope === "GROUP") {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: financeKeys.periodTransactionsRoot,
-          }),
-          queryClient.invalidateQueries({
-            queryKey: ["period-invoices"],
-          }),
-          queryClient.invalidateQueries({
-            queryKey: ["report-spending-by-category"],
-          }),
-          queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
-        ])
         return
       }
 
-      await invalidate()
+      const group = await loadRecurringGroup(recurringGroupId)
+      await Promise.all(
+        group.map((transaction) => transactionService.delete(transaction.id))
+      )
     },
+    onSuccess: invalidate,
   })
 
   return {
@@ -1526,7 +1212,7 @@ export function useTransactionMutations(
   }
 }
 
-export function useTransactionLinking(activePeriodId: string) {
+export function useTransactionLinking(period: Period) {
   const queryClient = useQueryClient()
   const [paymentModalEntry, setPaymentModalEntry] =
     useState<Transaction | null>(null)
@@ -1541,6 +1227,9 @@ export function useTransactionLinking(activePeriodId: string) {
     setPaymentModalEntry(entry)
     setSelectedInvoiceId(entry.creditCardInvoiceId || "")
   }
+
+  // Vincular move a transação para o mês da fatura (regra da API), então outros meses mudam.
+  const invalidate = () => invalidateTransactionViews(queryClient, period.planId)
 
   const linkTransactionToInvoice = useMutation({
     mutationFn: async () => {
@@ -1558,9 +1247,7 @@ export function useTransactionLinking(activePeriodId: string) {
     },
     onSuccess: async () => {
       closePaymentModal()
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periodTransactions(activePeriodId),
-      })
+      await invalidate()
     },
   })
 
@@ -1570,11 +1257,7 @@ export function useTransactionLinking(activePeriodId: string) {
         isClearedByInvoice: false,
         creditCardInvoiceId: null,
       }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periodTransactions(activePeriodId),
-      })
-    },
+    onSuccess: invalidate,
   })
 
   return {

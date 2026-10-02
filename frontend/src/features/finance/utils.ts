@@ -45,12 +45,67 @@ export function formatMonthYear(period: Period | null | undefined) {
   return `${formatMonthLabel(period.month).toLowerCase()}/${period.year}`
 }
 
-export function comparePeriods(left: Period, right: Period) {
-  return left.year * 100 + left.month - (right.year * 100 + right.month)
+const pad = (value: number, size = 2) => String(value).padStart(size, "0")
+
+export function toMonthId(year: number, month: number) {
+  return `${pad(year, 4)}-${pad(month)}`
 }
 
-export function sortPeriods(periods: Period[]) {
-  return [...periods].sort(comparePeriods)
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate()
+}
+
+/** Meses selecionáveis: do ano anterior ao seguinte, ampliado pelos anos que têm lançamentos. */
+export function buildPlanMonths(planId: string, monthsWithData: string[]): Period[] {
+  const currentYear = new Date().getFullYear()
+  const dataYears = monthsWithData.map((month) => Number(month.slice(0, 4)))
+  const firstYear = Math.min(currentYear - 1, ...dataYears)
+  const lastYear = Math.max(currentYear + 1, ...dataYears)
+
+  const months: Period[] = []
+  for (let year = firstYear; year <= lastYear; year++) {
+    for (let month = 1; month <= 12; month++) {
+      months.push({ id: toMonthId(year, month), planId, year, month })
+    }
+  }
+  return months
+}
+
+/** Mesmo mês/dia em outro mês, limitando o dia ao fim do mês (31/01 → 28/02). */
+export function moveDateToMonth(date: string, year: number, month: number) {
+  const day = Number(date.slice(8, 10)) || 1
+  return `${toMonthId(year, month)}-${pad(Math.min(day, daysInMonth(year, month)))}`
+}
+
+/** Soma meses a uma data AAAA-MM-DD, limitando o dia ao fim do mês. */
+export function addMonthsToDate(date: string, months: number) {
+  const [year, month] = date.split("-").map(Number)
+  const total = year * 12 + (month - 1) + months
+  return moveDateToMonth(date, Math.floor(total / 12), (total % 12) + 1)
+}
+
+/** Diferença em meses entre duas datas/meses (AAAA-MM...). */
+export function monthsBetween(from: string, to: string) {
+  const [fromYear, fromMonth] = from.split("-").map(Number)
+  const [toYear, toMonth] = to.split("-").map(Number)
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth)
+}
+
+/**
+ * Data de competência para uma transação criada no painel do mês: o vencimento se cair no mês,
+ * senão hoje se for o mês atual, senão o dia 1º.
+ */
+export function defaultReferenceDate(period: Period, dueDate?: string | null) {
+  if (dueDate?.startsWith(period.id)) {
+    return dueDate
+  }
+
+  const today = new Date()
+  if (today.getFullYear() === period.year && today.getMonth() + 1 === period.month) {
+    return `${period.id}-${pad(today.getDate())}`
+  }
+
+  return `${period.id}-01`
 }
 
 export function findDefaultPeriod(periods: Period[]) {
@@ -67,24 +122,6 @@ export function findDefaultPeriod(periods: Period[]) {
       (period) => period.month === currentMonth && period.year === currentYear
     ) ?? periods[periods.length - 1]
   )
-}
-
-export function formatPeriodRange(
-  startPeriod: Period | null | undefined,
-  endPeriod: Period | null | undefined
-) {
-  const startLabel = formatMonthYear(startPeriod)
-  const endLabel = formatMonthYear(endPeriod)
-
-  if (!startLabel && !endLabel) {
-    return "Nenhum mês selecionado"
-  }
-
-  if (!startLabel || !endLabel || startLabel === endLabel) {
-    return startLabel || endLabel
-  }
-
-  return `${startLabel} até ${endLabel}`
 }
 
 export function formatCurrencyInput(value: string) {

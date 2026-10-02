@@ -5,7 +5,7 @@ export function PlansPage() {
   const {
     plans,
     activePlan,
-    periods,
+    monthSummaries,
     selectedPlanId,
     setSelectedPlanId,
     userId,
@@ -15,7 +15,7 @@ export function PlansPage() {
     <PlanManager
       plans={plans}
       activePlan={activePlan}
-      periods={periods}
+      monthSummaries={monthSummaries}
       selectedPlanId={selectedPlanId}
       onSelectPlanId={setSelectedPlanId}
       userId={userId}
