@@ -65,7 +65,8 @@ export function AppLayout() {
       />
 
       <div className="lg:pl-[19rem]">
-        <header className="sticky top-0 z-20 border-b border-border/80 bg-background/78 backdrop-blur-2xl">
+        {/* No mobile, fundo quase opaco em vez de blur: o desfoque do cabeçalho fixo era refeito a cada quadro de rolagem. */}
+        <header className="sticky top-0 z-20 border-b border-border/80 bg-background/95 lg:bg-background/78 lg:backdrop-blur-2xl">
           <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
             <div className="flex items-start gap-3">
               <MobileSidebarButton onClick={() => setSidebarOpen(true)} />
@@ -76,7 +77,7 @@ export function AppLayout() {
               </div>
             </div>
             <div className="hidden items-center gap-3 md:flex">
-              <div className="rounded-full border border-border bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-xl">
+              <div className="rounded-full border border-border bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm">
                 {user?.name || "Usuário"}
               </div>
             </div>

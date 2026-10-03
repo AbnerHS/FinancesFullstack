@@ -1,15 +1,15 @@
 import {
   ArrowRight,
+  BarChart3,
   ChevronDown,
   SlidersHorizontal,
   Sparkles,
   TrendingDown,
   TrendingUp,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { lazy, Suspense, useCallback, useMemo, useState } from "react"
 
 import { Select } from "@/components/ui/select.tsx"
-import { DashboardCharts } from "@/features/finance/charts.tsx"
 import { useDashboard } from "@/features/finance/hooks.ts"
 import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { MonthCarousel } from "@/features/finance/month-carousel.tsx"
@@ -25,6 +25,20 @@ import {
 } from "@/features/finance/utils.ts"
 import MetricCard from "@/features/finance/metric-card"
 import { cn } from "@/lib/utils"
+
+// Gráficos (recharts) só são baixados e montados quando o usuário pede para exibi-los.
+const DashboardCharts = lazy(() =>
+  import("@/features/finance/charts.tsx").then((module) => ({ default: module.DashboardCharts }))
+)
+const CHARTS_OPEN_KEY = "dashboard-charts-open"
+
+function readChartsOpen() {
+  try {
+    return localStorage.getItem(CHARTS_OPEN_KEY) === "1"
+  } catch {
+    return false
+  }
+}
 
 export function DashboardPage() {
   const {
@@ -58,6 +72,28 @@ export function DashboardPage() {
   const [responsibleFilter, setResponsibleFilter] = useState("")
   const [activeMonthId, setActiveMonthId] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [chartsOpen, setChartsOpen] = useState(readChartsOpen)
+  const toggleCharts = () => {
+    const next = !chartsOpen
+    setChartsOpen(next)
+    try {
+      localStorage.setItem(CHARTS_OPEN_KEY, next ? "1" : "0")
+    } catch {
+      // Preferência só da sessão quando o armazenamento não está disponível.
+    }
+  }
+
+  // Referências estáveis: com elas os painéis (memo) não re-renderizam quando só o mês ativo muda.
+  const workspaceShared = useMemo(
+    () => ({ creditCards, transactionCategories, responsibleOptions }),
+    [creditCards, transactionCategories, responsibleOptions]
+  )
+  const renderPanel = useCallback(
+    (panel: (typeof periodPanels)[number]) => (
+      <TransactionsWorkspace panel={panel} shared={workspaceShared} />
+    ),
+    [workspaceShared]
+  )
 
   const filteredPanels = useMemo(() => {
     if (!responsibleFilter) {
@@ -348,24 +384,43 @@ export function DashboardPage() {
             panels={filteredPanels}
             activeId={activeMonthId}
             onActiveIdChange={setActiveMonthId}
-            renderPanel={(panel) => (
-              <TransactionsWorkspace
-                panel={panel}
-                shared={{
-                  creditCards,
-                  transactionCategories,
-                  responsibleOptions,
-                }}
-              />
-            )}
+            renderPanel={renderPanel}
           />
         )}
       </section>
 
-      <DashboardCharts
-        comparisonData={comparisonData}
-        categoryData={categoryData}
-      />
+      <section className="space-y-4" aria-label="Gráficos">
+        <button
+          type="button"
+          onClick={toggleCharts}
+          aria-expanded={chartsOpen}
+          className="flex w-full items-center justify-between gap-3 rounded-[1.5rem] border border-border bg-card/80 px-5 py-4 text-left transition hover:border-primary/40"
+        >
+          <span className="flex items-center gap-3">
+            <BarChart3 size={18} className="text-primary" />
+            <span>
+              <span className="block text-sm font-semibold text-foreground">Gráficos</span>
+              <span className="block text-xs text-muted-foreground">
+                Comparativo dos meses e despesas por categoria
+              </span>
+            </span>
+          </span>
+          <span className="flex items-center gap-1 text-xs font-medium text-primary">
+            {chartsOpen ? "Ocultar" : "Exibir"}
+            <ChevronDown size={16} className={cn("transition", chartsOpen && "rotate-180")} />
+          </span>
+        </button>
+
+        {chartsOpen ? (
+          <Suspense
+            fallback={
+              <div className="h-64 animate-pulse rounded-[1.75rem] border border-border bg-secondary/60" />
+            }
+          >
+            <DashboardCharts comparisonData={comparisonData} categoryData={categoryData} />
+          </Suspense>
+        ) : null}
+      </section>
 
       <section className="app-panel" aria-label="Leitura rápida do plano">
         <p className="app-eyebrow">Contexto do plano</p>
