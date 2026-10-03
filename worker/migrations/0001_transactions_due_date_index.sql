@@ -1,0 +1,1 @@
+CREATE INDEX `idx_transactions_plan_due_date` ON `transactions` (`plan_id`,`due_date`);

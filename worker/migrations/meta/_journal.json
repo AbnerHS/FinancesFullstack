@@ -8,6 +8,13 @@
       "when": 1790963531615,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790979058430,
+      "tag": "0001_transactions_due_date_index",
+      "breakpoints": true
     }
   ]
 }

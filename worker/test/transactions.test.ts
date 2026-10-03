@@ -177,6 +177,27 @@ describe("listagem e ordem", () => {
     expect((await as(owner).get(`/plans/${plan.id}/transactions?from=2026-10-31&to=2026-10-01`)).status).toBe(400)
   })
 
+  it("filtra por vencimento e status de pagamento, sem depender da competência", async () => {
+    const { owner, plan, create } = await setup()
+    const dueThisWeek = await create("2026-09-30", { dueDate: "2026-10-06" }) // competência no mês anterior
+    const paid = await create("2026-10-01", { dueDate: "2026-10-08", paymentStatus: "PAID", paymentDate: "2026-10-05" })
+    const overdue = await create("2026-09-01", { dueDate: "2026-09-20" })
+    await create("2026-10-01") // sem vencimento
+    await create("2026-10-02", { dueDate: "2026-10-20" }) // fora da semana
+
+    const week = await json(as(owner).get(`/plans/${plan.id}/transactions?dueFrom=2026-10-05&dueTo=2026-10-11`))
+    expect(week._embedded.transactions.map((t: any) => t.id).sort()).toEqual([dueThisWeek.id, paid.id].sort())
+
+    const late = await json(
+      as(owner).get(`/plans/${plan.id}/transactions?dueTo=2026-10-04&paymentStatus=PENDING`),
+    )
+    expect(late._embedded.transactions.map((t: any) => t.id)).toEqual([overdue.id])
+
+    expect((await as(owner).get(`/plans/${plan.id}/transactions?dueFrom=2026-10-32`)).status).toBe(400)
+    expect((await as(owner).get(`/plans/${plan.id}/transactions?dueTo=2026-10-04&paymentStatus=X`)).status).toBe(400)
+    expect((await as(owner).get(`/plans/${plan.id}/transactions?paymentStatus=PENDING`)).status).toBe(400)
+  })
+
   it("reordena o mês inteiro de uma vez", async () => {
     const { owner, plan, create } = await setup()
     const a = await create("2026-10-01")

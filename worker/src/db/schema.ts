@@ -150,6 +150,8 @@ export const transactions = sqliteTable(
   },
   (t) => [
     index("idx_transactions_plan_reference_date").on(t.planId, t.referenceDate),
+    // Resumo da semana: vencimentos por plano.
+    index("idx_transactions_plan_due_date").on(t.planId, t.dueDate),
     index("idx_transactions_invoice").on(t.creditCardInvoiceId),
     index("idx_transactions_category").on(t.categoryId),
     index("idx_transactions_recurring_group").on(t.recurringGroupId),

@@ -19,7 +19,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import {
-  ArrowRight,
   CheckCircle2,
   Clock3,
   Download,
@@ -33,8 +32,6 @@ import {
   Save,
   SendHorizonal,
   Trash2,
-  TrendingDown,
-  TrendingUp,
   X,
 } from "lucide-react"
 import { createPortal } from "react-dom"
@@ -82,7 +79,6 @@ import {
   toneForBalance,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
-import MetricCard from "./metric-card"
 
 type TransactionWorkspaceProps = {
   panel: {
@@ -226,38 +222,56 @@ function TransactionRowContent({
         >
           {formatCurrency(transaction.amount)}
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={
-            transaction.type === "EXPENSE" && transaction.isClearedByInvoice
-              ? "text-emerald-500 dark:text-emerald-400"
-              : undefined
-          }
-          onClick={onLink ? () => onLink(transaction) : undefined}
-          disabled={!onLink || transaction.type !== "EXPENSE"}
-        >
-          <Link size={14} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onEdit ? () => onEdit(transaction) : undefined}
-          disabled={!onEdit}
-        >
-          <Pencil size={14} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onDelete ? () => onDelete(transaction) : undefined}
-          disabled={!onDelete}
-        >
-          <Trash2 size={14} />
-        </Button>
+        <div className="flex items-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            className={
+              transaction.type === "EXPENSE" && transaction.isClearedByInvoice
+                ? "size-10 text-emerald-500 sm:size-9 dark:text-emerald-400"
+                : "size-10 sm:size-9"
+            }
+            onClick={onLink ? () => onLink(transaction) : undefined}
+            disabled={!onLink || transaction.type !== "EXPENSE"}
+            aria-label={
+              transaction.isClearedByInvoice
+                ? "Vínculo com fatura"
+                : "Vincular a uma fatura"
+            }
+            title={
+              transaction.isClearedByInvoice
+                ? "Vínculo com fatura"
+                : "Vincular a uma fatura"
+            }
+          >
+            <Link size={15} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            className="size-10 sm:size-9"
+            onClick={onEdit ? () => onEdit(transaction) : undefined}
+            disabled={!onEdit}
+            aria-label="Editar transação"
+            title="Editar transação"
+          >
+            <Pencil size={15} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            className="size-10 sm:size-9"
+            onClick={onDelete ? () => onDelete(transaction) : undefined}
+            disabled={!onDelete}
+            aria-label="Excluir transação"
+            title="Excluir transação"
+          >
+            <Trash2 size={15} />
+          </Button>
+        </div>
       </div>
     </>
   )
@@ -278,7 +292,8 @@ function TransactionDragHandle({
     <button
       ref={setActivatorNodeRef}
       type="button"
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/80 text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+      data-carousel-no-drag
+      className="flex h-10 w-10 shrink-0 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/80 text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
       style={{ touchAction: "none" }}
       aria-label="Arrastar transação"
       disabled={disabled}
@@ -565,6 +580,35 @@ function TransactionDetailsModal({
       </div>
     </div>,
     document.body
+  )
+}
+
+function PanelStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone: Transaction["type"] | "NEUTRAL"
+}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-border bg-secondary/45 px-2.5 py-2 sm:px-3">
+      <dt className="truncate text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd
+        className={`mt-0.5 truncate text-sm font-semibold sm:text-base ${
+          tone === "REVENUE"
+            ? "text-emerald-600 dark:text-emerald-400"
+            : tone === "EXPENSE"
+              ? "text-rose-600 dark:text-rose-400"
+              : "text-foreground"
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
   )
 }
 
@@ -924,29 +968,23 @@ export function TransactionsWorkspace({
             </div>
           ) : null}
         </div>
-        <div className="grid items-end gap-2 xl:grid-cols-3">
-          <MetricCard
-            title="Receitas"
+        <dl className="grid grid-cols-3 gap-2">
+          <PanelStat
+            label="Receitas"
             value={formatCurrency(panel.stats.incomes)}
-            tone="positive"
-            icon={<TrendingUp size={18} />}
-            size="sm"
+            tone="REVENUE"
           />
-          <MetricCard
-            title="Despesas"
+          <PanelStat
+            label="Despesas"
             value={formatCurrency(panel.stats.expenses)}
-            tone="negative"
-            icon={<TrendingDown size={18} />}
-            size="sm"
+            tone="EXPENSE"
           />
-          <MetricCard
-            title="Saldo"
+          <PanelStat
+            label="Saldo"
             value={formatCurrency(panel.stats.balance)}
             tone={toneForBalance(panel.stats.balance)}
-            icon={<ArrowRight size={18} />}
-            size="sm"
           />
-        </div>
+        </dl>
       </div>
 
       <div className="mt-6 space-y-5">
@@ -966,7 +1004,10 @@ export function TransactionsWorkspace({
             ) : null}
           </div>
           {invoiceManager.isCreateOpen ? (
-            <div className="mt-3 rounded-xl border border-border bg-card/90 p-4">
+            <div
+              data-carousel-no-drag
+              className="mt-3 rounded-xl border border-border bg-card/90 p-4"
+            >
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                 <div>
                   <Label>Cartão</Label>
@@ -1073,7 +1114,10 @@ export function TransactionsWorkspace({
                         </p>
                       </div>
                       {isEditing ? (
-                        <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div
+                          data-carousel-no-drag
+                          className="flex flex-wrap items-center justify-end gap-2"
+                        >
                           <div className="w-full min-w-40 sm:w-44">
                             <CurrencyInput
                               value={invoiceManager.editingAmount}
@@ -1110,10 +1154,13 @@ export function TransactionsWorkspace({
                           <Button
                             type="button"
                             variant="ghost"
-                            size="sm"
+                            size="icon-lg"
+                            className="size-10 sm:size-9"
                             onClick={() => invoiceManager.startEdit(invoice)}
+                            aria-label={`Editar fatura ${cardLabel}`}
+                            title="Editar fatura"
                           >
-                            <Pencil size={14} />
+                            <Pencil size={15} />
                           </Button>
                         </div>
                       )}

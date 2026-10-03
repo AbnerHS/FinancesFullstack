@@ -33,6 +33,19 @@ export const financeKeys = {
   periodTransactionsRoot: ["period-transactions"] as const,
   periodTransactions: (period?: Pick<Period, "planId" | "id"> | null) =>
     ["period-transactions", period?.planId, period?.id] as const,
+  // Sob a mesma raiz das transações: as mutations já invalidam ["period-transactions"].
+  transactionsByDue: (
+    planId: string | null | undefined,
+    filter: { dueFrom?: string; dueTo?: string; paymentStatus?: "PENDING" | "PAID" }
+  ) =>
+    [
+      "period-transactions",
+      planId,
+      "due",
+      filter.dueFrom ?? null,
+      filter.dueTo ?? null,
+      filter.paymentStatus ?? null,
+    ] as const,
   periodInvoicesRoot: ["period-invoices"] as const,
   periodInvoices: (period?: Pick<Period, "planId" | "id"> | null) =>
     ["period-invoices", period?.planId, period?.id] as const,
@@ -149,6 +162,16 @@ export const periodService = {
       { params: { month: period.id } }
     )
     return embedded(data, "invoices")
+  },
+  /** Transações por vencimento (resumo da semana). */
+  async getTransactionsByDue(
+    planId: string,
+    filter: { dueFrom?: string; dueTo?: string; paymentStatus?: "PENDING" | "PAID" }
+  ) {
+    const { data } = await http.get<
+      EmbeddedCollection<Transaction, "transactions">
+    >(`/plans/${planId}/transactions`, { params: filter })
+    return embedded(data, "transactions")
   },
   async getRecurringGroup(planId: string, recurringGroupId: string) {
     const { data } = await http.get<

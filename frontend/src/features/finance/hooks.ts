@@ -30,6 +30,7 @@ import type {
   Transaction,
 } from "@/features/finance/types.ts"
 import {
+  addDaysIso,
   addMonthsToDate,
   buildCategoryChartData,
   buildComparisonChartData,
@@ -40,6 +41,8 @@ import {
   formatMonthYear,
   monthsBetween,
   parseCurrencyInput,
+  todayIso,
+  weekBounds,
 } from "@/features/finance/utils.ts"
 
 type PeriodRange = {
@@ -382,6 +385,17 @@ export function useDashboard() {
     [periodIndexMap, setSelectedPeriodRange]
   )
 
+  /** Define início e fim de uma vez (atalhos de período), ignorando meses fora da lista. */
+  const setSelectedRange = useCallback(
+    (startPeriodId: string, endPeriodId: string) => {
+      if (!periodIndexMap.has(startPeriodId) || !periodIndexMap.has(endPeriodId)) {
+        return
+      }
+      setSelectedPeriodRange({ startPeriodId, endPeriodId })
+    },
+    [periodIndexMap, setSelectedPeriodRange]
+  )
+
   const selectedPeriods = useMemo(() => {
     if (!selectedStartPeriodId || !selectedEndPeriodId) {
       return []
@@ -554,6 +568,7 @@ export function useDashboard() {
     selectedPeriods,
     setSelectedStartPeriodId,
     setSelectedEndPeriodId,
+    setSelectedRange,
     periodPanels,
     combinedStats,
     categorySpending,
@@ -577,6 +592,71 @@ export function useDashboard() {
         ),
         responsibleFilter,
       }),
+  }
+}
+
+/**
+ * Dados extras do resumo do mês ativo: o mês anterior (para variação) e, quando o mês ativo é o
+ * atual, os vencimentos da semana e as contas atrasadas. Reusa as mesmas chaves de cache do painel.
+ */
+export function useMonthSummaryData({
+  activePeriod,
+  periods,
+}: {
+  activePeriod: Period | null
+  periods: Period[]
+}) {
+  const previousPeriod = useMemo(() => {
+    const index = activePeriod
+      ? periods.findIndex((period) => period.id === activePeriod.id)
+      : -1
+    return index > 0 ? periods[index - 1] : null
+  }, [activePeriod, periods])
+
+  const previousTransactions = useQuery({
+    queryKey: financeKeys.periodTransactions(previousPeriod),
+    queryFn: () => periodService.getTransactionsByPeriod(previousPeriod),
+    enabled: Boolean(previousPeriod),
+    staleTime: 1000 * 60 * 2,
+  })
+  const previousInvoices = useQuery({
+    queryKey: financeKeys.periodInvoices(previousPeriod),
+    queryFn: () => periodService.getInvoicesByPeriod(previousPeriod),
+    enabled: Boolean(previousPeriod),
+    staleTime: 1000 * 60 * 2,
+  })
+
+  const today = todayIso()
+  const isCurrentMonth = Boolean(activePeriod && today.startsWith(activePeriod.id))
+  const planId = activePeriod?.planId ?? null
+  const week = weekBounds(today)
+  const weekFilter = { dueFrom: week.from, dueTo: week.to }
+  const overdueFilter = {
+    dueTo: addDaysIso(today, -1),
+    paymentStatus: "PENDING" as const,
+  }
+
+  const weekTransactions = useQuery({
+    queryKey: financeKeys.transactionsByDue(planId, weekFilter),
+    queryFn: () => periodService.getTransactionsByDue(planId!, weekFilter),
+    enabled: Boolean(planId && isCurrentMonth),
+    staleTime: 1000 * 60 * 2,
+  })
+  const overdueTransactions = useQuery({
+    queryKey: financeKeys.transactionsByDue(planId, overdueFilter),
+    queryFn: () => periodService.getTransactionsByDue(planId!, overdueFilter),
+    enabled: Boolean(planId && isCurrentMonth),
+    staleTime: 1000 * 60 * 2,
+  })
+
+  return {
+    previousPeriod,
+    previousTransactions: previousTransactions.data ?? null,
+    previousInvoices: previousInvoices.data ?? null,
+    isCurrentMonth,
+    weekTransactions: weekTransactions.data ?? [],
+    overdueTransactions: overdueTransactions.data ?? [],
+    weekLoading: weekTransactions.isLoading || overdueTransactions.isLoading,
   }
 }
 

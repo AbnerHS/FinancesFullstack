@@ -1,4 +1,4 @@
-import { and, asc, between, count, eq, inArray, sql } from "drizzle-orm"
+import { and, asc, between, count, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import type { Database } from "../db/client.ts"
 import {
   type CreditCardInvoice,
@@ -124,23 +124,33 @@ export async function getAccessibleTransaction(db: Database, user: User, id: str
 }
 
 /**
- * Transações do plano por mês e depois pela ordem manual. Filtra por intervalo e/ou por grupo de
- * recorrência (usado para editar/excluir todas as ocorrências); ao menos um dos dois é exigido na rota.
+ * Transações do plano por mês e depois pela ordem manual. Filtra por intervalo de competência,
+ * grupo de recorrência (editar/excluir todas as ocorrências) e/ou vencimento (resumo da semana);
+ * a rota exige ao menos um desses filtros.
  */
 export async function listByPlan(
   db: Database,
   user: User,
   planId: string,
-  filter: { range: DateRange | null; recurringGroupId?: string | undefined },
+  filter: {
+    range: DateRange | null
+    recurringGroupId?: string | undefined
+    dueFrom?: string | undefined
+    dueTo?: string | undefined
+    paymentStatus?: Transaction["paymentStatus"] | undefined
+  },
 ) {
   await requirePlanAccess(db, planId, user)
-  const { range, recurringGroupId } = filter
+  const { range, recurringGroupId, dueFrom, dueTo, paymentStatus } = filter
   const rows = await selectWithCategory(db)
     .where(
       and(
         eq(transactions.planId, planId),
         range ? between(transactions.referenceDate, range.from, range.to) : undefined,
         recurringGroupId ? eq(transactions.recurringGroupId, recurringGroupId) : undefined,
+        dueFrom ? gte(transactions.dueDate, dueFrom) : undefined,
+        dueTo ? lte(transactions.dueDate, dueTo) : undefined,
+        paymentStatus ? eq(transactions.paymentStatus, paymentStatus) : undefined,
       ),
     )
     .orderBy(
