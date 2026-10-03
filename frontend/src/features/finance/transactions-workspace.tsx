@@ -19,8 +19,10 @@ import { useQueryClient } from "@tanstack/react-query"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import {
+  AlertTriangle,
   CheckCircle2,
   Clock3,
+  CreditCard as CreditCardIcon,
   Download,
   Eye,
   ExternalLink,
@@ -35,7 +37,7 @@ import {
   X,
 } from "lucide-react"
 import { createPortal } from "react-dom"
-import { memo, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -97,16 +99,6 @@ type TransactionWorkspaceProps = {
   }
 }
 
-type TransactionRowProps = {
-  transaction: Transaction
-  isDragOver: boolean
-  reorderPending: boolean
-  onOpenDetails: (transaction: Transaction) => void
-  onLink: (transaction: Transaction) => void
-  onEdit: (transaction: Transaction) => void
-  onDelete: (transaction: Transaction) => void
-}
-
 const emptyForm = (): TransactionFormValues => ({
   description: "",
   amount: "",
@@ -127,153 +119,110 @@ const emptyForm = (): TransactionFormValues => ({
   billingDocumentExisting: null,
 })
 
-function TransactionRowContent({
-  transaction,
-  dragHandle,
-  onOpenDetails,
-  onLink,
-  onEdit,
-  onDelete,
-}: {
+type TransactionActions = {
+  onOpenDetails: (transaction: Transaction) => void
+  onLink: (transaction: Transaction) => void
+  onEdit: (transaction: Transaction) => void
+  onDelete: (transaction: Transaction) => void
+}
+
+type TransactionRowProps = TransactionActions & {
   transaction: Transaction
-  dragHandle: React.ReactNode
-  onOpenDetails?: (transaction: Transaction) => void
-  onLink?: (transaction: Transaction) => void
-  onEdit?: (transaction: Transaction) => void
-  onDelete?: (transaction: Transaction) => void
-}) {
-  const dueAlert = getTransactionDueAlert(transaction)
-  const categoryLabel = transaction.category?.name || "Sem categoria"
-  const categoryBadgeStyle = getCategoryBadgeStyle(categoryLabel)
-  const dueAlertBadge =
-    dueAlert === "overdue"
-      ? {
-        label: "Vencida",
-        className:
-          "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+  isDragOver: boolean
+  reorderPending: boolean
+  onShowActions: (transaction: Transaction) => void
+}
+
+const LONG_PRESS_MS = 450
+const LONG_PRESS_TOLERANCE_PX = 10
+
+/**
+ * Toque longo (só touch) na linha: abre as ações. Cancela se o dedo se mover (rolagem ou swipe
+ * do carrossel) e engole o clique que vem depois, para não abrir também os detalhes.
+ */
+function useLongPress(onLongPress: () => void) {
+  const timerRef = useRef<number | undefined>(undefined)
+  const startRef = useRef<{ x: number; y: number } | null>(null)
+  const firedRef = useRef(false)
+
+  const cancel = () => {
+    window.clearTimeout(timerRef.current)
+    startRef.current = null
+  }
+
+  return {
+    onPointerDown: (event: React.PointerEvent) => {
+      if (event.pointerType !== "touch") return
+      if (event.target instanceof Element && event.target.closest("button")) return
+      firedRef.current = false
+      startRef.current = { x: event.clientX, y: event.clientY }
+      timerRef.current = window.setTimeout(() => {
+        firedRef.current = true
+        startRef.current = null
+        navigator.vibrate?.(12)
+        onLongPress()
+      }, LONG_PRESS_MS)
+    },
+    onPointerMove: (event: React.PointerEvent) => {
+      const start = startRef.current
+      if (
+        start &&
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) > LONG_PRESS_TOLERANCE_PX
+      ) {
+        cancel()
       }
-      : null
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    onContextMenu: (event: React.MouseEvent) => {
+      // Chrome Android dispara o menu de contexto no toque longo.
+      if (startRef.current || firedRef.current) event.preventDefault()
+    },
+    onClickCapture: (event: React.MouseEvent) => {
+      if (firedRef.current) {
+        firedRef.current = false
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+  }
+}
 
+const shortDate = (value: string) => formatDateOnly(value).slice(0, 5)
+
+/** Situação de pagamento de uma despesa, para a coluna de vencimento (ou a 2ª linha no mobile). */
+function getPaymentBadge(transaction: Transaction) {
+  if (transaction.type !== "EXPENSE") return null
+  if (transaction.paymentStatus === "PAID") {
+    return {
+      label: transaction.paymentDate ? `Pago ${shortDate(transaction.paymentDate)}` : "Pago",
+      icon: CheckCircle2,
+      className: "text-emerald-600 dark:text-emerald-400",
+    }
+  }
+  if (!transaction.dueDate) return null
+  const alert = getTransactionDueAlert(transaction)
+  return {
+    label: `${alert === "overdue" ? "Venceu" : "Vence"} ${shortDate(transaction.dueDate)}`,
+    icon: alert === "overdue" ? AlertTriangle : Clock3,
+    className:
+      alert === "overdue"
+        ? "font-semibold text-amber-600 dark:text-amber-400"
+        : alert === "dueSoon"
+          ? "font-medium text-orange-600 dark:text-orange-400"
+          : "text-muted-foreground",
+  }
+}
+
+function PaymentBadge({ transaction }: { transaction: Transaction }) {
+  const badge = getPaymentBadge(transaction)
+  if (!badge) return null
+  const Icon = badge.icon
   return (
-    <>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {dragHandle}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-1">
-            <button
-              type="button"
-              className="max-w-full cursor-pointer truncate text-left font-semibold text-foreground transition hover:text-primary"
-              onClick={
-                onOpenDetails
-                  ? () => onOpenDetails(transaction)
-                  : undefined
-              }
-            >
-              {transaction.description}
-            </button>
-            <span className="flex items-center gap-1">
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase"
-                style={categoryBadgeStyle}
-              >
-                {categoryLabel}
-              </span>
-              {transaction.recurringGroupId ? (
-                <span
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/12 text-primary"
-                  title="Recorrente"
-                  aria-label="Recorrente"
-                >
-                  <Repeat2 size={12} />
-                </span>
-              ) : null}
-              {dueAlertBadge ? (
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase ${dueAlertBadge.className}`}
-                >
-                  {dueAlertBadge.label}
-                </span>
-              ) : null}
-              {transaction.type === "EXPENSE" &&
-                transaction.paymentStatus !== "PAID" &&
-                transaction.dueDate ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-                  <Clock3 size={12} />
-                  {`Vence ${formatDateOnly(transaction.dueDate)}`}
-                </span>
-              ) : null}
-              {transaction.type === "EXPENSE" &&
-                transaction.paymentStatus === "PAID" ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-700 dark:text-emerald-300">
-                  <CheckCircle2 size={12} />
-                </span>
-              ) : null}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
-        <span
-          className={`text-sm font-semibold ${transaction.type === "REVENUE"
-            ? "text-emerald-500 dark:text-emerald-400"
-            : "text-rose-500 dark:text-rose-400"
-            }`}
-        >
-          {formatCurrency(transaction.amount)}
-        </span>
-        <div className="flex items-center">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            className={
-              transaction.type === "EXPENSE" && transaction.isClearedByInvoice
-                ? "size-10 text-emerald-500 sm:size-9 dark:text-emerald-400"
-                : "size-10 sm:size-9"
-            }
-            onClick={onLink ? () => onLink(transaction) : undefined}
-            disabled={!onLink || transaction.type !== "EXPENSE"}
-            aria-label={
-              transaction.isClearedByInvoice
-                ? "Vínculo com fatura"
-                : "Vincular a uma fatura"
-            }
-            title={
-              transaction.isClearedByInvoice
-                ? "Vínculo com fatura"
-                : "Vincular a uma fatura"
-            }
-          >
-            <Link size={15} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            className="size-10 sm:size-9"
-            onClick={onEdit ? () => onEdit(transaction) : undefined}
-            disabled={!onEdit}
-            aria-label="Editar transação"
-            title="Editar transação"
-          >
-            <Pencil size={15} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            className="size-10 sm:size-9"
-            onClick={onDelete ? () => onDelete(transaction) : undefined}
-            disabled={!onDelete}
-            aria-label="Excluir transação"
-            title="Excluir transação"
-          >
-            <Trash2 size={15} />
-          </Button>
-        </div>
-      </div>
-    </>
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap ${badge.className}`}>
+      <Icon size={12} className="shrink-0" />
+      {badge.label}
+    </span>
   )
 }
 
@@ -293,7 +242,7 @@ function TransactionDragHandle({
       ref={setActivatorNodeRef}
       type="button"
       data-carousel-no-drag
-      className="flex h-10 w-10 shrink-0 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/70 bg-secondary/80 text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex h-9 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition hover:bg-secondary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 sm:w-8"
       style={{ touchAction: "none" }}
       aria-label="Arrastar transação"
       disabled={disabled}
@@ -309,6 +258,7 @@ function SortableTransactionRow({
   transaction,
   isDragOver,
   reorderPending,
+  onShowActions,
   onOpenDetails,
   onLink,
   onEdit,
@@ -326,41 +276,373 @@ function SortableTransactionRow({
     id: transaction.id,
     disabled: reorderPending,
   })
+  const longPress = useLongPress(() => onShowActions(transaction))
+
+  const dueAlert = getTransactionDueAlert(transaction)
+  const categoryLabel = transaction.category?.name || "Sem categoria"
+  const isExpense = transaction.type === "EXPENSE"
+  const linkLabel = transaction.isClearedByInvoice ? "Vínculo com fatura" : "Vincular a uma fatura"
 
   return (
-    <div
+    <tr
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
+        transform: CSS.Translate.toString(transform),
         transition: isDragging ? undefined : transition,
       }}
-      className={`flex flex-col gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${isDragging
-        ? "z-10 border-primary/45 opacity-70 shadow-[0_18px_40px_rgba(15,23,42,0.16)]"
-        : getTransactionDueAlert(transaction) === "overdue"
-          ? "border-amber-500/60 bg-amber-500/[0.05] shadow-[0_14px_30px_rgba(245,158,11,0.10)]"
-          : getTransactionDueAlert(transaction) === "dueSoon"
-            ? "border-orange-400/50 bg-orange-500/[0.04]"
-            : isDragOver
-              ? "border-primary ring-2 ring-primary/15"
-              : "border-border"
-        }`}
+      {...longPress}
+      onClick={(event) => {
+        if (event.target instanceof Element && event.target.closest("button")) return
+        onOpenDetails(transaction)
+      }}
+      className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+        isDragging
+          ? "relative z-10 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.18)]"
+          : isDragOver
+            ? "bg-primary/8"
+            : dueAlert === "overdue"
+              ? "bg-amber-500/[0.07] hover:bg-amber-500/[0.12] active:bg-amber-500/[0.16]"
+              : "hover:bg-secondary/60 active:bg-secondary"
+      }`}
     >
-      <TransactionRowContent
-        transaction={transaction}
-        dragHandle={
-          <TransactionDragHandle
-            attributes={attributes}
-            listeners={listeners}
-            setActivatorNodeRef={setActivatorNodeRef}
-            disabled={reorderPending}
-          />
+      <td className="w-px py-1 pl-0.5 align-middle sm:pl-1">
+        <TransactionDragHandle
+          attributes={attributes}
+          listeners={listeners}
+          setActivatorNodeRef={setActivatorNodeRef}
+          disabled={reorderPending}
+        />
+      </td>
+      <td className="w-full max-w-0 py-1.5 pr-2 align-middle">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-foreground">
+            {transaction.description}
+          </span>
+          {transaction.recurringGroupId ? (
+            <Repeat2 size={12} className="shrink-0 text-primary" aria-label="Recorrente">
+              <title>Recorrente</title>
+            </Repeat2>
+          ) : null}
+          {isExpense && transaction.isClearedByInvoice ? (
+            <Link size={12} className="shrink-0 text-emerald-500 sm:hidden" aria-label="Vinculada a fatura" />
+          ) : null}
+        </div>
+        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] leading-4">
+          <span
+            className="min-w-0 truncate rounded px-1.5 font-medium"
+            style={getCategoryBadgeStyle(categoryLabel)}
+          >
+            {categoryLabel}
+          </span>
+          <span className="shrink-0 sm:hidden">
+            <PaymentBadge transaction={transaction} />
+          </span>
+        </div>
+      </td>
+      <td className="hidden w-px py-2 pr-4 align-middle text-xs sm:table-cell">
+        <PaymentBadge transaction={transaction} />
+      </td>
+      <td
+        className={`w-px py-2 pr-2 text-right align-middle text-sm font-semibold whitespace-nowrap tabular-nums sm:pr-3 ${
+          isExpense ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+        }`}
+      >
+        {formatCurrency(transaction.amount)}
+      </td>
+      <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
+        <div className="flex items-center justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`size-8 ${
+              isExpense && transaction.isClearedByInvoice ? "text-emerald-500 dark:text-emerald-400" : "text-muted-foreground"
+            }`}
+            onClick={() => onLink(transaction)}
+            disabled={!isExpense}
+            aria-label={linkLabel}
+            title={linkLabel}
+          >
+            <Link size={14} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground"
+            onClick={() => onEdit(transaction)}
+            aria-label="Editar transação"
+            title="Editar transação"
+          >
+            <Pencil size={14} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+            onClick={() => onDelete(transaction)}
+            aria-label="Excluir transação"
+            title="Excluir transação"
+          >
+            <Trash2 size={14} />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+type SheetAction = {
+  label: string
+  icon: typeof Eye
+  onClick: () => void
+  destructive?: boolean
+}
+
+/** Ações de uma linha no mobile (toque longo): folha que sobe do rodapé. */
+function ActionSheet({
+  open,
+  title,
+  subtitle,
+  amount,
+  amountTone,
+  actions,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  subtitle?: ReactNode
+  amount: string
+  amountTone: "positive" | "negative"
+  actions: SheetAction[]
+  onClose: () => void
+}) {
+  // A folha abre com o dedo ainda na tela: o clique de quando ele sai cairia nela (fechando-a ou
+  // acionando um botão). Só vale clique cujo toque começou já com a folha aberta.
+  const armedRef = useRef(false)
+
+  useEffect(() => {
+    if (!open) return
+    armedRef.current = false
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open, onClose])
+
+  if (!open) {
+    return null
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[125] flex items-end justify-center bg-slate-950/55 sm:items-center sm:p-4"
+      onPointerDownCapture={() => {
+        armedRef.current = true
+      }}
+      onClickCapture={(event) => {
+        if (!armedRef.current) {
+          event.preventDefault()
+          event.stopPropagation()
         }
-        onOpenDetails={onOpenDetails}
-        onLink={onLink}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
-    </div>
+      }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Ações de ${title}`}
+        className="w-full max-w-md rounded-t-2xl border border-border bg-card pb-[max(env(safe-area-inset-bottom),0.75rem)] shadow-[0_-20px_60px_rgba(2,6,23,0.35)] sm:rounded-2xl sm:pb-3"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border sm:hidden" />
+        <div className="flex items-start justify-between gap-3 border-b border-border/70 px-4 pt-3 pb-3">
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-foreground">{title}</p>
+            {subtitle ? (
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+          <span
+            className={`shrink-0 text-base font-semibold tabular-nums ${
+              amountTone === "negative"
+                ? "text-rose-600 dark:text-rose-400"
+                : "text-emerald-600 dark:text-emerald-400"
+            }`}
+          >
+            {amount}
+          </span>
+        </div>
+        <div className="px-2 pt-2">
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={() => {
+                onClose()
+                action.onClick()
+              }}
+              className={`flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition active:bg-secondary ${
+                action.destructive ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+              }`}
+            >
+              <action.icon size={18} className="shrink-0" />
+              {action.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+function TransactionActionSheet({
+  transaction,
+  onClose,
+  onOpenDetails,
+  onLink,
+  onEdit,
+  onDelete,
+}: TransactionActions & {
+  transaction: Transaction | null
+  onClose: () => void
+}) {
+  if (!transaction) {
+    return null
+  }
+
+  const isExpense = transaction.type === "EXPENSE"
+  const actions: SheetAction[] = [
+    { label: "Ver detalhes", icon: Eye, onClick: () => onOpenDetails(transaction) },
+    { label: "Editar", icon: Pencil, onClick: () => onEdit(transaction) },
+    ...(isExpense
+      ? [
+          {
+            label: transaction.isClearedByInvoice ? "Vínculo com fatura" : "Vincular a uma fatura",
+            icon: Link,
+            onClick: () => onLink(transaction),
+          },
+        ]
+      : []),
+    { label: "Excluir", icon: Trash2, onClick: () => onDelete(transaction), destructive: true },
+  ]
+
+  return (
+    <ActionSheet
+      open
+      title={transaction.description}
+      subtitle={
+        <>
+          <span>{transaction.category?.name || "Sem categoria"}</span>
+          <PaymentBadge transaction={transaction} />
+        </>
+      }
+      amount={formatCurrency(transaction.amount)}
+      amountTone={isExpense ? "negative" : "positive"}
+      actions={actions}
+      onClose={onClose}
+    />
+  )
+}
+
+/** Linha da tabela de faturas: em edição, o valor vira campo com salvar/cancelar. */
+function InvoiceRow({
+  label,
+  invoice,
+  isEditing,
+  editingAmount,
+  onEditingAmountChange,
+  savePending,
+  onSave,
+  onCancel,
+  onEdit,
+  onShowActions,
+}: {
+  label: string
+  invoice: Invoice
+  isEditing: boolean
+  editingAmount: string
+  onEditingAmountChange: (amount: string) => void
+  savePending: boolean
+  onSave: () => void
+  onCancel: () => void
+  onEdit: () => void
+  onShowActions: () => void
+}) {
+  const longPress = useLongPress(onShowActions)
+
+  if (isEditing) {
+    return (
+      <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
+        <td colSpan={3} className="max-w-0 px-3 py-2 sm:px-4">
+          <div data-carousel-no-drag className="flex items-center gap-2">
+            <span className="mr-auto flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+              <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
+              <span className="truncate">{label}</span>
+            </span>
+            <div className="w-28 shrink-0 sm:w-44">
+              <CurrencyInput value={editingAmount} onValueChange={onEditingAmountChange} />
+            </div>
+            <Button
+              type="button"
+              className="h-11 shrink-0 max-sm:w-11 max-sm:px-0"
+              onClick={onSave}
+              disabled={savePending}
+              aria-label="Salvar fatura"
+            >
+              <span className="hidden sm:inline">{savePending ? "Salvando..." : "Salvar"}</span>
+              <Save size={14} />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-11 shrink-0 px-0"
+              onClick={onCancel}
+              aria-label="Cancelar edição"
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <tr
+      {...longPress}
+      className="border-b border-border/60 transition-colors last:border-b-0 hover:bg-secondary/60 active:bg-secondary pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
+    >
+      <td className="w-full max-w-0 py-2.5 pr-2 pl-3 align-middle sm:pl-4">
+        <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+          <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
+          <span className="truncate">{label}</span>
+        </span>
+      </td>
+      <td className="w-px py-2.5 pr-3 text-right align-middle text-sm font-semibold whitespace-nowrap text-rose-600 tabular-nums sm:pr-3 dark:text-rose-400">
+        {formatCurrency(invoice.amount)}
+      </td>
+      <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
+        <div className="flex w-[6.5rem] justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground"
+            onClick={onEdit}
+            aria-label={`Editar fatura ${label}`}
+            title="Editar fatura"
+          >
+            <Pencil size={14} />
+          </Button>
+        </div>
+      </td>
+    </tr>
   )
 }
 
@@ -593,12 +875,12 @@ function PanelStat({
   tone: Transaction["type"] | "NEUTRAL"
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border bg-secondary/45 px-2.5 py-2 sm:px-3">
-      <dt className="truncate text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+    <div className="min-w-0 px-2 py-1.5 sm:px-3 sm:py-2">
+      <dt className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase sm:tracking-[0.14em]">
         {label}
       </dt>
       <dd
-        className={`mt-0.5 truncate text-sm font-semibold sm:text-base ${
+        className={`mt-0.5 text-[13px] font-semibold whitespace-nowrap tabular-nums sm:text-base ${
           tone === "REVENUE"
             ? "text-emerald-600 dark:text-emerald-400"
             : tone === "EXPENSE"
@@ -624,6 +906,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     useState<Transaction | null>(null)
   const [detailsTransaction, setDetailsTransaction] =
     useState<Transaction | null>(null)
+  const [actionsTransaction, setActionsTransaction] =
+    useState<Transaction | null>(null)
+  const [actionsInvoice, setActionsInvoice] = useState<Invoice | null>(null)
   const [editingScope, setEditingScope] = useState<"SINGLE" | "GROUP">("SINGLE")
   const [formError, setFormError] = useState<string | null>(null)
   const [submitPending, setSubmitPending] = useState(false)
@@ -935,6 +1220,46 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     }
   }
 
+  const confirmDelete = (entry: Transaction) =>
+    setConfirmationDialog({
+      confirmLabel: "Excluir Transação",
+      description: `A transação "${entry.description}" será removida deste mês.`,
+      title: "Excluir transação?",
+      onConfirm: () => deleteTransaction.mutate(entry.id),
+      ...(entry.recurringGroupId
+        ? {
+          confirmLabel: "Excluir somente esta",
+          description: `A transação "${entry.description}" faz parte de uma recorrência. Você pode remover apenas este mês ou excluir todas as recorrências do grupo.`,
+          title: "Excluir transação recorrente?",
+          secondaryConfirmLabel: "Excluir todas",
+          onSecondaryConfirm: () =>
+            deleteTransaction.mutate({
+              id: entry.id,
+              recurringGroupId: entry.recurringGroupId,
+              deleteScope: "GROUP",
+            }),
+        }
+        : {}),
+    })
+
+  const transactionActions: TransactionActions = {
+    onOpenDetails: setDetailsTransaction,
+    onLink: transactionLinking.openPaymentModal,
+    onEdit: startEditing,
+    onDelete: confirmDelete,
+  }
+  const closeActions = useCallback(() => setActionsTransaction(null), [])
+  const closeInvoiceActions = useCallback(() => setActionsInvoice(null), [])
+
+  const invoiceLabel = (invoice: Invoice) =>
+    invoice.creditCardName ||
+    shared.creditCards.find((card) => card.id === invoice.creditCardId)?.name ||
+    "Cartão"
+  const invoicesTotal = panel.invoices.reduce(
+    (total, invoice) => total + Number(invoice.amount || 0),
+    0
+  )
+
   const submit = async () => {
     setFormError(null)
     setSubmitPending(true)
@@ -950,56 +1275,75 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   }
 
   return (
-    <Card className="border-border bg-card p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] xl:p-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
-        <div>
+    <Card className="border-border bg-card p-3 shadow-[0_22px_54px_rgba(15,23,42,0.10)] sm:p-4 xl:p-5">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-center justify-between gap-3">
           <p className="app-eyebrow text-[13px] font-bold text-primary">
             {panel.label}
           </p>
           {!isComposerOpen ? (
-            <div className="mt-2">
-              <Button
-                type="button"
-                className="w-full xl:w-auto"
-                onClick={startCreateTransaction}
-              >
-                Nova Transação
-                <Plus size={16} />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="xl:hidden"
+              onClick={startCreateTransaction}
+            >
+              Nova transação
+              <Plus size={14} />
+            </Button>
           ) : null}
         </div>
-        <dl className="grid grid-cols-3 gap-2">
-          <PanelStat
-            label="Receitas"
-            value={formatCurrency(panel.stats.incomes)}
-            tone="REVENUE"
-          />
-          <PanelStat
-            label="Despesas"
-            value={formatCurrency(panel.stats.expenses)}
-            tone="EXPENSE"
-          />
-          <PanelStat
-            label="Saldo"
-            value={formatCurrency(panel.stats.balance)}
-            tone={toneForBalance(panel.stats.balance)}
-          />
-        </dl>
+        <div className="flex items-center gap-3">
+          <dl className="grid flex-1 grid-cols-3 divide-x divide-border rounded-xl border border-border bg-secondary/45 xl:min-w-[26rem]">
+            <PanelStat
+              label="Receitas"
+              value={formatCurrency(panel.stats.incomes)}
+              tone="REVENUE"
+            />
+            <PanelStat
+              label="Despesas"
+              value={formatCurrency(panel.stats.expenses)}
+              tone="EXPENSE"
+            />
+            <PanelStat
+              label="Saldo"
+              value={formatCurrency(panel.stats.balance)}
+              tone={toneForBalance(panel.stats.balance)}
+            />
+          </dl>
+          {!isComposerOpen ? (
+            <Button
+              type="button"
+              className="hidden xl:inline-flex"
+              onClick={startCreateTransaction}
+            >
+              Nova transação
+              <Plus size={16} />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-6 space-y-5">
-        <Card className="border-border bg-secondary/40 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="app-eyebrow">Faturas</h4>
-            {panel.invoices.length > 0 && !invoiceManager.isCreateOpen ? (
+      <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-5">
+        <Card className="gap-0 overflow-hidden border-border bg-card p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2 sm:px-4">
+            <div className="flex min-w-0 items-baseline gap-2">
+              <h4 className="app-eyebrow">Faturas</h4>
+              {panel.invoices.length > 0 ? (
+                <span className="truncate text-xs font-semibold text-rose-600 tabular-nums dark:text-rose-400">
+                  {formatCurrency(invoicesTotal)}
+                </span>
+              ) : null}
+            </div>
+            {!invoiceManager.isCreateOpen ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-8"
                 onClick={invoiceManager.startCreate}
               >
-                Nova Fatura
+                Nova fatura
                 <Plus size={14} />
               </Button>
             ) : null}
@@ -1007,7 +1351,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           {invoiceManager.isCreateOpen ? (
             <div
               data-carousel-no-drag
-              className="mt-3 rounded-xl border border-border bg-card/90 p-4"
+              className="border-b border-border/70 bg-secondary/40 p-3 sm:p-4"
             >
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                 <div>
@@ -1073,112 +1417,63 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               </div>
             </div>
           ) : null}
-          <div className="mt-3 space-y-2">
-            {panel.invoicesLoading ? (
-              <p className="text-sm text-muted-foreground">
-                Carregando faturas...
+          {panel.invoicesLoading ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              Carregando faturas...
+            </p>
+          ) : panel.invoices.length === 0 ? (
+            !invoiceManager.isCreateOpen ? (
+              <p className="px-4 py-3 text-sm text-muted-foreground">
+                Nenhuma fatura registrada neste mês.
               </p>
-            ) : panel.invoices.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-4">
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma fatura registrada.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={invoiceManager.startCreate}
-                >
-                  Criar fatura neste mês
-                  <Plus size={14} />
-                </Button>
-              </div>
-            ) : (
-              panel.invoices.map((invoice) => {
-                const card = shared.creditCards.find(
-                  (item) => item.id === invoice.creditCardId
-                )
-                const cardLabel =
-                  invoice.creditCardName || card?.name || "Cartão"
-                const isEditing = invoiceManager.editingInvoiceId === invoice.id
+            ) : null
+          ) : (
+            <table className="w-full border-collapse">
+              <tbody>
+                {panel.invoices.map((invoice) => {
+                  const label = invoiceLabel(invoice)
+                  const isEditing = invoiceManager.editingInvoiceId === invoice.id
 
-                return (
-                  <div
-                    key={invoice.id}
-                    className="rounded-xl border border-border bg-card/90 px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          {cardLabel}
-                        </p>
-                      </div>
-                      {isEditing ? (
-                        <div
-                          data-carousel-no-drag
-                          className="flex flex-wrap items-center justify-end gap-2"
-                        >
-                          <div className="w-full min-w-40 sm:w-44">
-                            <CurrencyInput
-                              value={invoiceManager.editingAmount}
-                              onValueChange={invoiceManager.setEditingAmount}
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            className="h-11"
-                            onClick={() =>
-                              invoiceManager.updateInvoice.mutate()
-                            }
-                            disabled={invoiceManager.updateInvoice.isPending}
-                          >
-                            {invoiceManager.updateInvoice.isPending
-                              ? "Salvando..."
-                              : "Salvar"}
-                            <Save size={14} />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-11"
-                            onClick={invoiceManager.cancelEdit}
-                          >
-                            <X size={14} />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-rose-500 dark:text-rose-400">
-                            {formatCurrency(invoice.amount)}
-                          </p>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-lg"
-                            className="size-10 sm:size-9"
-                            onClick={() => invoiceManager.startEdit(invoice)}
-                            aria-label={`Editar fatura ${cardLabel}`}
-                            title="Editar fatura"
-                          >
-                            <Pencil size={15} />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    {isEditing ? (
-                      <div className="mt-3">
-                        <FormError
-                          message={invoiceManager.updateErrorMessage}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })
-            )}
-          </div>
+                  return (
+                    <InvoiceRow
+                      key={invoice.id}
+                      label={label}
+                      invoice={invoice}
+                      isEditing={isEditing}
+                      editingAmount={invoiceManager.editingAmount}
+                      onEditingAmountChange={invoiceManager.setEditingAmount}
+                      savePending={invoiceManager.updateInvoice.isPending}
+                      onSave={() => invoiceManager.updateInvoice.mutate()}
+                      onCancel={invoiceManager.cancelEdit}
+                      onEdit={() => invoiceManager.startEdit(invoice)}
+                      onShowActions={() => setActionsInvoice(invoice)}
+                    />
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+          {invoiceManager.editingInvoiceId ? (
+            <div className="px-3 pb-2 empty:hidden sm:px-4">
+              <FormError message={invoiceManager.updateErrorMessage} />
+            </div>
+          ) : null}
         </Card>
+        <ActionSheet
+          open={Boolean(actionsInvoice)}
+          title={actionsInvoice ? invoiceLabel(actionsInvoice) : ""}
+          subtitle={<span>Fatura de cartão · {panel.label}</span>}
+          amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
+          amountTone="negative"
+          actions={[
+            {
+              label: "Editar valor",
+              icon: Pencil,
+              onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
+            },
+          ]}
+          onClose={closeInvoiceActions}
+        />
 
         <div>
           <TransactionComposer
@@ -1217,90 +1512,115 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           />
         </div>
 
-        <Card className="border-border bg-secondary/40 p-3 sm:p-4">
-          <h4 className="app-eyebrow">Transações por responsável</h4>
-          <div className="mt-3 space-y-4">
-            {panel.transactionsLoading ? (
-              <p className="text-sm text-muted-foreground">
-                Carregando transações...
+        <Card className="gap-0 overflow-hidden border-border bg-card p-0">
+          <div className="flex items-baseline justify-between gap-3 border-b border-border/70 px-3 py-2.5 sm:px-4">
+            <h4 className="app-eyebrow">Transações</h4>
+            {groupedTransactions.length > 0 ? (
+              <p className="truncate text-[11px] text-muted-foreground sm:hidden">
+                Segure a linha para ações
               </p>
-            ) : groupedTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma transação cadastrada.
-              </p>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis]}
-                onDragStart={reorder.onDragStart}
-                onDragOver={reorder.onDragOver}
-                onDragCancel={reorder.onDragCancel}
-                onDragEnd={reorder.onDragEnd}
-              >
-                {groupedTransactions.map((group) => (
-                  <div key={group.id} className="space-y-2">
-                    <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                      <p className="text-xs font-semibold tracking-[0.24em] text-muted-foreground uppercase">
-                        {group.label}
-                      </p>
-                    </div>
-
-                    <SortableContext
-                      items={group.transactions.map(
-                        (transaction) => transaction.id
-                      )}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {group.transactions.map((transaction) => (
-                        <SortableTransactionRow
-                          key={transaction.id}
-                          transaction={transaction}
-                          isDragOver={
-                            reorder.overId === transaction.id &&
-                            reorder.activeId !== transaction.id
-                          }
-                          reorderPending={reorder.reorderPending}
-                          onOpenDetails={(entry) =>
-                            setDetailsTransaction(entry)
-                          }
-                          onLink={(entry) =>
-                            transactionLinking.openPaymentModal(entry)
-                          }
-                          onEdit={startEditing}
-                          onDelete={(entry) =>
-                            setConfirmationDialog({
-                              confirmLabel: "Excluir Transação",
-                              description: `A transação "${entry.description}" será removida deste mês.`,
-                              title: "Excluir transação?",
-                              onConfirm: () =>
-                                deleteTransaction.mutate(entry.id),
-                              ...(entry.recurringGroupId
-                                ? {
-                                  confirmLabel: "Excluir somente esta",
-                                  description: `A transação "${entry.description}" faz parte de uma recorrência. Você pode remover apenas este mês ou excluir todas as recorrências do grupo.`,
-                                  title: "Excluir transação recorrente?",
-                                  secondaryConfirmLabel: "Excluir todas",
-                                  onSecondaryConfirm: () =>
-                                    deleteTransaction.mutate({
-                                      id: entry.id,
-                                      recurringGroupId:
-                                        entry.recurringGroupId,
-                                      deleteScope: "GROUP",
-                                    }),
-                                }
-                                : {}),
-                            })
-                          }
-                        />
-                      ))}
-                    </SortableContext>
-                  </div>
-                ))}
-              </DndContext>
-            )}
+            ) : null}
           </div>
+          {panel.transactionsLoading ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              Carregando transações...
+            </p>
+          ) : groupedTransactions.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              Nenhuma transação cadastrada.
+            </p>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragStart={reorder.onDragStart}
+              onDragOver={reorder.onDragOver}
+              onDragCancel={reorder.onDragCancel}
+              onDragEnd={reorder.onDragEnd}
+            >
+              <table className="w-full border-collapse">
+                <thead className="hidden sm:table-header-group">
+                  <tr className="text-left text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                    <th scope="col" className="py-2">
+                      <span className="sr-only">Ordem</span>
+                    </th>
+                    <th scope="col" className="py-2 pr-2 font-semibold">Descrição</th>
+                    <th scope="col" className="hidden py-2 pr-2 font-semibold sm:table-cell">Vencimento</th>
+                    <th scope="col" className="py-2 pr-2 text-right font-semibold sm:pr-3">Valor</th>
+                    <th scope="col" className="hidden py-2 font-semibold sm:table-cell">
+                      <span className="sr-only">Ações</span>
+                    </th>
+                  </tr>
+                </thead>
+                {groupedTransactions.map((group) => {
+                  const groupBalance = group.transactions.reduce(
+                    (total, transaction) =>
+                      total +
+                      (transaction.type === "REVENUE" ? 1 : -1) *
+                        Number(transaction.amount || 0),
+                    0
+                  )
+
+                  return (
+                    <tbody key={group.id}>
+                      <tr className="border-y border-border/70 bg-secondary/60">
+                        <th
+                          scope="colgroup"
+                          colSpan={5}
+                          className="px-3 py-1.5 text-left sm:px-4"
+                        >
+                          <div className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className="truncate font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+                              {group.label}
+                              <span className="ml-1.5 font-normal tracking-normal normal-case">
+                                · {group.transactions.length}
+                              </span>
+                            </span>
+                            <span
+                              className={`shrink-0 font-semibold tabular-nums ${
+                                groupBalance < 0
+                                  ? "text-rose-600 dark:text-rose-400"
+                                  : "text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {formatCurrency(groupBalance)}
+                            </span>
+                          </div>
+                        </th>
+                      </tr>
+                      <SortableContext
+                        items={group.transactions.map(
+                          (transaction) => transaction.id
+                        )}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {group.transactions.map((transaction) => (
+                          <SortableTransactionRow
+                            key={transaction.id}
+                            transaction={transaction}
+                            isDragOver={
+                              reorder.overId === transaction.id &&
+                              reorder.activeId !== transaction.id
+                            }
+                            reorderPending={reorder.reorderPending}
+                            onShowActions={setActionsTransaction}
+                            {...transactionActions}
+                          />
+                        ))}
+                      </SortableContext>
+                    </tbody>
+                  )
+                })}
+              </table>
+            </DndContext>
+          )}
         </Card>
+        <TransactionActionSheet
+          transaction={actionsTransaction}
+          onClose={closeActions}
+          {...transactionActions}
+        />
         <ConfirmationDialog
           onClose={() => setConfirmationDialog(null)}
           state={confirmationDialog}

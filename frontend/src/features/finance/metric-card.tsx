@@ -37,7 +37,7 @@ export default function MetricCard({
 
     const sizeClasses = {
         sm: {
-            card: "px-3 py-2",
+            card: "min-w-0 rounded-2xl px-3 py-2.5",
             container: "gap-3",
             value: "mt-1 text-lg",
             icon: "p-2",
@@ -59,13 +59,16 @@ export default function MetricCard({
     return (
         <Card className={cn("app-panel", sizeClasses.card)}>
             <div className={cn("flex items-center justify-between", sizeClasses.container)}>
-                <div>
-                    <p className="app-eyebrow">{title}</p>
-                    <p className={cn("font-semibold", sizeClasses.value, classes.value)}>
+                <div className="min-w-0">
+                    <p className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase sm:text-[0.72rem] sm:tracking-[0.28em]">
+                        {title}
+                    </p>
+                    <p className={cn("truncate font-semibold tabular-nums", sizeClasses.value, classes.value)}>
                         {value}
                     </p>
                 </div>
-                <div className={cn("rounded-full", sizeClasses.icon, classes.icon)}>{icon}</div>
+                {/* Sem ícone no mobile: em meia largura de tela ele vazava para fora do card. */}
+                <div className={cn("hidden shrink-0 rounded-full sm:block", sizeClasses.icon, classes.icon)}>{icon}</div>
             </div>
         </Card>
     )

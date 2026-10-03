@@ -118,6 +118,15 @@ function normalizePeriodRange(
       ? range.endPeriodId
       : null
 
+  // Sem seleção válida: o mês padrão com o anterior e o próximo, quando existem.
+  if (!startCandidate && !endCandidate) {
+    const fallbackIndex = Math.max(periodIds.indexOf(fallbackPeriodId), 0)
+    return {
+      startPeriodId: periodIds[Math.max(fallbackIndex - 1, 0)],
+      endPeriodId: periodIds[Math.min(fallbackIndex + 1, periodIds.length - 1)],
+    }
+  }
+
   const nextStartPeriodId = startCandidate ?? endCandidate ?? fallbackPeriodId
   const nextEndPeriodId = endCandidate ?? startCandidate ?? fallbackPeriodId
   const startIndex = periodIds.indexOf(nextStartPeriodId)
