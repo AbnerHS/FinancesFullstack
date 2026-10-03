@@ -523,18 +523,24 @@ function RangePresets({
   const month = today.getMonth() + 1
   const current = toMonthId(year, month)
   const threeMonthsAgo = new Date(year, month - 3, 1)
+  const hasPeriod = (id: string) => periods.some((period) => period.id === id)
+  const monthId = (offset: number) => {
+    const date = new Date(year, month - 1 + offset, 1)
+    return toMonthId(date.getFullYear(), date.getMonth() + 1)
+  }
+  // "Mês atual" abre com o anterior e o próximo ao lado no carrossel (o carrossel já começa no
+  // mês atual); se um deles não existir no plano, o intervalo fica só com o que existe.
+  const previous = hasPeriod(monthId(-1)) ? monthId(-1) : current
+  const next = hasPeriod(monthId(1)) ? monthId(1) : current
   const presets = [
-    { label: "Mês atual", start: current, end: current },
+    { label: "Mês atual", start: previous, end: next },
     {
       label: "Últimos 3 meses",
       start: toMonthId(threeMonthsAgo.getFullYear(), threeMonthsAgo.getMonth() + 1),
       end: current,
     },
     { label: "Este ano", start: toMonthId(year, 1), end: toMonthId(year, 12) },
-  ].filter((preset) =>
-    periods.some((period) => period.id === preset.start) &&
-    periods.some((period) => period.id === preset.end)
-  )
+  ].filter((preset) => hasPeriod(preset.start) && hasPeriod(preset.end))
 
   return (
     <div className="flex flex-wrap gap-2" aria-label="Atalhos de período">

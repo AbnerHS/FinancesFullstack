@@ -94,12 +94,13 @@ export function MonthSummary({
       })
     : null
 
+  // Curto ("ago/26") para caber numa linha nos KPIs do mobile.
   const previousLabel = data.previousPeriod
-    ? formatMonthYear(data.previousPeriod)
+    ? `${formatMonthYear(data.previousPeriod).slice(0, 3)}/${String(data.previousPeriod.year).slice(2)}`
     : null
 
   return (
-    <section className="app-panel space-y-5" aria-label="Resumo do mês">
+    <section className="app-panel space-y-4 p-4 sm:space-y-5 sm:p-5" aria-label="Resumo do mês">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="app-eyebrow">Resumo do mês</p>
@@ -114,7 +115,7 @@ export function MonthSummary({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <KpiTile
           label="Saldo"
           value={formatCurrency(insights.balance)}
@@ -146,9 +147,7 @@ export function MonthSummary({
         />
         <KpiTile
           label={
-            insights.daily.kind === "available"
-              ? "Disponível por dia"
-              : "Gasto médio por dia"
+            insights.daily.kind === "available" ? "Disponível/dia" : "Média/dia"
           }
           value={formatCurrency(insights.daily.value)}
           tone="neutral"
@@ -207,20 +206,23 @@ function KpiTile({
   }[tone]
 
   return (
-    <div className="rounded-[1.25rem] border border-border bg-secondary/45 p-3 sm:p-4">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+    <div className="min-w-0 rounded-2xl border border-border bg-secondary/45 px-3 py-2.5 sm:rounded-[1.25rem] sm:p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase sm:text-[11px] sm:tracking-[0.16em]">
           {label}
         </p>
-        <span className={cn("rounded-full p-1.5", iconClasses)}>{icon}</span>
+        {/* No mobile o ícone só ocupava espaço e quebrava o rótulo. */}
+        <span className={cn("hidden rounded-full p-1.5 sm:inline-flex", iconClasses)}>
+          {icon}
+        </span>
       </div>
-      <p className={cn("mt-1 text-lg font-semibold sm:text-2xl", toneClasses)}>
+      <p className={cn("mt-0.5 truncate text-base font-semibold tabular-nums sm:mt-1 sm:text-2xl", toneClasses)}>
         {value}
       </p>
       {change !== undefined ? (
         <ChangeBadge change={change ?? null} isGood={changeIsGood} label={changeLabel} />
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">{hint}</p>
       )}
     </div>
   )
@@ -237,7 +239,7 @@ function ChangeBadge({
 }) {
   if (change === null) {
     return (
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-0.5 truncate text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
         {label ? `Sem base em ${label}` : "Sem mês anterior"}
       </p>
     )
@@ -249,15 +251,15 @@ function ChangeBadge({
   return (
     <p
       className={cn(
-        "mt-1 inline-flex items-center gap-1 text-xs font-medium",
+        "mt-0.5 flex items-center gap-1 text-[11px] font-medium whitespace-nowrap sm:mt-1 sm:text-xs",
         good
           ? "text-emerald-600 dark:text-emerald-400"
           : "text-rose-600 dark:text-rose-400"
       )}
     >
-      <Icon size={14} aria-hidden="true" />
+      <Icon size={13} className="shrink-0" aria-hidden="true" />
       {`${Math.abs(change).toFixed(1)}%`}
-      <span className="font-normal text-muted-foreground">vs. {label}</span>
+      <span className="truncate font-normal text-muted-foreground">vs. {label}</span>
     </p>
   )
 }
@@ -272,7 +274,7 @@ function SummaryCard({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-[1.25rem] border border-border bg-card/80 p-4">
+    <div className="rounded-2xl border border-border bg-card/80 p-3.5 sm:rounded-[1.25rem] sm:p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
         <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">
