@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import useEmblaCarousel from "embla-carousel-react"
-import AutoHeight from "embla-carousel-auto-height"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import type { Period } from "@/features/finance/types.ts"
@@ -15,6 +14,8 @@ type CarouselPanel = {
 
 // Arrastar que começa nesses elementos não move o carrossel (alça do dnd-kit, formulários do painel).
 const NO_DRAG_SELECTOR = "[data-carousel-no-drag]"
+// Meses renderizados de cada lado do mês parado; os demais ficam com content-visibility: hidden.
+const VISIBLE_RADIUS = 1
 const isEditable = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
@@ -34,16 +35,20 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   onActiveIdChange: (periodId: string) => void
   renderPanel: (panel: Panel) => ReactNode
 }) {
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    {
-      align: "start",
-      containScroll: "trimSnaps",
-      watchDrag: (_api, event) =>
-        !(event.target instanceof Element && event.target.closest(NO_DRAG_SELECTOR)),
-    },
-    [AutoHeight()]
-  )
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: "start",
+    duration: 20,
+    containScroll: "trimSnaps",
+    watchDrag: (_api, event) =>
+      !(event.target instanceof Element && event.target.closest(NO_DRAG_SELECTOR)),
+  })
   const [selectedIndex, setSelectedIndex] = useState(0)
+  // Mês em que o carrossel parou. Só ele e os vizinhos são renderizados (ver `slides`).
+  const [settledIndex, setSettledIndex] = useState(0)
+  const settledIndexRef = useRef(0)
+  useEffect(() => {
+    settledIndexRef.current = settledIndex
+  }, [settledIndex])
   const [canPrev, setCanPrev] = useState(false)
   const [canNext, setCanNext] = useState(false)
   const sectionRef = useRef<HTMLDivElement | null>(null)
@@ -62,17 +67,76 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 
     const sync = () => {
       const index = emblaApi.selectedScrollSnap()
+      // Destino ainda oculto (swipes muito rápidos): mostra já, sem esperar o carrossel parar.
+      if (Math.abs(index - settledIndexRef.current) > VISIBLE_RADIUS) setSettledIndex(index)
       setSelectedIndex(index)
       setCanPrev(emblaApi.canScrollPrev())
       setCanNext(emblaApi.canScrollNext())
+    }
+    // Avisar a página re-renderiza o dashboard inteiro (resumo, painéis, gráficos). Feito no meio
+    // da animação, isso travava o slide; por isso só acontece quando o carrossel para.
+    const notify = () => {
+      const index = emblaApi.selectedScrollSnap()
       const id = emblaApi.slideNodes()[index]?.dataset.periodId
-      if (id) onActiveIdChangeRef.current(id)
+      startTransition(() => {
+        setSettledIndex(index)
+        if (id) onActiveIdChangeRef.current(id)
+      })
+    }
+    const syncAndNotify = () => {
+      sync()
+      notify()
     }
 
-    sync()
-    emblaApi.on("select", sync).on("reInit", sync)
+    syncAndNotify()
+    emblaApi.on("select", sync).on("settle", notify).on("reInit", syncAndNotify)
     return () => {
-      emblaApi.off("select", sync).off("reInit", sync)
+      emblaApi.off("select", sync).off("settle", notify).off("reInit", syncAndNotify)
+    }
+  }, [emblaApi])
+
+  // Altura do carrossel = altura do mês visível, acompanhando qualquer mudança de tamanho do slide
+  // (o plugin AutoHeight do Embla media os slides uma vez só, antes das transações carregarem).
+  // Sem transição de altura: animar height refaz o layout da página inteira a cada quadro do
+  // slide. Ao selecionar, só cresce (o mês de destino não aparece cortado); encolhe ao parar.
+  useEffect(() => {
+    if (!emblaApi) return
+    const container = emblaApi.containerNode()
+    const activeHeight = () =>
+      emblaApi.slideNodes()[emblaApi.selectedScrollSnap()]?.offsetHeight ?? null
+
+    const fit = () => {
+      const height = activeHeight()
+      if (height !== null) container.style.height = `${height}px`
+    }
+    const grow = () => {
+      const height = activeHeight()
+      if (height !== null && height > container.offsetHeight) container.style.height = `${height}px`
+    }
+
+    let moving = false
+    const onSelect = () => {
+      moving = true
+      grow()
+    }
+    const onSettle = () => {
+      moving = false
+      fit()
+    }
+
+    const observer = new ResizeObserver(() => (moving ? grow() : fit()))
+    const observeSlides = () => {
+      observer.disconnect()
+      emblaApi.slideNodes().forEach((slide) => observer.observe(slide))
+      fit()
+    }
+
+    observeSlides()
+    emblaApi.on("select", onSelect).on("settle", onSettle).on("reInit", observeSlides)
+    return () => {
+      emblaApi.off("select", onSelect).off("settle", onSettle).off("reInit", observeSlides)
+      observer.disconnect()
+      container.style.height = ""
     }
   }, [emblaApi])
 
@@ -86,6 +150,10 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     const index = candidates.find((candidate) => candidate >= 0) ?? ids.length - 1
     emblaApi.reInit()
     emblaApi.scrollTo(index, true)
+    // O salto instantâneo não emite "settle": mostra o mês e avisa a página aqui mesmo.
+    setSettledIndex(index)
+    const id = ids[index]
+    if (id) onActiveIdChangeRef.current(id)
     // activeId fica de fora de propósito: só reposiciona quando a lista de meses muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emblaApi, panelIds])
@@ -115,9 +183,44 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     return () => observer.disconnect()
   }, [])
 
+  // Todos os meses ficam montados (estado e DOM preservados), mas só o mês parado e os vizinhos
+  // são renderizados: os outros recebem content-visibility: hidden, e o navegador pula layout e
+  // pintura deles. Com o ano inteiro visível (~14 mil nós), o Chrome recalculava as camadas da
+  // árvore toda a cada quadro do slide. Montar/desmontar painéis ao trocar de mês também travava;
+  // trocar a classe não passa pelo React dos painéis (memo).
+  // Memorizados: selectedIndex muda no início da animação e não deve re-renderizar os painéis.
+  const slides = useMemo(
+    () =>
+      panels.map((panel, index) => (
+        <div
+          key={panel.period.id}
+          data-period-id={panel.period.id}
+          className={cn(
+            "min-w-0 shrink-0 grow-0 basis-full pl-4",
+            Math.abs(index - settledIndex) > VISIBLE_RADIUS && "[content-visibility:hidden]"
+          )}
+          role="group"
+          aria-roledescription="slide"
+          aria-label={`${panel.label} (${index + 1} de ${panels.length})`}
+        >
+          {renderPanel(panel)}
+        </div>
+      )),
+    [panels, renderPanel, settledIndex]
+  )
+
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi])
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi])
-  const scrollTo = useCallback((index: number) => emblaApi?.scrollTo(index), [emblaApi])
+  // Salto pelos chips para um mês distante: mostra o destino antes de animar, para não deslizar
+  // até um espaço vazio.
+  const scrollTo = useCallback(
+    (index: number) => {
+      if (!emblaApi) return
+      setSettledIndex(index)
+      requestAnimationFrame(() => emblaApi.scrollTo(index))
+    },
+    [emblaApi]
+  )
 
   if (panels.length === 0) {
     return null
@@ -192,20 +295,9 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 
       <div className="relative">
         <div className="overflow-hidden" ref={emblaRef}>
-          {/* items-start: cada mês com a sua altura (o AutoHeight ajusta o viewport). */}
-          <div className="-ml-4 flex touch-pan-y items-start transition-[height] duration-300">
-            {panels.map((panel, index) => (
-              <div
-                key={panel.period.id}
-                data-period-id={panel.period.id}
-                className="min-w-0 shrink-0 grow-0 basis-full pl-4"
-                role="group"
-                aria-roledescription="slide"
-                aria-label={`${panel.label} (${index + 1} de ${panels.length})`}
-              >
-                {renderPanel(panel)}
-              </div>
-            ))}
+          {/* items-start: cada mês com a sua altura (a altura acompanha o mês visível). */}
+          <div className="-ml-4 flex touch-pan-y items-start">
+            {slides}
           </div>
         </div>
 
@@ -220,7 +312,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       {multiple ? (
         <div
           className={cn(
-            "fixed inset-x-4 bottom-4 z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card/90 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] backdrop-blur-xl transition lg:hidden",
+            "fixed inset-x-4 bottom-4 z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition lg:hidden",
             inViewport ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
           )}
         >
@@ -274,7 +366,7 @@ function SideArrow({
           disabled={disabled}
           aria-label={side === "left" ? "Mês anterior" : "Próximo mês"}
           className={cn(
-            "pointer-events-auto inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-card/95 text-foreground shadow-[0_14px_32px_rgba(15,23,42,0.18)] backdrop-blur-xl transition hover:border-primary/40 hover:text-primary disabled:pointer-events-none disabled:opacity-0",
+            "pointer-events-auto inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-[0_14px_32px_rgba(15,23,42,0.18)] transition hover:border-primary/40 hover:text-primary disabled:pointer-events-none disabled:opacity-0",
             side === "left" ? "-translate-x-1/2" : "translate-x-1/2"
           )}
         >

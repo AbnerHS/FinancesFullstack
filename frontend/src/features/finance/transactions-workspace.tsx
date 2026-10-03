@@ -35,7 +35,7 @@ import {
   X,
 } from "lucide-react"
 import { createPortal } from "react-dom"
-import { useMemo, useState } from "react"
+import { memo, useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -612,7 +612,8 @@ function PanelStat({
   )
 }
 
-export function TransactionsWorkspace({
+// memo: o dashboard re-renderiza ao trocar de mês (resumo); os painéis só quando os dados mudam.
+export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   panel,
   shared,
 }: TransactionWorkspaceProps) {
@@ -949,7 +950,7 @@ export function TransactionsWorkspace({
   }
 
   return (
-    <Card className="border-border bg-card/90 p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] backdrop-blur-xl xl:p-5">
+    <Card className="border-border bg-card p-4 shadow-[0_22px_54px_rgba(15,23,42,0.10)] xl:p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between">
         <div>
           <p className="app-eyebrow text-[13px] font-bold text-primary">
@@ -1412,4 +1413,4 @@ export function TransactionsWorkspace({
       </div>
     </Card>
   )
-}
+})
