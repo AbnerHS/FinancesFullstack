@@ -13,7 +13,7 @@ export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-border bg-card/80 p-1 shadow-sm backdrop-blur-xl">
+    <div className="inline-flex items-center gap-1 rounded-full border border-border bg-card/80 p-1 shadow-sm">
       {themeOptions.map((option) => {
         const Icon = option.icon
         const active = theme === option.value

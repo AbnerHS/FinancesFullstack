@@ -60,7 +60,7 @@ export function MobileSidebarButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center justify-center rounded-full border border-border bg-card/80 p-3 text-foreground shadow-sm backdrop-blur-xl lg:hidden"
+      className="inline-flex items-center justify-center rounded-full border border-border bg-card/80 p-3 text-foreground shadow-sm lg:hidden"
       aria-label="Abrir menu"
     >
       <Menu size={18} />
@@ -81,17 +81,19 @@ export function AppShellSidebar({
         type="button"
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-30 bg-slate-950/55 backdrop-blur-sm transition lg:hidden",
+          "fixed inset-0 z-30 bg-slate-950/55 transition lg:hidden",
+          // Blur só com o menu aberto: invisível (opacity-0) ele continuava desfocando a tela
+          // inteira a cada quadro de rolagem.
           isOpen
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0"
+            ? "pointer-events-auto opacity-100 backdrop-blur-sm"
+            : "pointer-events-none invisible opacity-0"
         )}
         aria-label="Fechar menu"
       />
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-sidebar-border bg-[linear-gradient(180deg,rgba(248,251,255,0.88),rgba(226,235,255,0.82))] shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0 dark:bg-[linear-gradient(180deg,rgba(11,22,40,0.96),rgba(19,34,56,0.94))] dark:shadow-[0_28px_90px_rgba(2,6,23,0.54)]",
+          "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-sidebar-border bg-[linear-gradient(180deg,rgba(248,251,255,0.88),rgba(226,235,255,0.82))] shadow-[0_30px_80px_rgba(15,23,42,0.16)] transition-transform duration-300 lg:translate-x-0 dark:bg-[linear-gradient(180deg,rgba(11,22,40,0.96),rgba(19,34,56,0.94))] dark:shadow-[0_28px_90px_rgba(2,6,23,0.54)]",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -111,7 +113,7 @@ export function AppShellSidebar({
             </button>
           </div>
 
-          <div className="mx-4 rounded-[1.75rem] border border-border bg-card/75 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+          <div className="mx-4 rounded-[1.75rem] border border-border bg-card/75 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)]">
             <p className="text-xs tracking-[0.28em] text-muted-foreground uppercase">
               Usuário ativo
             </p>
