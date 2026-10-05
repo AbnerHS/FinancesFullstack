@@ -1,11 +1,12 @@
 import type { ReactNode } from "react"
+import { Link } from "@tanstack/react-router"
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   CalendarClock,
   CalendarDays,
-  CheckCircle2,
   CreditCard,
   PiggyBank,
   TrendingDown,
@@ -18,7 +19,6 @@ import { useMonthSummaryData } from "@/features/finance/hooks.ts"
 import type {
   Invoice,
   Period,
-  ResponsibleOption,
   Transaction,
 } from "@/features/finance/types.ts"
 import {
@@ -29,7 +29,9 @@ import {
   formatDateOnly,
   formatMonthYear,
   formatPercent,
+  getTransactionDueAlert,
   type MonthInsights,
+  type WeekDue,
 } from "@/features/finance/utils.ts"
 import { cn } from "@/lib/utils"
 
@@ -39,27 +41,31 @@ type SummaryPanel = {
   transactions: Transaction[]
   invoices: Invoice[]
   stats: { incomes: number; expenses: number; balance: number }
+  transactionsLoading?: boolean
+  invoicesLoading?: boolean
 }
 
 /**
- * Resumo do mês visível no carrossel. Quando ele é o mês atual, mostra também os vencimentos da
- * semana (segunda a domingo) e as contas atrasadas.
+ * Resumo do mês visível no carrossel: KPIs, contas a pagar e para onde foi o dinheiro. A evolução
+ * entre meses fica na tela própria (/evolucao).
  */
 export function MonthSummary({
   panel,
-  periods,
-  responsibleOptions,
   responsibleFilter,
+  onGoToCurrentMonth,
 }: {
   panel: SummaryPanel | null
-  periods: Period[]
-  responsibleOptions: ResponsibleOption[]
   responsibleFilter: string
+  onGoToCurrentMonth: () => void
 }) {
-  const data = useMonthSummaryData({ activePeriod: panel?.period ?? null, periods })
+  const data = useMonthSummaryData({ activePeriod: panel?.period ?? null })
 
   if (!panel) {
     return null
+  }
+
+  if (panel.transactionsLoading || panel.invoicesLoading) {
+    return <MonthSummarySkeleton label={panel.label} />
   }
 
   const byResponsible = (transaction: Transaction) =>
@@ -84,7 +90,6 @@ export function MonthSummary({
     transactions: panel.transactions,
     invoices: responsibleFilter ? [] : panel.invoices,
     previousStats,
-    responsibleOptions,
   })
 
   const week = data.isCurrentMonth
@@ -108,25 +113,31 @@ export function MonthSummary({
             {panel.label}
           </h3>
         </div>
-        {data.isCurrentMonth ? (
-          <span className="rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary">
-            Mês atual
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {data.isCurrentMonth ? (
+            <span className="rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary">
+              Mês atual
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onGoToCurrentMonth}
+              className="rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20"
+            >
+              Voltar ao mês atual
+            </button>
+          )}
+          <Link
+            to="/evolucao"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition hover:border-primary/40 hover:text-primary"
+          >
+            Evolução
+            <ArrowRight size={13} aria-hidden="true" />
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-        <KpiTile
-          label="Saldo"
-          value={formatCurrency(insights.balance)}
-          tone={insights.balance < 0 ? "negative" : "positive"}
-          icon={<Wallet size={16} />}
-          hint={
-            insights.savingsRate === null
-              ? "Sem receitas no mês"
-              : `${formatPercent(insights.savingsRate)} das receitas`
-          }
-        />
         <KpiTile
           label="Receitas"
           value={formatCurrency(insights.incomes)}
@@ -146,6 +157,17 @@ export function MonthSummary({
           changeLabel={previousLabel}
         />
         <KpiTile
+          label="Saldo"
+          value={formatCurrency(insights.balance)}
+          tone={insights.balance < 0 ? "negative" : "positive"}
+          icon={<Wallet size={16} />}
+          hint={
+            insights.savingsRate === null
+              ? "Sem receitas no mês"
+              : `${formatPercent(insights.savingsRate)} das receitas`
+          }
+        />
+        <KpiTile
           label={
             insights.daily.kind === "available" ? "Disponível/dia" : "Média/dia"
           }
@@ -160,17 +182,58 @@ export function MonthSummary({
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        <BillsCard insights={insights} />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <BillsCard
+          insights={insights}
+          period={panel.period}
+          transactions={panel.transactions}
+          week={week}
+          weekLoading={data.weekLoading}
+        />
         <SpendingCard insights={insights} />
-        {insights.byResponsible.length > 1 && !responsibleFilter ? (
-          <ResponsibleCard insights={insights} />
-        ) : (
-          <CommittedCard insights={insights} />
-        )}
       </div>
+    </section>
+  )
+}
 
-      {week ? <WeekDueBlock week={week} loading={data.weekLoading} /> : null}
+/** Mesmo formato do resumo, sem números: aparece na hora ao trocar para um mês ainda sem dados. */
+function MonthSummarySkeleton({ label }: { label: string }) {
+  return (
+    <section
+      className="app-panel space-y-4 p-4 sm:space-y-5 sm:p-5"
+      aria-label="Resumo do mês"
+      aria-busy="true"
+    >
+      <div>
+        <p className="app-eyebrow">Resumo do mês</p>
+        <h3 className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl">
+          {label}
+        </h3>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((tile) => (
+          <div
+            key={tile}
+            className="space-y-2 rounded-2xl border border-border bg-secondary/45 px-3 py-3 sm:rounded-[1.25rem] sm:p-4"
+          >
+            <div className="h-2.5 w-16 animate-pulse rounded bg-secondary" />
+            <div className="h-5 w-28 animate-pulse rounded bg-secondary sm:h-7" />
+            <div className="h-2.5 w-20 animate-pulse rounded bg-secondary/70" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        {[0, 1].map((card) => (
+          <div
+            key={card}
+            className="space-y-3 rounded-2xl border border-border p-3.5 sm:rounded-[1.25rem] sm:p-4"
+          >
+            <div className="h-2.5 w-28 animate-pulse rounded bg-secondary" />
+            <div className="h-2 w-full animate-pulse rounded-full bg-secondary" />
+            <div className="h-14 w-full animate-pulse rounded-xl bg-secondary/70" />
+          </div>
+        ))}
+      </div>
     </section>
   )
 }
@@ -313,52 +376,179 @@ function ProgressBar({
   )
 }
 
-function BillsCard({ insights }: { insights: MonthInsights }) {
+type DueItem = { transaction: Transaction; overdue: boolean }
+
+/**
+ * Contas a pagar do mês. No mês atual separa atrasadas (de qualquer mês), as que vencem até
+ * domingo e o resto do mês; nos outros meses, pendentes e atrasadas daquele mês.
+ */
+function BillsCard({
+  insights,
+  period,
+  transactions,
+  week,
+  weekLoading,
+}: {
+  insights: MonthInsights
+  period: Period
+  transactions: Transaction[]
+  week: WeekDue | null
+  weekLoading: boolean
+}) {
   const { bills } = insights
   const total = bills.paidCount + bills.pendingCount
+  const byDueDate = (a: Transaction, b: Transaction) =>
+    (a.dueDate ?? "").localeCompare(b.dueDate ?? "")
+  const monthPending = transactions
+    .filter(
+      (t) =>
+        t.type === "EXPENSE" &&
+        !t.isClearedByInvoice &&
+        t.dueDate &&
+        t.paymentStatus !== "PAID"
+    )
+    .sort(byDueDate)
+  const sum = (items: Transaction[]) =>
+    items.reduce((acc, item) => acc + Number(item.amount || 0), 0)
+
+  let stats: Array<{ label: string; value: number; count: number; tone: "negative" | "neutral" | "positive" }>
+  let items: DueItem[]
+  let overdueFromOtherMonths = false
+
+  if (week) {
+    const later = monthPending.filter((t) => (t.dueDate ?? "") > week.to)
+    overdueFromOtherMonths = week.overdue.some(
+      (t) => !(t.referenceDate ?? "").startsWith(period.id)
+    )
+    stats = [
+      {
+        label: "Atrasadas",
+        value: week.overdueTotal,
+        count: week.overdue.length,
+        tone: week.overdue.length > 0 ? "negative" : "neutral",
+      },
+      { label: "Até domingo", value: week.upcomingTotal, count: week.upcoming.length, tone: "neutral" },
+      { label: "Restante", value: sum(later), count: later.length, tone: "neutral" },
+    ]
+    items = [
+      ...week.overdue.map((transaction) => ({ transaction, overdue: true })),
+      ...week.upcoming.map((transaction) => ({ transaction, overdue: false })),
+      ...later.map((transaction) => ({ transaction, overdue: false })),
+    ]
+  } else {
+    const overdue = monthPending.filter((t) => getTransactionDueAlert(t) === "overdue")
+    const pending = monthPending.filter((t) => getTransactionDueAlert(t) !== "overdue")
+    stats = [
+      { label: "Pagas", value: bills.paidTotal, count: bills.paidCount, tone: "positive" },
+      { label: "Pendentes", value: sum(pending), count: pending.length, tone: "neutral" },
+      {
+        label: "Atrasadas",
+        value: sum(overdue),
+        count: overdue.length,
+        tone: overdue.length > 0 ? "negative" : "neutral",
+      },
+    ]
+    items = [
+      ...overdue.map((transaction) => ({ transaction, overdue: true })),
+      ...pending.map((transaction) => ({ transaction, overdue: false })),
+    ]
+  }
+
+  const visibleItems = items.slice(0, 5)
 
   return (
-    <SummaryCard title="Contas do mês" icon={<CheckCircle2 size={14} />}>
-      {total === 0 ? (
+    <SummaryCard title="Contas a pagar" icon={<CalendarClock size={14} />}>
+      {total === 0 && items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nenhuma despesa com vencimento neste mês.
         </p>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-sm text-foreground">
-              <span className="font-semibold">{bills.paidCount}</span> de {total}{" "}
-              pagas
-            </p>
-            <p className="text-sm font-semibold text-foreground">
-              {formatPercent(bills.paidRatio)}
-            </p>
-          </div>
-          <ProgressBar
-            value={bills.paidRatio ?? 0}
-            className="bg-emerald-500"
-            label="Contas pagas no mês"
-          />
-          <dl className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <dt className="text-xs text-muted-foreground">Pago</dt>
-              <dd className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(bills.paidTotal)}
-              </dd>
+          {total > 0 ? (
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <p className="text-foreground">
+                  <span className="font-semibold">{bills.paidCount}</span> de {total}{" "}
+                  pagas no mês
+                </p>
+                <p className="font-semibold text-foreground">
+                  {formatPercent(bills.paidRatio)}
+                </p>
+              </div>
+              <ProgressBar
+                value={bills.paidRatio ?? 0}
+                className="bg-emerald-500"
+                label="Contas pagas no mês"
+              />
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">A pagar</dt>
-              <dd className="font-semibold text-foreground">
-                {formatCurrency(bills.pendingTotal)}
-              </dd>
-            </div>
+          ) : null}
+
+          <dl className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-secondary/40">
+            {stats.map((stat) => (
+              <div key={stat.label} className="min-w-0 px-2 py-1.5 sm:px-3">
+                <dt className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+                  {stat.label}
+                </dt>
+                <dd
+                  className={cn(
+                    "text-[13px] font-semibold whitespace-nowrap tabular-nums sm:text-sm",
+                    stat.tone === "negative" && "text-rose-600 dark:text-rose-400",
+                    stat.tone === "positive" && "text-emerald-600 dark:text-emerald-400",
+                    stat.tone === "neutral" && "text-foreground"
+                  )}
+                >
+                  {formatCurrency(stat.value)}
+                </dd>
+                <dd className="text-[11px] text-muted-foreground">
+                  {stat.count} {stat.count === 1 ? "conta" : "contas"}
+                </dd>
+              </div>
+            ))}
           </dl>
-          {bills.overdueCount > 0 ? (
-            <p className="flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
-              <AlertTriangle size={14} aria-hidden="true" />
-              {bills.overdueCount}{" "}
-              {bills.overdueCount === 1 ? "atrasada" : "atrasadas"} ·{" "}
-              {formatCurrency(bills.overdueTotal)}
+
+          {week && weekLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando vencimentos...</p>
+          ) : visibleItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nada pendente.</p>
+          ) : (
+            <ul className="divide-y divide-border rounded-xl border border-border">
+              {visibleItems.map(({ transaction, overdue }) => (
+                <li
+                  key={transaction.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {transaction.description}
+                    </p>
+                    <p
+                      className={cn(
+                        "flex items-center gap-1 text-[11px]",
+                        overdue
+                          ? "font-semibold text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {overdue ? <AlertTriangle size={11} aria-hidden="true" /> : null}
+                      {overdue ? "Venceu" : "Vence"} {formatDateOnly(transaction.dueDate).slice(0, 5)}
+                      {overdue && !(transaction.referenceDate ?? "").startsWith(period.id)
+                        ? ` · ${formatDateOnly(transaction.referenceDate).slice(3)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
+                    {formatCurrency(transaction.amount)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {items.length > visibleItems.length || overdueFromOtherMonths ? (
+            <p className="text-[11px] text-muted-foreground">
+              {items.length > visibleItems.length
+                ? `+${items.length - visibleItems.length} no painel de transações. `
+                : ""}
+              {overdueFromOtherMonths ? "Atrasadas inclui contas de meses anteriores." : ""}
             </p>
           ) : null}
         </div>
@@ -414,158 +604,5 @@ function SpendingCard({ insights }: { insights: MonthInsights }) {
         </div>
       </div>
     </SummaryCard>
-  )
-}
-
-function ResponsibleCard({ insights }: { insights: MonthInsights }) {
-  return (
-    <SummaryCard title="Gastos por responsável" icon={<Wallet size={14} />}>
-      <ul className="space-y-2.5">
-        {insights.byResponsible.map((item) => (
-          <li key={item.id}>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="truncate text-foreground">{item.label}</span>
-              <span className="font-semibold text-foreground">
-                {formatCurrency(item.total)}
-              </span>
-            </div>
-            <div className="mt-1">
-              <ProgressBar value={item.share} label={`Parte de ${item.label}`} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </SummaryCard>
-  )
-}
-
-function CommittedCard({ insights }: { insights: MonthInsights }) {
-  const rate = insights.committedRate
-  return (
-    <SummaryCard title="Renda comprometida" icon={<Wallet size={14} />}>
-      {rate === null ? (
-        <p className="text-sm text-muted-foreground">Sem receitas no mês.</p>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-2xl font-semibold text-foreground">
-            {formatPercent(rate)}
-          </p>
-          <ProgressBar
-            value={rate}
-            className={rate > 1 ? "bg-rose-500" : rate > 0.8 ? "bg-amber-500" : "bg-primary"}
-            label="Despesas sobre receitas"
-          />
-          <p className="text-xs text-muted-foreground">
-            {rate > 1
-              ? "As despesas passaram das receitas."
-              : "Das receitas do mês já vão para despesas."}
-          </p>
-        </div>
-      )}
-    </SummaryCard>
-  )
-}
-
-function WeekDueBlock({
-  week,
-  loading,
-}: {
-  week: ReturnType<typeof buildWeekDue>
-  loading: boolean
-}) {
-  const items = [...week.upcoming].slice(0, 6)
-
-  return (
-    <div className="rounded-[1.25rem] border border-border bg-secondary/35 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <CalendarClock size={16} className="text-primary" aria-hidden="true" />
-          <p className="text-sm font-semibold text-foreground">Esta semana</p>
-          <p className="text-xs text-muted-foreground">
-            {formatDateOnly(week.from)} – {formatDateOnly(week.to)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <WeekStat label="A pagar" value={formatCurrency(week.upcomingTotal)} count={week.upcoming.length} />
-        <WeekStat
-          label="Pagas"
-          value={formatCurrency(week.paidTotal)}
-          count={week.paid.length}
-          tone="positive"
-        />
-        <WeekStat
-          label="Atrasadas"
-          value={formatCurrency(week.overdueTotal)}
-          count={week.overdue.length}
-          tone={week.overdue.length > 0 ? "negative" : "neutral"}
-        />
-      </div>
-
-      <div className="mt-3">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Carregando vencimentos...</p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nada a pagar de hoje até domingo.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border bg-card/80">
-            {items.map((transaction) => (
-              <li
-                key={transaction.id}
-                className="flex items-center justify-between gap-3 px-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {transaction.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Vence {formatDateOnly(transaction.dueDate)}
-                  </p>
-                </div>
-                <p className="shrink-0 text-sm font-semibold text-rose-600 dark:text-rose-400">
-                  {formatCurrency(transaction.amount)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function WeekStat({
-  label,
-  value,
-  count,
-  tone = "neutral",
-}: {
-  label: string
-  value: string
-  count: number
-  tone?: "positive" | "negative" | "neutral"
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card/80 px-2.5 py-2">
-      <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "mt-0.5 text-sm font-semibold sm:text-base",
-          tone === "positive" && "text-emerald-600 dark:text-emerald-400",
-          tone === "negative" && "text-rose-600 dark:text-rose-400",
-          tone === "neutral" && "text-foreground"
-        )}
-      >
-        {value}
-      </p>
-      <p className="text-[11px] text-muted-foreground">
-        {count} {count === 1 ? "conta" : "contas"}
-      </p>
-    </div>
   )
 }

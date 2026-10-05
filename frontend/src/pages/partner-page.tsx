@@ -1,7 +1,7 @@
 import { Users } from "lucide-react"
 
 import { Select } from "@/components/ui/select.tsx"
-import { useDashboard } from "@/features/finance/hooks.ts"
+import { usePlanContext } from "@/features/finance/hooks.ts"
 import { PlanParticipantsManager } from "@/features/finance/managers.tsx"
 
 export function PartnerPage() {
@@ -12,7 +12,7 @@ export function PartnerPage() {
     isPlanOwner,
     selectedPlanId,
     setSelectedPlanId,
-  } = useDashboard()
+  } = usePlanContext()
 
   return (
     <div className="space-y-6">

@@ -10,6 +10,13 @@
   --background: #f4f7fb;
   --foreground: #0f172a;
   --card: #ffffff;
+  /* Fatias do gráfico de categorias (paleta categórica validada para daltonismo; 5 + "Outras"). */
+  --chart-cat-1: #2a78d6;
+  --chart-cat-2: #eb6834;
+  --chart-cat-3: #1baf7a;
+  --chart-cat-4: #eda100;
+  --chart-cat-5: #e87ba4;
+  --chart-cat-other: #94a3b8;
   --card-foreground: #111827;
   --popover: #ffffff;
   --popover-foreground: #111827;
@@ -46,6 +53,12 @@
   --background: #08111f;
   --foreground: #e5eefc;
   --card: #0f1b2d;
+  --chart-cat-1: #3987e5;
+  --chart-cat-2: #d95926;
+  --chart-cat-3: #199e70;
+  --chart-cat-4: #c98500;
+  --chart-cat-5: #d55181;
+  --chart-cat-other: #64748b;
   --card-foreground: #f8fafc;
   --popover: #0f1b2d;
   --popover-foreground: #f8fafc;

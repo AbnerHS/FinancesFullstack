@@ -3,13 +3,12 @@ import useEmblaCarousel from "embla-carousel-react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import type { Period } from "@/features/finance/types.ts"
-import { formatCurrency, formatMonthYear } from "@/features/finance/utils.ts"
+import { formatMonthYear } from "@/features/finance/utils.ts"
 import { cn } from "@/lib/utils"
 
 type CarouselPanel = {
   period: Period
   label: string
-  stats: { balance: number }
 }
 
 // Arrastar que começa nesses elementos não move o carrossel (alça do dnd-kit, formulários do painel).
@@ -21,8 +20,9 @@ const isEditable = (target: EventTarget | null) =>
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
 
 /**
- * Carrossel dos meses do intervalo: um mês por vez (o resumo acompanha o mês visível), com
- * arrastar/swipe, setas laterais, chips de mês, barra de navegação no rodapé (mobile) e teclado.
+ * Carrossel de meses: um mês por vez (o resumo acompanha o mês visível), com arrastar/swipe,
+ * setas laterais, barra de navegação no rodapé (mobile) e teclado. A página passa só o mês ativo
+ * e os vizinhos; ao parar num vizinho, a janela se recentra nele.
  */
 export function MonthCarousel<Panel extends CarouselPanel>({
   panels,
@@ -33,7 +33,8 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   panels: Panel[]
   activeId: string | null
   onActiveIdChange: (periodId: string) => void
-  renderPanel: (panel: Panel) => ReactNode
+  /** `near`: o mês parado ou um vizinho dele; os demais podem renderizar algo leve (esqueleto). */
+  renderPanel: (panel: Panel, near: boolean) => ReactNode
 }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({
     align: "start",
@@ -49,10 +50,10 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   useEffect(() => {
     settledIndexRef.current = settledIndex
   }, [settledIndex])
-  const [canPrev, setCanPrev] = useState(false)
-  const [canNext, setCanNext] = useState(false)
+  // Toques de seta na borda antes de a janela se recentrar (+ para frente, - para trás):
+  // aplicados logo depois.
+  const pendingMoveRef = useRef(0)
   const sectionRef = useRef<HTMLDivElement | null>(null)
-  const chipsRef = useRef<HTMLDivElement | null>(null)
   const [inViewport, setInViewport] = useState(false)
 
   const panelIds = panels.map((panel) => panel.period.id).join("|")
@@ -70,8 +71,6 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       // Destino ainda oculto (swipes muito rápidos): mostra já, sem esperar o carrossel parar.
       if (Math.abs(index - settledIndexRef.current) > VISIBLE_RADIUS) setSettledIndex(index)
       setSelectedIndex(index)
-      setCanPrev(emblaApi.canScrollPrev())
-      setCanNext(emblaApi.canScrollNext())
     }
     // Avisar a página re-renderiza o dashboard inteiro (resumo, painéis, gráficos). Feito no meio
     // da animação, isso travava o slide; por isso só acontece quando o carrossel para.
@@ -154,23 +153,15 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     setSettledIndex(index)
     const id = ids[index]
     if (id) onActiveIdChangeRef.current(id)
+    const pending = pendingMoveRef.current
+    if (pending !== 0) {
+      const target = Math.min(Math.max(index + pending, 0), ids.length - 1)
+      pendingMoveRef.current = pending - (target - index)
+      emblaApi.scrollTo(target)
+    }
     // activeId fica de fora de propósito: só reposiciona quando a lista de meses muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emblaApi, panelIds])
-
-  // Chip ativo centralizado na faixa de meses. Rolagem só horizontal da faixa: scrollIntoView
-  // também rolaria a página até o carrossel ao carregar.
-  useEffect(() => {
-    const list = chipsRef.current
-    const chip = list?.querySelector<HTMLElement>(`[data-chip-index="${selectedIndex}"]`)
-    if (!list || !chip) return
-    const listRect = list.getBoundingClientRect()
-    const chipRect = chip.getBoundingClientRect()
-    list.scrollTo({
-      left: list.scrollLeft + chipRect.left - listRect.left - (list.clientWidth - chipRect.width) / 2,
-      behavior: "smooth",
-    })
-  }, [selectedIndex])
 
   // A barra flutuante do mobile só aparece enquanto o carrossel está na tela.
   useEffect(() => {
@@ -183,11 +174,10 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     return () => observer.disconnect()
   }, [])
 
-  // Todos os meses ficam montados (estado e DOM preservados), mas só o mês parado e os vizinhos
-  // são renderizados: os outros recebem content-visibility: hidden, e o navegador pula layout e
-  // pintura deles. Com o ano inteiro visível (~14 mil nós), o Chrome recalculava as camadas da
-  // árvore toda a cada quadro do slide. Montar/desmontar painéis ao trocar de mês também travava;
-  // trocar a classe não passa pelo React dos painéis (memo).
+  // Meses além dos vizinhos do mês parado recebem content-visibility: hidden (o navegador pula
+  // layout e pintura deles): com muitos meses montados, o Chrome recalculava as camadas da árvore
+  // toda a cada quadro do slide. Hoje o dashboard passa só três meses, mas o carrossel continua
+  // aguentando mais.
   // Memorizados: selectedIndex muda no início da animação e não deve re-renderizar os painéis.
   const slides = useMemo(
     () =>
@@ -201,27 +191,26 @@ export function MonthCarousel<Panel extends CarouselPanel>({
           )}
           role="group"
           aria-roledescription="slide"
-          aria-label={`${panel.label} (${index + 1} de ${panels.length})`}
+          aria-label={panel.label}
         >
-          {renderPanel(panel)}
+          {renderPanel(panel, Math.abs(index - settledIndex) <= VISIBLE_RADIUS)}
         </div>
       )),
     [panels, renderPanel, settledIndex]
   )
 
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi])
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi])
-  // Salto pelos chips para um mês distante: mostra o destino antes de animar, para não deslizar
-  // até um espaço vazio.
-  const scrollTo = useCallback(
-    (index: number) => {
-      if (!emblaApi) return
-      setSettledIndex(index)
-      requestAnimationFrame(() => emblaApi.scrollTo(index))
-    },
-    [emblaApi]
-  )
-
+  // A página sempre tem mais meses (a janela se recentra ao parar), então as setas nunca ficam
+  // desabilitadas: na borda, o toque espera a janela andar.
+  const scrollPrev = useCallback(() => {
+    if (!emblaApi) return
+    if (emblaApi.canScrollPrev()) emblaApi.scrollPrev()
+    else pendingMoveRef.current -= 1
+  }, [emblaApi])
+  const scrollNext = useCallback(() => {
+    if (!emblaApi) return
+    if (emblaApi.canScrollNext()) emblaApi.scrollNext()
+    else pendingMoveRef.current += 1
+  }, [emblaApi])
   if (panels.length === 0) {
     return null
   }
@@ -235,7 +224,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       className="space-y-3 outline-none"
       role="region"
       aria-roledescription="carrossel"
-      aria-label="Meses do intervalo"
+      aria-label="Transações por mês"
       tabIndex={-1}
       onKeyDown={(event) => {
         if (isEditable(event.target)) return
@@ -248,51 +237,6 @@ export function MonthCarousel<Panel extends CarouselPanel>({
         }
       }}
     >
-      {multiple ? (
-        <div
-          ref={chipsRef}
-          className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0"
-          role="tablist"
-          aria-label="Escolher mês"
-        >
-          {panels.map((panel, index) => {
-            const active = index === selectedIndex
-            return (
-              <button
-                key={panel.period.id}
-                type="button"
-                role="tab"
-                aria-selected={index === selectedIndex}
-                data-chip-index={index}
-                onClick={() => scrollTo(index)}
-                className={cn(
-                  "flex shrink-0 flex-col items-start rounded-2xl border px-3 py-2 text-left transition",
-                  active
-                    ? "border-primary/30 bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(37,99,235,0.22)]"
-                    : "border-border bg-card/80 text-foreground hover:border-primary/40"
-                )}
-              >
-                <span className="text-xs font-semibold capitalize">
-                  {formatMonthYear(panel.period)}
-                </span>
-                <span
-                  className={cn(
-                    "text-[11px]",
-                    active
-                      ? "text-primary-foreground/80"
-                      : panel.stats.balance < 0
-                        ? "text-rose-600 dark:text-rose-400"
-                        : "text-muted-foreground"
-                  )}
-                >
-                  {formatCurrency(panel.stats.balance)}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
-
       <div className="relative">
         <div className="overflow-hidden" ref={emblaRef}>
           {/* items-start: cada mês com a sua altura (a altura acompanha o mês visível). */}
@@ -303,8 +247,8 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 
         {multiple ? (
           <>
-            <SideArrow side="left" onClick={scrollPrev} disabled={!canPrev} />
-            <SideArrow side="right" onClick={scrollNext} disabled={!canNext} />
+            <SideArrow side="left" onClick={scrollPrev} />
+            <SideArrow side="right" onClick={scrollNext} />
           </>
         ) : null}
       </div>
@@ -316,16 +260,13 @@ export function MonthCarousel<Panel extends CarouselPanel>({
             inViewport ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
           )}
         >
-          <NavButton onClick={scrollPrev} disabled={!canPrev} label="Mês anterior">
+          <NavButton onClick={scrollPrev} label="Mês anterior">
             <ChevronLeft size={18} />
           </NavButton>
           <p className="min-w-0 truncate text-center text-sm font-semibold capitalize text-foreground">
             {activePanel ? formatMonthYear(activePanel.period) : ""}
-            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-              {selectedIndex + 1}/{panels.length}
-            </span>
           </p>
-          <NavButton onClick={scrollNext} disabled={!canNext} label="Próximo mês">
+          <NavButton onClick={scrollNext} label="Próximo mês">
             <ChevronRight size={18} />
           </NavButton>
         </div>
@@ -338,11 +279,9 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 function SideArrow({
   side,
   onClick,
-  disabled,
 }: {
   side: "left" | "right"
   onClick: () => void
-  disabled: boolean
 }) {
   return (
     <div
@@ -363,10 +302,9 @@ function SideArrow({
         <button
           type="button"
           onClick={onClick}
-          disabled={disabled}
           aria-label={side === "left" ? "Mês anterior" : "Próximo mês"}
           className={cn(
-            "pointer-events-auto inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-[0_14px_32px_rgba(15,23,42,0.18)] transition hover:border-primary/40 hover:text-primary disabled:pointer-events-none disabled:opacity-0",
+            "pointer-events-auto inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-[0_14px_32px_rgba(15,23,42,0.18)] transition hover:border-primary/40 hover:text-primary",
             side === "left" ? "-translate-x-1/2" : "translate-x-1/2"
           )}
         >
@@ -379,12 +317,10 @@ function SideArrow({
 
 function NavButton({
   onClick,
-  disabled,
   label,
   children,
 }: {
   onClick: () => void
-  disabled: boolean
   label: string
   children: ReactNode
 }) {
@@ -392,9 +328,8 @@ function NavButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
       aria-label={label}
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition hover:text-primary disabled:opacity-35"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition hover:text-primary"
     >
       {children}
     </button>

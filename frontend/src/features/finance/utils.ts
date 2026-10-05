@@ -1,5 +1,4 @@
 import type {
-  CategorySpending,
   PaymentStatus,
   Period,
   Transaction,
@@ -69,6 +68,14 @@ export function buildPlanMonths(planId: string, monthsWithData: string[]): Perio
     }
   }
   return months
+}
+
+/** Mês `offset` meses antes/depois (o dashboard navega livremente, fora da lista do plano). */
+export function shiftPeriod(period: Period, offset: number): Period {
+  const date = new Date(period.year, period.month - 1 + offset, 1)
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  return { id: toMonthId(year, month), planId: period.planId, year, month }
 }
 
 /** Mesmo mês/dia em outro mês, limitando o dia ao fim do mês (31/01 → 28/02). */
@@ -254,69 +261,6 @@ export function getTransactionDueAlert(transaction: {
   return "none" satisfies DueAlertLevel
 }
 
-export function buildComparisonChartData(
-  panels: Array<{
-    period: Period
-    label: string
-    stats: { incomes: number; expenses: number; balance: number }
-  }>
-) {
-  return panels.map((panel) => ({
-    id: panel.period.id,
-    label: panel.label,
-    incomes: panel.stats.incomes,
-    expenses: panel.stats.expenses,
-    balance: panel.stats.balance,
-  }))
-}
-
-export function buildCategoryChartData({
-  categorySpending,
-  filteredTransactions,
-  responsibleFilter,
-}: {
-  categorySpending: CategorySpending[]
-  filteredTransactions: Transaction[]
-  responsibleFilter: string
-}) {
-  if (!responsibleFilter) {
-    return categorySpending
-  }
-
-  const totals = new Map<string, number>()
-  filteredTransactions
-    .filter(
-      (transaction) =>
-        transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
-    )
-    .forEach((transaction) => {
-      const label = transaction.category?.name || "Sem categoria"
-      totals.set(
-        label,
-        (totals.get(label) ?? 0) + Number(transaction.amount || 0)
-      )
-    })
-
-  return [...totals.entries()]
-    .map(([category, totalAmount]) => ({ category, totalAmount }))
-    .sort((a, b) => b.totalAmount - a.totalAmount)
-}
-
-export function computeVariation(items: Array<{ balance: number }>) {
-  if (items.length < 2) {
-    return null
-  }
-
-  const previous = Number(items[0]?.balance || 0)
-  const current = Number(items[items.length - 1]?.balance || 0)
-
-  if (previous === 0) {
-    return current === 0 ? 0 : 100
-  }
-
-  return ((current - previous) / Math.abs(previous)) * 100
-}
-
 export function calculateStats(
   transactions: Transaction[],
   invoicesAmount: number
@@ -407,7 +351,6 @@ export type MonthInsights = {
   daily: { kind: "available" | "average"; value: number; days: number }
   topCategory: { name: string; total: number; share: number } | null
   invoices: { total: number; share: number | null; count: number }
-  byResponsible: Array<{ id: string; label: string; total: number; share: number }>
 }
 
 export function buildMonthInsights({
@@ -416,7 +359,6 @@ export function buildMonthInsights({
   transactions,
   invoices,
   previousStats,
-  responsibleOptions,
   today = todayIso(),
 }: {
   period: Period
@@ -424,7 +366,6 @@ export function buildMonthInsights({
   transactions: Transaction[]
   invoices: Array<{ amount: number | string }>
   previousStats: { incomes: number; expenses: number } | null
-  responsibleOptions: Array<{ id: string; label: string }>
   today?: string
 }): MonthInsights {
   const { incomes, expenses, balance } = stats
@@ -455,21 +396,6 @@ export function buildMonthInsights({
 
   const invoicesTotal = sum(invoices)
 
-  const responsibleTotals = new Map<string, number>()
-  transactions.filter(isCountedExpense).forEach((t) => {
-    const id = t.responsibleUserId || ""
-    responsibleTotals.set(id, (responsibleTotals.get(id) ?? 0) + Number(t.amount || 0))
-  })
-  const responsibleExpenses = [...responsibleTotals.values()].reduce((a, b) => a + b, 0)
-  const byResponsible = [...responsibleTotals.entries()]
-    .map(([id, total]) => ({
-      id: id || "__unassigned__",
-      label: responsibleOptions.find((option) => option.id === id)?.label || "Geral",
-      total,
-      share: responsibleExpenses > 0 ? total / responsibleExpenses : 0,
-    }))
-    .sort((a, b) => b.total - a.total)
-
   return {
     incomes,
     expenses,
@@ -497,7 +423,6 @@ export function buildMonthInsights({
       share: expenses > 0 ? invoicesTotal / expenses : null,
       count: invoices.length,
     },
-    byResponsible,
   }
 }
 
@@ -554,5 +479,79 @@ export function formatPercent(value: number | null | undefined, fractionDigits =
   if (value == null || !Number.isFinite(value)) {
     return "--"
   }
-  return `${(value * 100).toFixed(fractionDigits)}%`
+  const fixed = (value * 100).toFixed(fractionDigits)
+  // -0.4% arredonda para "-0%": mostra "0%".
+  return `${Number(fixed) === 0 ? (0).toFixed(fractionDigits) : fixed}%`
+}
+
+type StatsPanel = {
+  transactions: Transaction[]
+  invoices: Array<{ amount: number | string }>
+  stats: { incomes: number; expenses: number; balance: number }
+}
+
+/**
+ * Painéis vistos por um responsável: só as transações dele, e as faturas (que não têm dono) ficam
+ * fora dos totais. Sem filtro, devolve os mesmos painéis.
+ */
+export function filterPanelsByResponsible<Panel extends StatsPanel>(
+  panels: Panel[],
+  responsibleId: string
+): Panel[] {
+  if (!responsibleId) {
+    return panels
+  }
+
+  return panels.map((panel) => {
+    const transactions = panel.transactions.filter(
+      (transaction) => transaction.responsibleUserId === responsibleId
+    )
+    return { ...panel, transactions, stats: calculateStats(transactions, 0) }
+  })
+}
+
+export type SpendingItem = { id: string; label: string; total: number; share: number }
+
+const withShares = (totals: Map<string, { label: string; total: number }>): SpendingItem[] => {
+  const sum = [...totals.values()].reduce((total, item) => total + item.total, 0)
+  return [...totals.entries()]
+    .map(([id, item]) => ({ id, ...item, share: sum > 0 ? item.total / sum : 0 }))
+    .filter((item) => item.total > 0)
+    .sort((a, b) => b.total - a.total)
+}
+
+/** Despesas por categoria; faturas de cartão entram juntas como "Cartão de Crédito". */
+export function buildCategorySpending(panels: StatsPanel[], includeInvoices: boolean) {
+  const totals = new Map<string, { label: string; total: number }>()
+  const add = (label: string, amount: number) => {
+    const current = totals.get(label)
+    totals.set(label, { label, total: (current?.total ?? 0) + amount })
+  }
+
+  panels.forEach((panel) => {
+    panel.transactions.filter(isCountedExpense).forEach((transaction) => {
+      add(transaction.category?.name || "Sem categoria", Number(transaction.amount || 0))
+    })
+    if (includeInvoices) {
+      panel.invoices.forEach((invoice) => add("Cartão de Crédito", Number(invoice.amount || 0)))
+    }
+  })
+
+  return withShares(totals)
+}
+
+/** Despesas por responsável (transações sem responsável ficam em "Geral"). */
+export function buildResponsibleSpending(
+  transactions: Transaction[],
+  responsibleOptions: Array<{ id: string; label: string }>
+) {
+  const totals = new Map<string, { label: string; total: number }>()
+  transactions.filter(isCountedExpense).forEach((transaction) => {
+    const id = transaction.responsibleUserId || "__unassigned__"
+    const label =
+      responsibleOptions.find((option) => option.id === transaction.responsibleUserId)?.label ||
+      "Geral"
+    totals.set(id, { label, total: (totals.get(id)?.total ?? 0) + Number(transaction.amount || 0) })
+  })
+  return withShares(totals)
 }

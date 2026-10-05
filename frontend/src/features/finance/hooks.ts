@@ -32,15 +32,13 @@ import type {
 import {
   addDaysIso,
   addMonthsToDate,
-  buildCategoryChartData,
-  buildComparisonChartData,
   buildPlanMonths,
   calculateStats,
-  computeVariation,
   findDefaultPeriod,
   formatMonthYear,
   monthsBetween,
   parseCurrencyInput,
+  shiftPeriod,
   todayIso,
   weekBounds,
 } from "@/features/finance/utils.ts"
@@ -99,12 +97,16 @@ function buildRecurringGroupPayload({
   return groupPayload
 }
 
+/**
+ * Intervalo válido dentro de `periods`. Sem seleção: os últimos 12 meses até o mês atual, sem os
+ * meses vazios do começo (plano novo não abre com meses zerados puxando as médias para baixo).
+ */
 function normalizePeriodRange(
   range: PeriodRange,
   periods: Period[],
-  fallbackPeriodId: string | null
+  monthsWithData: string[]
 ) {
-  if (periods.length === 0 || !fallbackPeriodId) {
+  if (periods.length === 0) {
     return EMPTY_PERIOD_RANGE
   }
 
@@ -118,36 +120,28 @@ function normalizePeriodRange(
       ? range.endPeriodId
       : null
 
-  // Sem seleção válida: o mês padrão com o anterior e o próximo, quando existem.
   if (!startCandidate && !endCandidate) {
-    const fallbackIndex = Math.max(periodIds.indexOf(fallbackPeriodId), 0)
+    const currentIndex = Math.max(
+      periodIds.indexOf(findDefaultPeriod(periods)?.id ?? ""),
+      0
+    )
+    const firstDataIndex = periodIds.findIndex((id) => monthsWithData.includes(id))
+    const startIndex = Math.min(
+      Math.max(currentIndex - 11, firstDataIndex, 0),
+      currentIndex
+    )
     return {
-      startPeriodId: periodIds[Math.max(fallbackIndex - 1, 0)],
-      endPeriodId: periodIds[Math.min(fallbackIndex + 1, periodIds.length - 1)],
+      startPeriodId: periodIds[startIndex],
+      endPeriodId: periodIds[currentIndex],
     }
   }
 
-  const nextStartPeriodId = startCandidate ?? endCandidate ?? fallbackPeriodId
-  const nextEndPeriodId = endCandidate ?? startCandidate ?? fallbackPeriodId
-  const startIndex = periodIds.indexOf(nextStartPeriodId)
-  const endIndex = periodIds.indexOf(nextEndPeriodId)
+  const nextStartPeriodId = (startCandidate ?? endCandidate)!
+  const nextEndPeriodId = (endCandidate ?? startCandidate)!
 
-  if (startIndex === -1 || endIndex === -1) {
-    return {
-      startPeriodId: fallbackPeriodId,
-      endPeriodId: fallbackPeriodId,
-    }
-  }
-
-  return startIndex <= endIndex
-    ? {
-        startPeriodId: nextStartPeriodId,
-        endPeriodId: nextEndPeriodId,
-      }
-    : {
-        startPeriodId: nextEndPeriodId,
-        endPeriodId: nextStartPeriodId,
-      }
+  return periodIds.indexOf(nextStartPeriodId) <= periodIds.indexOf(nextEndPeriodId)
+    ? { startPeriodId: nextStartPeriodId, endPeriodId: nextEndPeriodId }
+    : { startPeriodId: nextEndPeriodId, endPeriodId: nextStartPeriodId }
 }
 
 export function usePlans() {
@@ -226,7 +220,11 @@ export function useTransactionCategories() {
   })
 }
 
-export function useDashboard() {
+/**
+ * Contexto comum das telas do plano: planos, plano ativo, meses selecionáveis, participantes,
+ * cartões e categorias. Não busca transações (cada tela decide quais meses carregar).
+ */
+export function usePlanContext() {
   const { data: plans = [], isLoading: plansLoading } = usePlans()
   const user = useAuthStore((state) => state.user)
   const isAuthenticated = Boolean(user?.id)
@@ -239,9 +237,6 @@ export function useDashboard() {
   )
   const setSelectedPlanId = useDashboardStore(
     (state) => state.setSelectedPlanId
-  )
-  const setSelectedPeriodRange = useDashboardStore(
-    (state) => state.setSelectedPeriodRange
   )
   const clearSelections = useDashboardStore((state) => state.clearSelections)
 
@@ -291,33 +286,199 @@ export function useDashboard() {
 
   // Já vêm em ordem cronológica.
   const {
-    data: sortedPeriods,
+    data: periods,
     monthSummaries,
     isLoading: periodsLoading,
     isFetched: periodsFetched,
   } = usePeriods(activePlan)
+  const defaultMonthId = useMemo(
+    () => findDefaultPeriod(periods)?.id ?? null,
+    [periods]
+  )
+
+  const { data: participants = [] } = useQuery({
+    queryKey: financeKeys.participants(activePlan?.id),
+    queryFn: () => planService.getParticipants(activePlan?.id),
+    enabled: Boolean(activePlan?.id),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const responsibleOptions = useMemo<ResponsibleOption[]>(() => {
+    return participants.map((participant) => ({
+      id: participant.userId,
+      label:
+        participant.name ||
+        (participant.role === "OWNER" ? "Owner" : "Parceiro"),
+    }))
+  }, [participants])
+
+  const { data: creditCards = [] } = useQuery(
+    financeQueries.planCards(activePlan)
+  )
+  const { data: ownCreditCards = [] } = useOwnCreditCards()
+  const { data: transactionCategories = [] } = useTransactionCategories()
+  const isPlanOwner = Boolean(
+    activePlan?.ownerId && user?.id && activePlan.ownerId === user.id
+  )
+
+  return {
+    plans,
+    plansLoading,
+    activePlan,
+    selectedPlanId,
+    setSelectedPlanId,
+    periods,
+    monthSummaries,
+    periodsLoading,
+    periodsFetched,
+    defaultMonthId,
+    participants,
+    responsibleOptions,
+    creditCards,
+    ownCreditCards,
+    transactionCategories,
+    isPlanOwner,
+    isAuthenticated,
+    userId: user?.id ?? null,
+  }
+}
+
+export type PeriodPanel = PeriodPanelData
+
+/** Transações e faturas de cada mês (uma query por mês, cache compartilhado entre as telas). */
+export function usePeriodPanels(periods: Period[]) {
+  const transactionQueries = useQueries({
+    queries: periods.map((period) => ({
+      queryKey: financeKeys.periodTransactions(period),
+      queryFn: () => periodService.getTransactionsByPeriod(period),
+      staleTime: 1000 * 60 * 2,
+      placeholderData: [] as Transaction[],
+    })),
+  })
+
+  const invoiceQueries = useQueries({
+    queries: periods.map((period) => ({
+      queryKey: financeKeys.periodInvoices(period),
+      queryFn: () => periodService.getInvoicesByPeriod(period),
+      staleTime: 1000 * 60 * 2,
+      placeholderData: [] as Invoice[],
+    })),
+  })
+
+  return useMemo(
+    () =>
+      periods.map((period, index): PeriodPanelData => {
+        const transactionQuery = transactionQueries[index]
+        const invoiceQuery = invoiceQueries[index]
+        const transactions = (transactionQuery?.data ?? []) as Transaction[]
+        const invoices = (invoiceQuery?.data ?? []) as Invoice[]
+
+        return {
+          period,
+          label: formatMonthYear(period),
+          invoices,
+          transactions,
+          stats: calculateStats(
+            transactions,
+            invoices.reduce((total, invoice) => total + Number(invoice.amount || 0), 0)
+          ),
+          // Com placeholderData a query não fica "isLoading": o vazio provisório é o carregamento.
+          transactionsLoading: Boolean(
+            transactionQuery?.isLoading || transactionQuery?.isPlaceholderData
+          ),
+          invoicesLoading: Boolean(invoiceQuery?.isLoading || invoiceQuery?.isPlaceholderData),
+        }
+      }),
+    [invoiceQueries, periods, transactionQueries]
+  )
+}
+
+type PeriodPanelData = {
+  period: Period
+  label: string
+  invoices: Invoice[]
+  transactions: Transaction[]
+  stats: { incomes: number; expenses: number; balance: number }
+  transactionsLoading: boolean
+  invoicesLoading: boolean
+}
+
+/**
+ * Dashboard: um mês por vez, sem limite de intervalo. Carrega o mês ativo e dois de cada lado (o
+ * carrossel desliza para eles sem esperar a rede, e toques rápidos não batem na borda); ao parar
+ * num mês, a janela se recentra nele.
+ * Sem mês escolhido na sessão, abre no mês atual.
+ */
+export function useDashboard() {
+  const context = usePlanContext()
+  const { activePlan } = context
+  const selectedMonthId = useDashboardStore((state) => state.selectedMonthId)
+  const setSelectedMonthId = useDashboardStore((state) => state.setSelectedMonthId)
+
+  const currentMonthId = todayIso().slice(0, 7)
+  const activeMonthId =
+    selectedMonthId && /^\d{4}-\d{2}$/.test(selectedMonthId) ? selectedMonthId : currentMonthId
+
+  const activePeriod = useMemo<Period | null>(() => {
+    if (!activePlan) return null
+    const [year, month] = activeMonthId.split("-").map(Number)
+    return { id: activeMonthId, planId: activePlan.id, year, month }
+  }, [activeMonthId, activePlan])
+  const windowPeriods = useMemo(
+    () =>
+      activePeriod
+        ? [-2, -1, 0, 1, 2].map((offset) => shiftPeriod(activePeriod, offset))
+        : [],
+    [activePeriod]
+  )
+  const periodPanels = usePeriodPanels(windowPeriods)
+
+  return {
+    ...context,
+    activePeriod,
+    goToCurrentMonth: () => setSelectedMonthId(currentMonthId),
+    setSelectedMonthId,
+    periodPanels,
+  }
+}
+
+/** Tela de evolução: intervalo De/Até (salvo no navegador) com os meses carregados. */
+export function useEvolution() {
+  const context = usePlanContext()
+  const {
+    activePlan,
+    periods,
+    monthSummaries,
+    periodsFetched,
+    periodsLoading,
+    isAuthenticated,
+  } = context
+  const selectedStartPeriodId = useDashboardStore(
+    (state) => state.selectedStartPeriodId
+  )
+  const selectedEndPeriodId = useDashboardStore(
+    (state) => state.selectedEndPeriodId
+  )
+  const setSelectedPeriodRange = useDashboardStore(
+    (state) => state.setSelectedPeriodRange
+  )
 
   useEffect(() => {
     if (!isAuthenticated || !activePlan || !periodsFetched || periodsLoading) {
       return
     }
 
-    if (sortedPeriods.length === 0) {
+    if (periods.length === 0) {
       if (selectedStartPeriodId !== null || selectedEndPeriodId !== null) {
         setSelectedPeriodRange(EMPTY_PERIOD_RANGE)
       }
       return
     }
 
-    const defaultPeriodId = findDefaultPeriod(sortedPeriods)?.id ?? null
-    const requestedRange = {
-      startPeriodId: selectedStartPeriodId,
-      endPeriodId: selectedEndPeriodId,
-    }
     const normalizedRange = normalizePeriodRange(
-      requestedRange,
-      sortedPeriods,
-      defaultPeriodId
+      { startPeriodId: selectedStartPeriodId, endPeriodId: selectedEndPeriodId },
+      periods,
+      monthSummaries.map((summary) => summary.month)
     )
 
     if (
@@ -336,12 +497,13 @@ export function useDashboard() {
     selectedEndPeriodId,
     selectedStartPeriodId,
     setSelectedPeriodRange,
-    sortedPeriods,
+    periods,
+    monthSummaries,
   ])
 
   const periodIndexMap = useMemo(
-    () => new Map(sortedPeriods.map((period, index) => [period.id, index])),
-    [sortedPeriods]
+    () => new Map(periods.map((period, index) => [period.id, index])),
+    [periods]
   )
 
   const setSelectedStartPeriodId = useCallback(
@@ -406,201 +568,28 @@ export function useDashboard() {
   )
 
   const selectedPeriods = useMemo(() => {
-    if (!selectedStartPeriodId || !selectedEndPeriodId) {
-      return []
-    }
+    const startIndex = selectedStartPeriodId
+      ? (periodIndexMap.get(selectedStartPeriodId) ?? -1)
+      : -1
+    const endIndex = selectedEndPeriodId
+      ? (periodIndexMap.get(selectedEndPeriodId) ?? -1)
+      : -1
+    return startIndex === -1 || endIndex === -1
+      ? []
+      : periods.slice(startIndex, endIndex + 1)
+  }, [periodIndexMap, periods, selectedEndPeriodId, selectedStartPeriodId])
 
-    const startIndex = sortedPeriods.findIndex(
-      (period) => period.id === selectedStartPeriodId
-    )
-    const endIndex = sortedPeriods.findIndex(
-      (period) => period.id === selectedEndPeriodId
-    )
-
-    if (startIndex === -1 || endIndex === -1) {
-      return []
-    }
-
-    return sortedPeriods.slice(startIndex, endIndex + 1)
-  }, [selectedEndPeriodId, selectedStartPeriodId, sortedPeriods])
-  const selectedPeriodIds = useMemo(
-    () => selectedPeriods.map((period) => period.id),
-    [selectedPeriods]
-  )
-
-  const transactionQueries = useQueries({
-    queries: selectedPeriods.map((period) => ({
-      queryKey: financeKeys.periodTransactions(period),
-      queryFn: () => periodService.getTransactionsByPeriod(period),
-      staleTime: 1000 * 60 * 2,
-      placeholderData: [] as Transaction[],
-    })),
-  })
-
-  const invoiceQueries = useQueries({
-    queries: selectedPeriods.map((period) => ({
-      queryKey: financeKeys.periodInvoices(period),
-      queryFn: () => periodService.getInvoicesByPeriod(period),
-      staleTime: 1000 * 60 * 2,
-      placeholderData: [] as Invoice[],
-    })),
-  })
-
-  const { data: participants = [] } = useQuery({
-    queryKey: financeKeys.participants(activePlan?.id),
-    queryFn: () => planService.getParticipants(activePlan?.id),
-    enabled: Boolean(activePlan?.id),
-    staleTime: 1000 * 60 * 5,
-  })
-
-  const responsibleOptions = useMemo<ResponsibleOption[]>(() => {
-    return participants.map((participant) => ({
-      id: participant.userId,
-      label:
-        participant.name ||
-        (participant.role === "OWNER" ? "Owner" : "Parceiro"),
-    }))
-  }, [participants])
-
-  const periodPanels = useMemo(
-    () =>
-      selectedPeriods.map((period, index) => {
-        const transactions = (transactionQueries[index]?.data ??
-          []) as Transaction[]
-        const invoices = (invoiceQueries[index]?.data ?? []) as Invoice[]
-        const invoicesAmount = invoices.reduce(
-          (total, invoice) => total + Number(invoice.amount || 0),
-          0
-        )
-
-        return {
-          period,
-          label: formatMonthYear(period),
-          invoices,
-          transactions,
-          stats: calculateStats(transactions, invoicesAmount),
-          transactionsLoading: Boolean(transactionQueries[index]?.isLoading),
-          invoicesLoading: Boolean(invoiceQueries[index]?.isLoading),
-        }
-      }),
-    [invoiceQueries, selectedPeriods, transactionQueries]
-  )
-
-  const combinedStats = useMemo(
-    () =>
-      periodPanels.reduce(
-        (acc, panel) => {
-          acc.incomes += panel.stats.incomes
-          acc.expenses += panel.stats.expenses
-          acc.balance += panel.stats.balance
-          return acc
-        },
-        { incomes: 0, expenses: 0, balance: 0 }
-      ),
-    [periodPanels]
-  )
-
-  const categorySpending = useMemo(() => {
-    const totals = new Map<string, number>()
-
-    periodPanels.forEach((panel) => {
-      panel.transactions
-        .filter(
-          (transaction) =>
-            transaction.type === "EXPENSE" && !transaction.isClearedByInvoice
-        )
-        .forEach((transaction) => {
-          const label = transaction.category?.name || "Sem categoria"
-          totals.set(
-            label,
-            (totals.get(label) ?? 0) + Number(transaction.amount || 0)
-          )
-        })
-    })
-
-    const creditCardInvoicesTotal = periodPanels.reduce(
-      (total, panel) =>
-        total +
-        panel.invoices.reduce(
-          (invoiceTotal, invoice) => invoiceTotal + Number(invoice.amount || 0),
-          0
-        ),
-      0
-    )
-
-    if (creditCardInvoicesTotal > 0) {
-      totals.set(
-        "Cartão de Crédito",
-        (totals.get("Cartão de Crédito") ?? 0) + creditCardInvoicesTotal
-      )
-    }
-
-    return [...totals.entries()]
-      .map(([category, totalAmount]) => ({ category, totalAmount }))
-      .sort((a, b) => b.totalAmount - a.totalAmount)
-  }, [periodPanels])
-
-  const allTransactions = useMemo(
-    () => periodPanels.flatMap((panel) => panel.transactions),
-    [periodPanels]
-  )
-
-  const comparisonData = useMemo(
-    () => buildComparisonChartData(periodPanels),
-    [periodPanels]
-  )
-  const variation = useMemo(
-    () => computeVariation(comparisonData),
-    [comparisonData]
-  )
-  const { data: creditCards = [] } = useQuery(
-    financeQueries.planCards(activePlan)
-  )
-  const { data: ownCreditCards = [] } = useOwnCreditCards()
-  const { data: transactionCategories = [] } = useTransactionCategories()
-  const isPlanOwner = Boolean(
-    activePlan?.ownerId && user?.id && activePlan.ownerId === user.id
-  )
+  const periodPanels = usePeriodPanels(selectedPeriods)
 
   return {
-    plans,
-    plansLoading,
-    periods: sortedPeriods,
-    monthSummaries,
-    periodsLoading,
-    selectedPlanId,
-    activePlan,
-    selectedPeriodIds,
+    ...context,
     selectedStartPeriodId,
     selectedEndPeriodId,
-    setSelectedPlanId,
     selectedPeriods,
     setSelectedStartPeriodId,
     setSelectedEndPeriodId,
     setSelectedRange,
     periodPanels,
-    combinedStats,
-    categorySpending,
-    allTransactions,
-    comparisonData,
-    variation,
-    creditCards,
-    ownCreditCards,
-    transactionCategories,
-    participants,
-    isPlanOwner,
-    responsibleOptions,
-    userId: user?.id ?? null,
-    buildCategoryChartData: (responsibleFilter: string) =>
-      buildCategoryChartData({
-        categorySpending,
-        filteredTransactions: allTransactions.filter(
-          (transaction) =>
-            !responsibleFilter ||
-            transaction.responsibleUserId === responsibleFilter
-        ),
-        responsibleFilter,
-      }),
   }
 }
 
@@ -608,19 +597,11 @@ export function useDashboard() {
  * Dados extras do resumo do mês ativo: o mês anterior (para variação) e, quando o mês ativo é o
  * atual, os vencimentos da semana e as contas atrasadas. Reusa as mesmas chaves de cache do painel.
  */
-export function useMonthSummaryData({
-  activePeriod,
-  periods,
-}: {
-  activePeriod: Period | null
-  periods: Period[]
-}) {
-  const previousPeriod = useMemo(() => {
-    const index = activePeriod
-      ? periods.findIndex((period) => period.id === activePeriod.id)
-      : -1
-    return index > 0 ? periods[index - 1] : null
-  }, [activePeriod, periods])
+export function useMonthSummaryData({ activePeriod }: { activePeriod: Period | null }) {
+  const previousPeriod = useMemo(
+    () => (activePeriod ? shiftPeriod(activePeriod, -1) : null),
+    [activePeriod]
+  )
 
   const previousTransactions = useQuery({
     queryKey: financeKeys.periodTransactions(previousPeriod),

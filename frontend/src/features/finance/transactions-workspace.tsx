@@ -78,7 +78,6 @@ import {
   getTransactionDueAlert,
   defaultReferenceDate,
   parseCurrencyInput,
-  toneForBalance,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
 
@@ -88,7 +87,6 @@ type TransactionWorkspaceProps = {
     label: string
     transactions: Transaction[]
     invoices: Invoice[]
-    stats: { incomes: number; expenses: number; balance: number }
     transactionsLoading: boolean
     invoicesLoading: boolean
   }
@@ -865,32 +863,82 @@ function TransactionDetailsModal({
   )
 }
 
-function PanelStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string
-  tone: Transaction["type"] | "NEUTRAL"
-}) {
+/**
+ * Esqueleto do painel do mês: aparece na hora ao navegar, enquanto o mês carrega (e nos meses
+ * pré-carregados longe do visível), no lugar do painel completo, que é caro de montar.
+ */
+export function TransactionsWorkspaceSkeleton({ label }: { label: string }) {
   return (
-    <div className="min-w-0 px-2 py-1.5 sm:px-3 sm:py-2">
-      <dt className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase sm:tracking-[0.14em]">
-        {label}
-      </dt>
-      <dd
-        className={`mt-0.5 text-[13px] font-semibold whitespace-nowrap tabular-nums sm:text-base ${
-          tone === "REVENUE"
-            ? "text-emerald-600 dark:text-emerald-400"
-            : tone === "EXPENSE"
-              ? "text-rose-600 dark:text-rose-400"
-              : "text-foreground"
-        }`}
-      >
-        {value}
-      </dd>
-    </div>
+    <Card
+      className="border-border bg-card p-3 shadow-[0_22px_54px_rgba(15,23,42,0.10)] sm:p-4 xl:p-5"
+      aria-busy="true"
+      aria-label={`Carregando ${label}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="app-eyebrow text-[13px] font-bold text-primary">{label}</p>
+        <div className="h-8 w-32 animate-pulse rounded-full bg-secondary" />
+      </div>
+      <div className="mt-3 space-y-4 sm:mt-4 sm:space-y-5">
+        <div className="overflow-hidden rounded-2xl border border-border">
+          <div className="flex items-center justify-between border-b border-border/70 px-3 py-2.5 sm:px-4">
+            <div className="h-3 w-28 animate-pulse rounded bg-secondary" />
+            <div className="h-7 w-24 animate-pulse rounded-full bg-secondary" />
+          </div>
+          {[0, 1].map((row) => (
+            <div
+              key={row}
+              className="flex items-center justify-between border-b border-border/60 px-3 py-3 last:border-b-0 sm:px-4"
+            >
+              <div className="h-3.5 w-32 animate-pulse rounded bg-secondary" />
+              <div className="h-3.5 w-20 animate-pulse rounded bg-secondary" />
+            </div>
+          ))}
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-border">
+          <div className="border-b border-border/70 px-3 py-2.5 sm:px-4">
+            <div className="h-3 w-24 animate-pulse rounded bg-secondary" />
+          </div>
+          {[0, 1, 2, 3, 4, 5].map((row) => (
+            <div
+              key={row}
+              className="flex items-center gap-3 border-b border-border/60 px-3 py-2.5 last:border-b-0 sm:px-4"
+            >
+              <div className="h-6 w-3 animate-pulse rounded bg-secondary" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div
+                  className="h-3.5 animate-pulse rounded bg-secondary"
+                  style={{ width: `${45 + ((row * 17) % 35)}%` }}
+                />
+                <div className="h-3 w-16 animate-pulse rounded bg-secondary/70" />
+              </div>
+              <div className="h-3.5 w-20 animate-pulse rounded bg-secondary" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * Os objetos de painel são recriados sempre que qualquer mês da janela atualiza (useQueries devolve
+ * um array novo); o painel só re-renderiza quando os dados do próprio mês mudam.
+ */
+function samePanelData(
+  previous: TransactionWorkspaceProps,
+  next: TransactionWorkspaceProps
+) {
+  const a = previous.panel
+  const b = next.panel
+  return (
+    previous.shared === next.shared &&
+    a.period.id === b.period.id &&
+    a.period.planId === b.period.planId &&
+    a.label === b.label &&
+    a.transactions === b.transactions &&
+    a.invoices === b.invoices &&
+    a.transactionsLoading === b.transactionsLoading &&
+    a.invoicesLoading === b.invoicesLoading
   )
 }
 
@@ -1276,55 +1324,20 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
 
   return (
     <Card className="border-border bg-card p-3 shadow-[0_22px_54px_rgba(15,23,42,0.10)] sm:p-4 xl:p-5">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex items-center justify-between gap-3">
-          <p className="app-eyebrow text-[13px] font-bold text-primary">
-            {panel.label}
-          </p>
-          {!isComposerOpen ? (
-            <Button
-              type="button"
-              size="sm"
-              className="xl:hidden"
-              onClick={startCreateTransaction}
-            >
-              Nova transação
-              <Plus size={14} />
-            </Button>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-3">
-          <dl className="grid flex-1 grid-cols-3 divide-x divide-border rounded-xl border border-border bg-secondary/45 xl:min-w-[26rem]">
-            <PanelStat
-              label="Receitas"
-              value={formatCurrency(panel.stats.incomes)}
-              tone="REVENUE"
-            />
-            <PanelStat
-              label="Despesas"
-              value={formatCurrency(panel.stats.expenses)}
-              tone="EXPENSE"
-            />
-            <PanelStat
-              label="Saldo"
-              value={formatCurrency(panel.stats.balance)}
-              tone={toneForBalance(panel.stats.balance)}
-            />
-          </dl>
-          {!isComposerOpen ? (
-            <Button
-              type="button"
-              className="hidden xl:inline-flex"
-              onClick={startCreateTransaction}
-            >
-              Nova transação
-              <Plus size={16} />
-            </Button>
-          ) : null}
-        </div>
+      {/* Receitas/despesas/saldo do mês ficam no resumo acima do carrossel. */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="app-eyebrow text-[13px] font-bold text-primary">
+          {panel.label}
+        </p>
+        {!isComposerOpen ? (
+          <Button type="button" size="sm" onClick={startCreateTransaction}>
+            Nova transação
+            <Plus size={14} />
+          </Button>
+        ) : null}
       </div>
 
-      <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-5">
+      <div className="mt-3 space-y-4 sm:mt-4 sm:space-y-5">
         <Card className="gap-0 overflow-hidden border-border bg-card p-0">
           <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2 sm:px-4">
             <div className="flex min-w-0 items-baseline gap-2">
@@ -1733,4 +1746,4 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       </div>
     </Card>
   )
-})
+}, samePanelData)

@@ -12,6 +12,7 @@ import { SignUpForm } from "@/features/auth/sign-up-form.tsx"
 import { AppLayout } from "@/layouts/app-layout.tsx"
 import { CardsPage } from "@/pages/cards-page.tsx"
 import { DashboardPage } from "@/pages/dashboard-page.tsx"
+import { EvolutionPage } from "@/pages/evolution-page.tsx"
 import { InvitePage } from "@/pages/invite-page.tsx"
 import { PartnerPage } from "@/pages/partner-page.tsx"
 import { PlansPage } from "@/pages/plans-page.tsx"
@@ -65,6 +66,12 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 })
 
+const evolutionRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/evolucao",
+  component: EvolutionPage,
+})
+
 const profileRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/profile",
@@ -95,6 +102,7 @@ const routeTree = rootRoute.addChildren([
   publicRoute.addChildren([loginRoute, signUpRoute]),
   appRoute.addChildren([
     dashboardRoute,
+    evolutionRoute,
     profileRoute,
     plansRoute,
     cardsRoute,
