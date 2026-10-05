@@ -9,9 +9,15 @@ type DashboardPeriodRange = {
 
 type DashboardStoreState = {
   selectedPlanId: string | null
+  /** Mês do dashboard (AAAA-MM). Não é salvo: cada visita abre no mês atual. */
+  selectedMonthId: string | null
+  /** Filtro de responsável compartilhado entre dashboard e evolução (não é salvo). */
+  responsibleFilter: string
   selectedStartPeriodId: string | null
   selectedEndPeriodId: string | null
   setSelectedPlanId: (selectedPlanId: string | null) => void
+  setSelectedMonthId: (selectedMonthId: string | null) => void
+  setResponsibleFilter: (responsibleFilter: string) => void
   setSelectedPeriodRange: (
     nextOrUpdater:
       | DashboardPeriodRange
@@ -24,9 +30,13 @@ export const useDashboardStore = create<DashboardStoreState>()(
   persist(
     (set) => ({
       selectedPlanId: null,
+      selectedMonthId: null,
+      responsibleFilter: "",
       selectedStartPeriodId: null,
       selectedEndPeriodId: null,
       setSelectedPlanId: (selectedPlanId) => set({ selectedPlanId }),
+      setSelectedMonthId: (selectedMonthId) => set({ selectedMonthId }),
+      setResponsibleFilter: (responsibleFilter) => set({ responsibleFilter }),
       setSelectedPeriodRange: (nextOrUpdater) =>
         set((state) => {
           const next =
@@ -45,6 +55,8 @@ export const useDashboardStore = create<DashboardStoreState>()(
       clearSelections: () => {
         set({
           selectedPlanId: null,
+          selectedMonthId: null,
+          responsibleFilter: "",
           selectedStartPeriodId: null,
           selectedEndPeriodId: null,
         })

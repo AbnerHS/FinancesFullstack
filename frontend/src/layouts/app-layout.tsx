@@ -15,6 +15,10 @@ const routeMeta: Record<string, { title: string; description: string }> = {
     description:
       "Acompanhe o plano, compare períodos e mantenha a operação central em uma visão só.",
   },
+  "/evolucao": {
+    title: "Evolução",
+    description: "Compare meses: receitas, despesas, categorias e responsáveis.",
+  },
   "/profile": {
     title: "Meu Perfil",
     description: "Atualize dados básicos da conta e mantenha o acesso seguro.",

@@ -1,4 +1,4 @@
-import { useDashboard } from "@/features/finance/hooks.ts"
+import { usePlanContext } from "@/features/finance/hooks.ts"
 import { PlanManager } from "@/features/finance/managers.tsx"
 
 export function PlansPage() {
@@ -9,7 +9,7 @@ export function PlansPage() {
     selectedPlanId,
     setSelectedPlanId,
     userId,
-  } = useDashboard()
+  } = usePlanContext()
 
   return (
     <PlanManager

@@ -3,6 +3,7 @@ import {
   CreditCard,
   FolderKanban,
   LayoutDashboard,
+  LineChart,
   LogOut,
   Menu,
   UserRound,
@@ -28,6 +29,12 @@ const navItems = [
     label: "Dashboard",
     description: "Resumo e fluxo diário",
     icon: LayoutDashboard,
+  },
+  {
+    to: "/evolucao",
+    label: "Evolução",
+    description: "Comparativo entre meses",
+    icon: LineChart,
   },
   {
     to: "/profile",
