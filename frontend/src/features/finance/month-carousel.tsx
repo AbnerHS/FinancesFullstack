@@ -73,19 +73,9 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     }
     // Avisar a página re-renderiza o dashboard inteiro (resumo, painéis, gráficos). Feito no meio
     // da animação, isso travava o slide; por isso só acontece quando o carrossel para.
-    let lastNotifiedId: string | undefined
     const notify = () => {
       const index = emblaApi.selectedScrollSnap()
       const id = emblaApi.slideNodes()[index]?.dataset.periodId
-      // Trocou de mês com a lista rolada para baixo: leva ao início do novo mês. Sem isso, um mês
-      // mais curto deixava a página menor e o navegador cortava a rolagem num ponto qualquer.
-      const section = sectionRef.current
-      if (id && lastNotifiedId && id !== lastNotifiedId && section) {
-        if (section.getBoundingClientRect().top < 0) {
-          section.scrollIntoView({ block: "start", behavior: "smooth" })
-        }
-      }
-      lastNotifiedId = id
       startTransition(() => {
         setSettledIndex(index)
         if (id) onActiveIdChangeRef.current(id)
@@ -111,11 +101,12 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     if (!emblaApi) return
     const container = emblaApi.containerNode()
     const activeSlide = () => emblaApi.slideNodes()[emblaApi.selectedScrollSnap()]
-    const activeHeight = () => activeSlide()?.offsetHeight ?? null
+    // 0 = slide ainda com content-visibility: hidden (logo depois de a janela se recentrar, antes de
+    // re-renderizar): ignora, em vez de zerar a altura do carrossel por um instante.
+    const activeHeight = () => activeSlide()?.offsetHeight || null
 
     const fit = () => {
-      // Mês ainda carregando (esqueleto, mais baixo): não encolhe. Encolher deixava a página mais
-      // curta e o navegador puxava a rolagem para cima; ajusta quando o conteúdo chegar.
+      // Mês ainda carregando (esqueleto): não encolhe; ajusta quando o conteúdo chegar.
       if (activeSlide()?.querySelector('[aria-busy="true"]')) return grow()
       const height = activeHeight()
       if (height !== null) container.style.height = `${height}px`
@@ -137,6 +128,8 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 
     const observer = new ResizeObserver(() => (moving ? grow() : fit()))
     const observeSlides = () => {
+      // reInit (janela recentrada) salta sem animação e não emite "settle".
+      moving = false
       observer.disconnect()
       emblaApi.slideNodes().forEach((slide) => observer.observe(slide))
       fit()
@@ -240,7 +233,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   return (
     <div
       ref={sectionRef}
-      className="scroll-mt-20 space-y-3 outline-none"
+      className="space-y-3 outline-none"
       role="region"
       aria-roledescription="carrossel"
       aria-label="Transações por mês"
@@ -257,7 +250,11 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       }}
     >
       <div className="relative">
-        <div className="overflow-hidden" ref={emblaRef}>
+        {/* transform neutro na área visível: o reInit do Embla limpa o transform do trilho por um
+            instante, e sem nenhum transform ali o Chrome em celular/tablet zerava a rolagem da página
+            (ia para o topo ao trocar de mês). Fica aqui, e não no trilho, porque transform muda a
+            referência do offsetLeft que o Embla usa para medir os slides. */}
+        <div className="overflow-hidden [transform:translate3d(0,0,0)]" ref={emblaRef}>
           {/* items-start: cada mês com a sua altura (a altura acompanha o mês visível). */}
           <div className="-ml-4 flex touch-pan-y items-start">
             {slides}
