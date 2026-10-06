@@ -327,3 +327,31 @@ describe("acesso", () => {
     expect((await as(stranger).get(`/reports/spending-by-category?planId=${plan.id}`)).status).toBe(403)
   })
 })
+
+describe("dados por mês (month-data)", () => {
+  it("devolve transações e faturas agrupadas por mês, incluindo meses vazios", async () => {
+    const { owner, plan, create } = await setup()
+    await create("2026-09-10", { description: "Setembro" })
+    await create("2026-11-02", { description: "Novembro" })
+    await create("2026-12-01", { description: "Fora do intervalo" })
+    await invoiceFor(owner, plan.id, "2026-11")
+
+    const body = await json(as(owner).get(`/plans/${plan.id}/month-data?from=2026-09&to=2026-11`))
+
+    expect(body.months.map((m: { month: string }) => m.month)).toEqual(["2026-09", "2026-10", "2026-11"])
+    expect(body.months[0].transactions.map((t: { description: string }) => t.description)).toEqual(["Setembro"])
+    expect(body.months[1]).toMatchObject({ transactions: [], invoices: [] })
+    expect(body.months[2].transactions.map((t: { description: string }) => t.description)).toEqual(["Novembro"])
+    expect(body.months[2].invoices).toHaveLength(1)
+  })
+
+  it("valida o intervalo e o acesso ao plano", async () => {
+    const { owner, plan } = await setup()
+    const outsider = await createUser("Fora")
+
+    await json(as(owner).get(`/plans/${plan.id}/month-data?from=2026-10`), 400)
+    await json(as(owner).get(`/plans/${plan.id}/month-data?from=2026-11&to=2026-10`), 400)
+    await json(as(owner).get(`/plans/${plan.id}/month-data?from=2024-01&to=2026-12`), 400)
+    expect((await as(outsider).get(`/plans/${plan.id}/month-data?from=2026-10&to=2026-10`)).status).toBe(403)
+  })
+})

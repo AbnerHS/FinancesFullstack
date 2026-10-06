@@ -346,12 +346,19 @@ export function usePlanContext() {
 export type PeriodPanel = PeriodPanelData
 
 /** Transações e faturas de cada mês (uma query por mês, cache compartilhado entre as telas). */
+// Meses já vistos ficam no cache do navegador por 30 min depois de saírem da janela do carrossel
+// (o padrão do React Query descarta em 5 min) e só são rebuscados em segundo plano depois de 5 min;
+// as mutações invalidam o que mudou.
+const MONTH_STALE_TIME = 1000 * 60 * 5
+const MONTH_GC_TIME = 1000 * 60 * 30
+
 export function usePeriodPanels(periods: Period[]) {
   const transactionQueries = useQueries({
     queries: periods.map((period) => ({
       queryKey: financeKeys.periodTransactions(period),
       queryFn: () => periodService.getTransactionsByPeriod(period),
-      staleTime: 1000 * 60 * 2,
+      staleTime: MONTH_STALE_TIME,
+      gcTime: MONTH_GC_TIME,
       placeholderData: [] as Transaction[],
     })),
   })
@@ -360,7 +367,8 @@ export function usePeriodPanels(periods: Period[]) {
     queries: periods.map((period) => ({
       queryKey: financeKeys.periodInvoices(period),
       queryFn: () => periodService.getInvoicesByPeriod(period),
-      staleTime: 1000 * 60 * 2,
+      staleTime: MONTH_STALE_TIME,
+      gcTime: MONTH_GC_TIME,
       placeholderData: [] as Invoice[],
     })),
   })
@@ -404,11 +412,13 @@ type PeriodPanelData = {
 }
 
 /**
- * Dashboard: um mês por vez, sem limite de intervalo. Carrega o mês ativo e dois de cada lado (o
- * carrossel desliza para eles sem esperar a rede, e toques rápidos não batem na borda); ao parar
- * num mês, a janela se recentra nele.
+ * Dashboard: um mês por vez, sem limite de intervalo. Carrega o mês ativo e WINDOW_RADIUS meses de
+ * cada lado (numa requisição só, ver loadMonthData): swipes seguidos não batem na borda antes de
+ * o carrossel parar e a janela se recentrar no mês em que parou.
  * Sem mês escolhido na sessão, abre no mês atual.
  */
+const WINDOW_RADIUS = 6
+
 export function useDashboard() {
   const context = usePlanContext()
   const { activePlan } = context
@@ -427,7 +437,9 @@ export function useDashboard() {
   const windowPeriods = useMemo(
     () =>
       activePeriod
-        ? [-2, -1, 0, 1, 2].map((offset) => shiftPeriod(activePeriod, offset))
+        ? Array.from({ length: WINDOW_RADIUS * 2 + 1 }, (_, index) =>
+            shiftPeriod(activePeriod, index - WINDOW_RADIUS)
+          )
         : [],
     [activePeriod]
   )
@@ -607,13 +619,15 @@ export function useMonthSummaryData({ activePeriod }: { activePeriod: Period | n
     queryKey: financeKeys.periodTransactions(previousPeriod),
     queryFn: () => periodService.getTransactionsByPeriod(previousPeriod),
     enabled: Boolean(previousPeriod),
-    staleTime: 1000 * 60 * 2,
+    staleTime: MONTH_STALE_TIME,
+    gcTime: MONTH_GC_TIME,
   })
   const previousInvoices = useQuery({
     queryKey: financeKeys.periodInvoices(previousPeriod),
     queryFn: () => periodService.getInvoicesByPeriod(previousPeriod),
     enabled: Boolean(previousPeriod),
-    staleTime: 1000 * 60 * 2,
+    staleTime: MONTH_STALE_TIME,
+    gcTime: MONTH_GC_TIME,
   })
 
   const today = todayIso()
