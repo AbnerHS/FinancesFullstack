@@ -182,7 +182,7 @@ export function MonthSummary({
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <BillsCard
           insights={insights}
           period={panel.period}
@@ -222,7 +222,7 @@ function MonthSummarySkeleton({ label }: { label: string }) {
           </div>
         ))}
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         {[0, 1].map((card) => (
           <div
             key={card}
@@ -337,7 +337,7 @@ function SummaryCard({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/80 p-3.5 sm:rounded-[1.25rem] sm:p-4">
+    <div className="min-w-0 rounded-2xl border border-border bg-card/80 p-3.5 sm:rounded-[1.25rem] sm:p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
         <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">
@@ -377,6 +377,8 @@ function ProgressBar({
 }
 
 type DueItem = { transaction: Transaction; overdue: boolean }
+
+const BILLS_LIST_ROWS = 5
 
 /**
  * Contas a pagar do mês. No mês atual separa atrasadas (de qualquer mês), as que vencem até
@@ -454,68 +456,81 @@ function BillsCard({
     ]
   }
 
-  const visibleItems = items.slice(0, 5)
+  const visibleItems = items.slice(0, BILLS_LIST_ROWS)
+  const footnote = [
+    items.length > visibleItems.length
+      ? `+${items.length - visibleItems.length} no painel de transações.`
+      : "",
+    overdueFromOtherMonths ? "Atrasadas incluem meses anteriores." : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
 
+  // Altura igual em qualquer mês (lista sempre com espaço para BILLS_LIST_ROWS linhas, rodapé e
+  // barra sempre presentes): trocar de mês não muda a altura da página.
   return (
     <SummaryCard title="Contas a pagar" icon={<CalendarClock size={14} />}>
-      {total === 0 && items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nenhuma despesa com vencimento neste mês.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {total > 0 ? (
-            <div className="space-y-1.5">
-              <div className="flex items-baseline justify-between gap-2 text-sm">
-                <p className="text-foreground">
-                  <span className="font-semibold">{bills.paidCount}</span> de {total}{" "}
-                  pagas no mês
-                </p>
-                <p className="font-semibold text-foreground">
-                  {formatPercent(bills.paidRatio)}
-                </p>
-              </div>
-              <ProgressBar
-                value={bills.paidRatio ?? 0}
-                className="bg-emerald-500"
-                label="Contas pagas no mês"
-              />
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between gap-2 text-sm">
+            <p className="truncate text-foreground">
+              {total > 0 ? (
+                <>
+                  <span className="font-semibold">{bills.paidCount}</span> de {total} pagas no mês
+                </>
+              ) : (
+                <span className="text-muted-foreground">Sem contas com vencimento no mês</span>
+              )}
+            </p>
+            <p className="font-semibold text-foreground">
+              {total > 0 ? formatPercent(bills.paidRatio) : ""}
+            </p>
+          </div>
+          <ProgressBar
+            value={bills.paidRatio ?? 0}
+            className="bg-emerald-500"
+            label="Contas pagas no mês"
+          />
+        </div>
+
+        <dl className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-secondary/40">
+          {stats.map((stat) => (
+            <div key={stat.label} className="min-w-0 px-2 py-1.5 sm:px-3">
+              <dt className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+                {stat.label}
+              </dt>
+              <dd
+                className={cn(
+                  "text-[13px] font-semibold whitespace-nowrap tabular-nums sm:text-sm",
+                  stat.tone === "negative" && "text-rose-600 dark:text-rose-400",
+                  stat.tone === "positive" && "text-emerald-600 dark:text-emerald-400",
+                  stat.tone === "neutral" && "text-foreground"
+                )}
+              >
+                {formatCurrency(stat.value)}
+              </dd>
+              <dd className="text-[11px] text-muted-foreground">
+                {stat.count} {stat.count === 1 ? "conta" : "contas"}
+              </dd>
             </div>
-          ) : null}
+          ))}
+        </dl>
 
-          <dl className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-secondary/40">
-            {stats.map((stat) => (
-              <div key={stat.label} className="min-w-0 px-2 py-1.5 sm:px-3">
-                <dt className="truncate text-[10px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-                  {stat.label}
-                </dt>
-                <dd
-                  className={cn(
-                    "text-[13px] font-semibold whitespace-nowrap tabular-nums sm:text-sm",
-                    stat.tone === "negative" && "text-rose-600 dark:text-rose-400",
-                    stat.tone === "positive" && "text-emerald-600 dark:text-emerald-400",
-                    stat.tone === "neutral" && "text-foreground"
-                  )}
-                >
-                  {formatCurrency(stat.value)}
-                </dd>
-                <dd className="text-[11px] text-muted-foreground">
-                  {stat.count} {stat.count === 1 ? "conta" : "contas"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
+        <div className="overflow-hidden rounded-xl border border-border" style={{ height: `${BILLS_LIST_ROWS * 3 + 0.125}rem` }}>
           {week && weekLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando vencimentos...</p>
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Carregando vencimentos...
+            </p>
           ) : visibleItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nada pendente.</p>
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Nada pendente.
+            </p>
           ) : (
-            <ul className="divide-y divide-border rounded-xl border border-border">
+            <ul className="divide-y divide-border">
               {visibleItems.map(({ transaction, overdue }) => (
                 <li
                   key={transaction.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2"
+                  className="flex h-12 items-center justify-between gap-3 px-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">
@@ -543,16 +558,9 @@ function BillsCard({
               ))}
             </ul>
           )}
-          {items.length > visibleItems.length || overdueFromOtherMonths ? (
-            <p className="text-[11px] text-muted-foreground">
-              {items.length > visibleItems.length
-                ? `+${items.length - visibleItems.length} no painel de transações. `
-                : ""}
-              {overdueFromOtherMonths ? "Atrasadas inclui contas de meses anteriores." : ""}
-            </p>
-          ) : null}
         </div>
-      )}
+        <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+      </div>
     </SummaryCard>
   )
 }
@@ -583,7 +591,13 @@ function SpendingCard({ insights }: { insights: MonthInsights }) {
             </p>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Sem despesas no mês.</p>
+          // Mesma altura do bloco com categoria (duas linhas).
+          <div>
+            <p className="text-sm text-muted-foreground">Sem despesas no mês.</p>
+            <p className="mt-0.5 text-xs text-transparent" aria-hidden="true">
+              –
+            </p>
+          </div>
         )}
 
         <div className="border-t border-border pt-3">

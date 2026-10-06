@@ -1430,42 +1430,45 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               </div>
             </div>
           ) : null}
-          {panel.invoicesLoading ? (
-            <p className="px-4 py-3 text-sm text-muted-foreground">
-              Carregando faturas...
-            </p>
-          ) : panel.invoices.length === 0 ? (
-            !invoiceManager.isCreateOpen ? (
+          {/* Espaço mínimo de duas faturas: meses sem fatura não deixam o painel mais baixo. */}
+          <div className="min-h-[5.125rem]">
+            {panel.invoicesLoading ? (
               <p className="px-4 py-3 text-sm text-muted-foreground">
-                Nenhuma fatura registrada neste mês.
+                Carregando faturas...
               </p>
-            ) : null
-          ) : (
-            <table className="w-full border-collapse">
-              <tbody>
-                {panel.invoices.map((invoice) => {
-                  const label = invoiceLabel(invoice)
-                  const isEditing = invoiceManager.editingInvoiceId === invoice.id
+            ) : panel.invoices.length === 0 ? (
+              !invoiceManager.isCreateOpen ? (
+                <p className="px-4 py-3 text-sm text-muted-foreground">
+                  Nenhuma fatura registrada neste mês.
+                </p>
+              ) : null
+            ) : (
+              <table className="w-full border-collapse">
+                <tbody>
+                  {panel.invoices.map((invoice) => {
+                    const label = invoiceLabel(invoice)
+                    const isEditing = invoiceManager.editingInvoiceId === invoice.id
 
-                  return (
-                    <InvoiceRow
-                      key={invoice.id}
-                      label={label}
-                      invoice={invoice}
-                      isEditing={isEditing}
-                      editingAmount={invoiceManager.editingAmount}
-                      onEditingAmountChange={invoiceManager.setEditingAmount}
-                      savePending={invoiceManager.updateInvoice.isPending}
-                      onSave={() => invoiceManager.updateInvoice.mutate()}
-                      onCancel={invoiceManager.cancelEdit}
-                      onEdit={() => invoiceManager.startEdit(invoice)}
-                      onShowActions={() => setActionsInvoice(invoice)}
-                    />
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+                    return (
+                      <InvoiceRow
+                        key={invoice.id}
+                        label={label}
+                        invoice={invoice}
+                        isEditing={isEditing}
+                        editingAmount={invoiceManager.editingAmount}
+                        onEditingAmountChange={invoiceManager.setEditingAmount}
+                        savePending={invoiceManager.updateInvoice.isPending}
+                        onSave={() => invoiceManager.updateInvoice.mutate()}
+                        onCancel={invoiceManager.cancelEdit}
+                        onEdit={() => invoiceManager.startEdit(invoice)}
+                        onShowActions={() => setActionsInvoice(invoice)}
+                      />
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
           {invoiceManager.editingInvoiceId ? (
             <div className="px-3 pb-2 empty:hidden sm:px-4">
               <FormError message={invoiceManager.updateErrorMessage} />
