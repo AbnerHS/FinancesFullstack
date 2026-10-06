@@ -141,27 +141,80 @@ export const planService = {
   },
 }
 
+type MonthData = { month: string; transactions: Transaction[]; invoices: Invoice[] }
+type MonthWaiter = { resolve: (data: MonthData) => void; reject: (error: unknown) => void }
+
+// Limite do endpoint /month-data.
+const MONTH_DATA_LIMIT = 24
+const monthIndex = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number)
+  return year * 12 + monthNumber - 1
+}
+
+/**
+ * Junta os pedidos de meses feitos no mesmo ciclo (as queries de transações e de faturas de cada
+ * mês da janela do carrossel) numa requisição só ao /month-data, em vez de duas por mês.
+ */
+const pendingMonths = new Map<string, Map<string, MonthWaiter[]>>()
+let flushScheduled = false
+
+function flushMonthData() {
+  flushScheduled = false
+  const batches = [...pendingMonths]
+  pendingMonths.clear()
+
+  for (const [planId, months] of batches) {
+    const sorted = [...months.keys()].sort()
+    const chunks: string[][] = []
+    for (const month of sorted) {
+      const chunk = chunks[chunks.length - 1]
+      if (chunk && monthIndex(month) - monthIndex(chunk[0]) < MONTH_DATA_LIMIT) chunk.push(month)
+      else chunks.push([month])
+    }
+
+    for (const chunk of chunks) {
+      const from = chunk[0]
+      const to = chunk[chunk.length - 1]
+      http
+        .get<{ months: MonthData[] }>(`/plans/${planId}/month-data`, { params: { from, to } })
+        .then(({ data }) => {
+          const byMonth = new Map(data.months.map((item) => [item.month, item]))
+          chunk.forEach((month) => {
+            const result = byMonth.get(month) ?? { month, transactions: [], invoices: [] }
+            months.get(month)?.forEach((waiter) => waiter.resolve(result))
+          })
+        })
+        .catch((error) => {
+          chunk.forEach((month) => months.get(month)?.forEach((waiter) => waiter.reject(error)))
+        })
+    }
+  }
+}
+
+function loadMonthData(period: Period) {
+  return new Promise<MonthData>((resolve, reject) => {
+    const months = pendingMonths.get(period.planId) ?? new Map<string, MonthWaiter[]>()
+    pendingMonths.set(period.planId, months)
+    months.set(period.id, [...(months.get(period.id) ?? []), { resolve, reject }])
+    if (!flushScheduled) {
+      flushScheduled = true
+      setTimeout(flushMonthData, 0)
+    }
+  })
+}
+
 export const periodService = {
   async getTransactionsByPeriod(period: Period | null | undefined) {
     if (!period) {
       return []
     }
-
-    const { data } = await http.get<
-      EmbeddedCollection<Transaction, "transactions">
-    >(`/plans/${period.planId}/transactions`, { params: { month: period.id } })
-    return embedded(data, "transactions")
+    return (await loadMonthData(period)).transactions
   },
   async getInvoicesByPeriod(period: Period | null | undefined) {
     if (!period) {
       return []
     }
-
-    const { data } = await http.get<EmbeddedCollection<Invoice, "invoices">>(
-      `/plans/${period.planId}/invoices`,
-      { params: { month: period.id } }
-    )
-    return embedded(data, "invoices")
+    return (await loadMonthData(period)).invoices
   },
   /** Transações por vencimento (resumo da semana). */
   async getTransactionsByDue(

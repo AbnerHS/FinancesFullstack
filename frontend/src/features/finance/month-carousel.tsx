@@ -46,10 +46,8 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   const [selectedIndex, setSelectedIndex] = useState(0)
   // Mês em que o carrossel parou. Só ele e os vizinhos são renderizados (ver `slides`).
   const [settledIndex, setSettledIndex] = useState(0)
-  const settledIndexRef = useRef(0)
-  useEffect(() => {
-    settledIndexRef.current = settledIndex
-  }, [settledIndex])
+  // Destino do swipe, atualizado numa transição (selectedIndex é urgente, para a barra do rodapé).
+  const [targetIndex, setTargetIndex] = useState(0)
   // Toques de seta na borda antes de a janela se recentrar (+ para frente, - para trás):
   // aplicados logo depois.
   const pendingMoveRef = useRef(0)
@@ -66,17 +64,28 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   useEffect(() => {
     if (!emblaApi) return
 
+    // Destino do swipe: a barra do rodapé troca na hora; o painel completo do destino (e vizinhos)
+    // monta numa transição, interrompível, sem travar a animação (ver `slides`).
     const sync = () => {
       const index = emblaApi.selectedScrollSnap()
-      // Destino ainda oculto (swipes muito rápidos): mostra já, sem esperar o carrossel parar.
-      if (Math.abs(index - settledIndexRef.current) > VISIBLE_RADIUS) setSettledIndex(index)
       setSelectedIndex(index)
+      startTransition(() => setTargetIndex(index))
     }
     // Avisar a página re-renderiza o dashboard inteiro (resumo, painéis, gráficos). Feito no meio
     // da animação, isso travava o slide; por isso só acontece quando o carrossel para.
+    let lastNotifiedId: string | undefined
     const notify = () => {
       const index = emblaApi.selectedScrollSnap()
       const id = emblaApi.slideNodes()[index]?.dataset.periodId
+      // Trocou de mês com a lista rolada para baixo: leva ao início do novo mês. Sem isso, um mês
+      // mais curto deixava a página menor e o navegador cortava a rolagem num ponto qualquer.
+      const section = sectionRef.current
+      if (id && lastNotifiedId && id !== lastNotifiedId && section) {
+        if (section.getBoundingClientRect().top < 0) {
+          section.scrollIntoView({ block: "start", behavior: "smooth" })
+        }
+      }
+      lastNotifiedId = id
       startTransition(() => {
         setSettledIndex(index)
         if (id) onActiveIdChangeRef.current(id)
@@ -101,10 +110,13 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   useEffect(() => {
     if (!emblaApi) return
     const container = emblaApi.containerNode()
-    const activeHeight = () =>
-      emblaApi.slideNodes()[emblaApi.selectedScrollSnap()]?.offsetHeight ?? null
+    const activeSlide = () => emblaApi.slideNodes()[emblaApi.selectedScrollSnap()]
+    const activeHeight = () => activeSlide()?.offsetHeight ?? null
 
     const fit = () => {
+      // Mês ainda carregando (esqueleto, mais baixo): não encolhe. Encolher deixava a página mais
+      // curta e o navegador puxava a rolagem para cima; ajusta quando o conteúdo chegar.
+      if (activeSlide()?.querySelector('[aria-busy="true"]')) return grow()
       const height = activeHeight()
       if (height !== null) container.style.height = `${height}px`
     }
@@ -151,6 +163,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     emblaApi.scrollTo(index, true)
     // O salto instantâneo não emite "settle": mostra o mês e avisa a página aqui mesmo.
     setSettledIndex(index)
+    setTargetIndex(index)
     const id = ids[index]
     if (id) onActiveIdChangeRef.current(id)
     const pending = pendingMoveRef.current
@@ -174,11 +187,11 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     return () => observer.disconnect()
   }, [])
 
-  // Meses além dos vizinhos do mês parado recebem content-visibility: hidden (o navegador pula
-  // layout e pintura deles): com muitos meses montados, o Chrome recalculava as camadas da árvore
-  // toda a cada quadro do slide. Hoje o dashboard passa só três meses, mas o carrossel continua
-  // aguentando mais.
-  // Memorizados: selectedIndex muda no início da animação e não deve re-renderizar os painéis.
+  // `near` (mês parado, destino do swipe e vizinhos) recebe o painel completo, se os dados já
+  // estiverem no cache; os outros, algo leve (esqueleto). Meses longe do parado e do destino recebem
+  // content-visibility: hidden (o navegador pula layout e pintura deles): com muitos meses montados,
+  // o Chrome recalculava as camadas da árvore toda a cada quadro do slide.
+  // Painéis com memo: trocar selectedIndex só muda a classe dos slides.
   const slides = useMemo(
     () =>
       panels.map((panel, index) => (
@@ -187,16 +200,22 @@ export function MonthCarousel<Panel extends CarouselPanel>({
           data-period-id={panel.period.id}
           className={cn(
             "min-w-0 shrink-0 grow-0 basis-full pl-4",
-            Math.abs(index - settledIndex) > VISIBLE_RADIUS && "[content-visibility:hidden]"
+            Math.abs(index - settledIndex) > VISIBLE_RADIUS &&
+              Math.abs(index - selectedIndex) > VISIBLE_RADIUS &&
+              "[content-visibility:hidden]"
           )}
           role="group"
           aria-roledescription="slide"
           aria-label={panel.label}
         >
-          {renderPanel(panel, Math.abs(index - settledIndex) <= VISIBLE_RADIUS)}
+          {renderPanel(
+            panel,
+            Math.abs(index - settledIndex) <= VISIBLE_RADIUS ||
+              Math.abs(index - targetIndex) <= VISIBLE_RADIUS
+          )}
         </div>
       )),
-    [panels, renderPanel, settledIndex]
+    [panels, renderPanel, selectedIndex, settledIndex, targetIndex]
   )
 
   // A página sempre tem mais meses (a janela se recentra ao parar), então as setas nunca ficam
@@ -221,7 +240,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   return (
     <div
       ref={sectionRef}
-      className="space-y-3 outline-none"
+      className="scroll-mt-20 space-y-3 outline-none"
       role="region"
       aria-roledescription="carrossel"
       aria-label="Transações por mês"

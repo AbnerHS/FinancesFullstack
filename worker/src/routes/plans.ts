@@ -4,7 +4,7 @@ import { badRequest } from "../lib/errors.ts"
 import { collection } from "../lib/hal.ts"
 import { id, parseDateRange, yearMonth } from "../lib/query.ts"
 import { validate } from "../lib/validation.ts"
-import { isIsoDate, isYearMonth } from "../lib/dates.ts"
+import { isIsoDate, isYearMonth, monthBounds } from "../lib/dates.ts"
 import { paymentStatuses } from "../db/schema.ts"
 import { requirePlanAccess, requirePlanOwner } from "../services/access.ts"
 import * as cards from "../services/cards.ts"
@@ -23,6 +23,24 @@ const reorderSchema = z.object({
 const selfHref = (url: string) => {
   const { pathname, search } = new URL(url)
   return pathname + search
+}
+
+const MONTH_DATA_LIMIT = 24
+
+/** Quantos meses de `from` a `to`, inclusive (AAAA-MM). */
+function monthsBetween(from: string, to: string) {
+  const [fy, fm] = from.split("-").map(Number) as [number, number]
+  const [ty, tm] = to.split("-").map(Number) as [number, number]
+  return (ty - fy) * 12 + (tm - fm) + 1
+}
+
+/** Lista AAAA-MM de `from` a `to`, inclusive. */
+function monthRange(from: string, to: string) {
+  const [fy, fm] = from.split("-").map(Number) as [number, number]
+  return Array.from({ length: monthsBetween(from, to) }, (_, index) => {
+    const date = new Date(Date.UTC(fy, fm - 1 + index, 1))
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
+  })
 }
 
 /** `month=AAAA-MM` ou `from`/`to` (AAAA-MM), para faturas. */
@@ -122,6 +140,31 @@ export const planRoutes = new Hono<AppEnv>()
   .get("/:id/invoices", async (c) => {
     const list = await invoices.listByPlan(c.var.db, c.var.user, c.req.param("id"), parseMonthRange(c.req.query()))
     return c.json(collection("invoices", list, selfHref(c.req.url)))
+  })
+  // Transações e faturas de vários meses numa ida só (o carrossel do dashboard carrega uma janela de
+  // meses de uma vez). Todos os meses do intervalo vêm na resposta, mesmo vazios.
+  .get("/:id/month-data", async (c) => {
+    const { from, to } = c.req.query()
+    if (!from || !to || !isYearMonth(from) || !isYearMonth(to)) {
+      throw badRequest("Informe 'from' e 'to' no formato AAAA-MM")
+    }
+    if (from > to) throw badRequest("'from' deve ser anterior ou igual a 'to'")
+    if (monthsBetween(from, to) > MONTH_DATA_LIMIT) {
+      throw badRequest(`Intervalo máximo de ${MONTH_DATA_LIMIT} meses`)
+    }
+    const planId = c.req.param("id")
+    const [transactionList, invoiceList] = await Promise.all([
+      transactions.listByPlan(c.var.db, c.var.user, planId, {
+        range: { from: monthBounds(from).from, to: monthBounds(to).to },
+      }),
+      invoices.listByPlan(c.var.db, c.var.user, planId, { from, to }),
+    ])
+    const months = monthRange(from, to).map((month) => ({
+      month,
+      transactions: transactionList.filter((t) => t.referenceDate.startsWith(month)),
+      invoices: invoiceList.filter((i) => i.referenceMonth === month),
+    }))
+    return c.json({ months })
   })
   .get("/:id/months", async (c) => c.json(await transactions.months(c.var.db, c.var.user, c.req.param("id"))))
   .get("/:id/summary", async (c) =>

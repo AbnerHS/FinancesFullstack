@@ -1,4 +1,11 @@
-import { useCallback, useMemo } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 
 import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
 import { useDashboard, type PeriodPanel } from "@/features/finance/hooks.ts"
@@ -112,11 +119,15 @@ export function DashboardPage() {
         ) : null}
       </FiltersPanel>
 
-      <MonthSummary
-        panel={activePanel}
-        responsibleFilter={responsibleFilter}
-        onGoToCurrentMonth={goToCurrentMonth}
-      />
+      <KeepHeightWhileLoading
+        loading={Boolean(activePanel?.transactionsLoading || activePanel?.invoicesLoading)}
+      >
+        <MonthSummary
+          panel={activePanel}
+          responsibleFilter={responsibleFilter}
+          onGoToCurrentMonth={goToCurrentMonth}
+        />
+      </KeepHeightWhileLoading>
 
       <section className="space-y-3" aria-label="Transações do mês">
         <div>
@@ -141,6 +152,29 @@ export function DashboardPage() {
           />
         )}
       </section>
+    </div>
+  )
+}
+
+/**
+ * Mantém a altura do último conteúdo carregado enquanto o próximo carrega (o esqueleto é mais
+ * baixo): sem isso a página encolhia acima do carrossel e a rolagem pulava.
+ */
+function KeepHeightWhileLoading({ loading, children }: { loading: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [loadedHeight, setLoadedHeight] = useState<number | null>(null)
+
+  useEffect(() => {
+    const node = ref.current
+    if (!node || loading) return
+    const observer = new ResizeObserver(() => setLoadedHeight(node.offsetHeight))
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [loading])
+
+  return (
+    <div ref={ref} style={loading && loadedHeight ? { minHeight: loadedHeight } : undefined}>
+      {children}
     </div>
   )
 }
