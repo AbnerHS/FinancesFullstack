@@ -37,7 +37,7 @@ import {
   X,
 } from "lucide-react"
 import { createPortal } from "react-dom"
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -131,61 +131,6 @@ type TransactionRowProps = TransactionActions & {
   onShowActions: (transaction: Transaction) => void
 }
 
-const LONG_PRESS_MS = 450
-const LONG_PRESS_TOLERANCE_PX = 10
-
-/**
- * Toque longo (só touch) na linha: abre as ações. Cancela se o dedo se mover (rolagem ou swipe
- * do carrossel) e engole o clique que vem depois, para não abrir também os detalhes.
- */
-function useLongPress(onLongPress: () => void) {
-  const timerRef = useRef<number | undefined>(undefined)
-  const startRef = useRef<{ x: number; y: number } | null>(null)
-  const firedRef = useRef(false)
-
-  const cancel = () => {
-    window.clearTimeout(timerRef.current)
-    startRef.current = null
-  }
-
-  return {
-    onPointerDown: (event: React.PointerEvent) => {
-      if (event.pointerType !== "touch") return
-      if (event.target instanceof Element && event.target.closest("button")) return
-      firedRef.current = false
-      startRef.current = { x: event.clientX, y: event.clientY }
-      timerRef.current = window.setTimeout(() => {
-        firedRef.current = true
-        startRef.current = null
-        navigator.vibrate?.(12)
-        onLongPress()
-      }, LONG_PRESS_MS)
-    },
-    onPointerMove: (event: React.PointerEvent) => {
-      const start = startRef.current
-      if (
-        start &&
-        Math.hypot(event.clientX - start.x, event.clientY - start.y) > LONG_PRESS_TOLERANCE_PX
-      ) {
-        cancel()
-      }
-    },
-    onPointerUp: cancel,
-    onPointerCancel: cancel,
-    onContextMenu: (event: React.MouseEvent) => {
-      // Chrome Android dispara o menu de contexto no toque longo.
-      if (startRef.current || firedRef.current) event.preventDefault()
-    },
-    onClickCapture: (event: React.MouseEvent) => {
-      if (firedRef.current) {
-        firedRef.current = false
-        event.preventDefault()
-        event.stopPropagation()
-      }
-    },
-  }
-}
-
 const shortDate = (value: string) => formatDateOnly(value).slice(0, 5)
 
 /** Situação de pagamento de uma despesa, para a coluna de vencimento (ou a 2ª linha no mobile). */
@@ -257,7 +202,6 @@ function SortableTransactionRow({
   isDragOver,
   reorderPending,
   onShowActions,
-  onOpenDetails,
   onLink,
   onEdit,
   onDelete,
@@ -274,7 +218,6 @@ function SortableTransactionRow({
     id: transaction.id,
     disabled: reorderPending,
   })
-  const longPress = useLongPress(() => onShowActions(transaction))
 
   const dueAlert = getTransactionDueAlert(transaction)
   const categoryLabel = transaction.category?.name || "Sem categoria"
@@ -288,12 +231,11 @@ function SortableTransactionRow({
         transform: CSS.Translate.toString(transform),
         transition: isDragging ? undefined : transition,
       }}
-      {...longPress}
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("button")) return
-        onOpenDetails(transaction)
+        onShowActions(transaction)
       }}
-      className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+      className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 ${
         isDragging
           ? "relative z-10 bg-card shadow-[0_12px_30px_rgba(15,23,42,0.18)]"
           : isDragOver
@@ -398,7 +340,7 @@ type SheetAction = {
   destructive?: boolean
 }
 
-/** Ações de uma linha no mobile (toque longo): folha que sobe do rodapé. */
+/** Ações de uma linha (clique): folha que sobe do rodapé no mobile e modal centrado no desktop. */
 function ActionSheet({
   open,
   title,
@@ -416,13 +358,8 @@ function ActionSheet({
   actions: SheetAction[]
   onClose: () => void
 }) {
-  // A folha abre com o dedo ainda na tela: o clique de quando ele sai cairia nela (fechando-a ou
-  // acionando um botão). Só vale clique cujo toque começou já com a folha aberta.
-  const armedRef = useRef(false)
-
   useEffect(() => {
     if (!open) return
-    armedRef.current = false
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose()
     }
@@ -437,15 +374,6 @@ function ActionSheet({
   return createPortal(
     <div
       className="fixed inset-0 z-[125] flex items-end justify-center bg-slate-950/55 sm:items-center sm:p-4"
-      onPointerDownCapture={() => {
-        armedRef.current = true
-      }}
-      onClickCapture={(event) => {
-        if (!armedRef.current) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-      }}
       onClick={onClose}
     >
       <div
@@ -572,8 +500,6 @@ function InvoiceRow({
   onEdit: () => void
   onShowActions: () => void
 }) {
-  const longPress = useLongPress(onShowActions)
-
   if (isEditing) {
     return (
       <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
@@ -613,8 +539,11 @@ function InvoiceRow({
 
   return (
     <tr
-      {...longPress}
-      className="border-b border-border/60 transition-colors last:border-b-0 hover:bg-secondary/60 active:bg-secondary pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
+      onClick={(event) => {
+        if (event.target instanceof Element && event.target.closest("button")) return
+        onShowActions()
+      }}
+      className="cursor-pointer border-b border-border/60 transition-colors last:border-b-0 hover:bg-secondary/60 active:bg-secondary"
     >
       <td className="w-full max-w-0 py-2.5 pr-2 pl-3 align-middle sm:pl-4">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
@@ -1533,7 +1462,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             <h4 className="app-eyebrow">Transações</h4>
             {groupedTransactions.length > 0 ? (
               <p className="truncate text-[11px] text-muted-foreground sm:hidden">
-                Segure a linha para ações
+                Toque na linha para ações
               </p>
             ) : null}
           </div>
