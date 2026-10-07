@@ -7,7 +7,6 @@ on:
       - ".github/workflows/ci-worker.yml"
   push:
     branches:
-      - dev
       - main
       - master
     paths:

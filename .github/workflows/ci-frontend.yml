@@ -7,7 +7,6 @@ on:
       - ".github/workflows/ci-frontend.yml"
   push:
     branches:
-      - dev
       - main
       - master
     paths:
