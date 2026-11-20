@@ -11,17 +11,33 @@ import { getPlanOrThrow, participantIds, requirePlanAccess } from "./access.ts"
 // Porta do CreditCardInvoiceService. A fatura pertence a um plano e a um mês (`referenceMonth`);
 // as transações vinculadas ficam com a data de competência dentro desse mês.
 
-export type InvoiceInput = { creditCardId: string; referenceMonth: string; amount: number }
+export type InvoiceInput = {
+  creditCardId: string
+  referenceMonth: string
+  amount: number
+  dueDate?: string | null
+  paymentStatus?: "PENDING" | "PAID" | null
+  paymentDate?: string | null
+}
 
-export function invoiceModel(invoice: CreditCardInvoice, creditCardName: string | null) {
+export function invoiceModel(
+  invoice: CreditCardInvoice,
+  creditCardName: string | null,
+  creditCardOwnerId: string | null = null,
+) {
   return withLinks(
     {
       id: invoice.id,
       planId: invoice.planId,
       creditCardId: invoice.creditCardId,
       creditCardName,
+      // Dono do cartão: é a quem a fatura conta no filtro por responsável.
+      creditCardOwnerId,
       referenceMonth: invoice.referenceMonth,
       amount: fromCents(invoice.amountCents),
+      dueDate: invoice.dueDate,
+      paymentStatus: invoice.paymentStatus,
+      paymentDate: invoice.paymentDate,
     },
     {
       self: `/api/credit-card-invoices/${invoice.id}`,
@@ -33,14 +49,14 @@ export function invoiceModel(invoice: CreditCardInvoice, creditCardName: string 
 
 const withCardName = (db: Database) =>
   db
-    .select({ invoice: creditCardInvoices, creditCardName: creditCards.name })
+    .select({ invoice: creditCardInvoices, creditCardName: creditCards.name, creditCardOwnerId: creditCards.userId })
     .from(creditCardInvoices)
     .innerJoin(creditCards, eq(creditCards.id, creditCardInvoices.creditCardId))
 
 export async function findModel(db: Database, id: string) {
   const row = await withCardName(db).where(eq(creditCardInvoices.id, id)).get()
   if (!row) throw notFound("Fatura não encontrada")
-  return invoiceModel(row.invoice, row.creditCardName)
+  return invoiceModel(row.invoice, row.creditCardName, row.creditCardOwnerId)
 }
 
 export async function getAccessibleInvoice(db: Database, user: User, id: string): Promise<CreditCardInvoice> {
@@ -66,7 +82,7 @@ export async function listByPlan(
       ),
     )
     .orderBy(creditCardInvoices.referenceMonth, creditCards.name)
-  return rows.map((r) => invoiceModel(r.invoice, r.creditCardName))
+  return rows.map((r) => invoiceModel(r.invoice, r.creditCardName, r.creditCardOwnerId))
 }
 
 async function assertCardInPlan(db: Database, planId: string, creditCardId: string) {
@@ -92,6 +108,7 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
         creditCardId: input.creditCardId,
         referenceMonth: input.referenceMonth,
         amountCents: toCents(input.amount),
+        ...paymentFields(input, null),
       })
       .returning()
     return invoice!
@@ -101,15 +118,44 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
   }
 }
 
-export async function update(db: Database, user: User, id: string, input: InvoiceInput) {
+/**
+ * Vencimento e pagamento. Campo ausente mantém o valor atual (o PUT antigo, sem esses campos, não
+ * apaga nada). Sem vencimento não há pagamento a registrar, como nas despesas; a data de
+ * pagamento só vale para fatura paga.
+ */
+function paymentFields(input: Partial<InvoiceInput>, current: CreditCardInvoice | null) {
+  const has = (key: keyof InvoiceInput) => Object.prototype.hasOwnProperty.call(input, key)
+  const dueDate = has("dueDate") ? (input.dueDate ?? null) : (current?.dueDate ?? null)
+  let paymentStatus = has("paymentStatus") ? (input.paymentStatus ?? "PENDING") : (current?.paymentStatus ?? "PENDING")
+  let paymentDate = has("paymentDate") ? (input.paymentDate ?? null) : (current?.paymentDate ?? null)
+  if (!dueDate) {
+    paymentStatus = "PENDING"
+    paymentDate = null
+  }
+  if (paymentStatus !== "PAID") paymentDate = null
+  return { dueDate, paymentStatus, paymentDate }
+}
+
+export async function update(db: Database, user: User, id: string, partial: Partial<InvoiceInput>) {
   const current = await getAccessibleInvoice(db, user, id)
+  const input: InvoiceInput = {
+    ...partial,
+    creditCardId: partial.creditCardId ?? current.creditCardId,
+    referenceMonth: partial.referenceMonth ?? current.referenceMonth,
+    amount: partial.amount ?? fromCents(current.amountCents) ?? 0,
+  }
   if (input.creditCardId !== current.creditCardId) {
     await assertCardInPlan(db, current.planId, input.creditCardId)
   }
 
   const updateInvoice = db
     .update(creditCardInvoices)
-    .set({ creditCardId: input.creditCardId, referenceMonth: input.referenceMonth, amountCents: toCents(input.amount) })
+    .set({
+      creditCardId: input.creditCardId,
+      referenceMonth: input.referenceMonth,
+      amountCents: toCents(input.amount),
+      ...paymentFields(partial, current),
+    })
     .where(eq(creditCardInvoices.id, id))
 
   try {

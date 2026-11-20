@@ -880,9 +880,11 @@ export function usePeriodInvoiceManager({
   const [createForm, setCreateForm] = useState({
     creditCardId: creditCards[0]?.id || "",
     amount: "",
+    dueDate: "",
   })
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [editingAmount, setEditingAmount] = useState("")
+  const [editingDueDate, setEditingDueDate] = useState("")
   const resolvedCreateForm = useMemo(() => {
     const hasCurrentCard = creditCards.some(
       (card) => card.id === createForm.creditCardId
@@ -918,10 +920,11 @@ export function usePeriodInvoiceManager({
         creditCardId: resolvedCreateForm.creditCardId,
         referenceMonth: period.id,
         amount: amountNumber,
+        dueDate: resolvedCreateForm.dueDate || null,
       })
     },
     onSuccess: async () => {
-      setCreateForm((current) => ({ ...current, amount: "" }))
+      setCreateForm((current) => ({ ...current, amount: "", dueDate: "" }))
       setIsCreateOpen(false)
       await invalidatePeriodInvoices()
     },
@@ -947,11 +950,13 @@ export function usePeriodInvoiceManager({
         creditCardId: invoice.creditCardId,
         referenceMonth: invoice.referenceMonth,
         amount: amountNumber,
+        dueDate: editingDueDate || null,
       })
     },
     onSuccess: async () => {
       setEditingInvoiceId(null)
       setEditingAmount("")
+      setEditingDueDate("")
       await invalidatePeriodInvoices()
     },
   })
@@ -975,7 +980,7 @@ export function usePeriodInvoiceManager({
   }
 
   const cancelCreate = () => {
-    setCreateForm((current) => ({ ...current, amount: "" }))
+    setCreateForm((current) => ({ ...current, amount: "", dueDate: "" }))
     setIsCreateOpen(false)
   }
 
@@ -988,11 +993,13 @@ export function usePeriodInvoiceManager({
         maximumFractionDigits: 2,
       })
     )
+    setEditingDueDate(invoice.dueDate ?? "")
   }
 
   const cancelEdit = () => {
     setEditingInvoiceId(null)
     setEditingAmount("")
+    setEditingDueDate("")
   }
 
   return {
@@ -1005,6 +1012,8 @@ export function usePeriodInvoiceManager({
     editingInvoiceId,
     editingAmount,
     setEditingAmount,
+    editingDueDate,
+    setEditingDueDate,
     startEdit,
     cancelEdit,
     updateInvoice,
@@ -1436,6 +1445,45 @@ export function useTransactionPayment(planId: string | null | undefined) {
           Array.isArray(current)
             ? current.map((item) =>
                 item.id === transaction.id ? { ...item, ...patch } : item
+              )
+            : current
+      )
+      return { snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      context?.snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => invalidateTransactionViews(queryClient, planId),
+  })
+}
+
+/** Baixa da fatura (paga hoje / volta a pendente). Só faturas com vencimento. */
+export function useInvoicePayment(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ invoice, paid }: { invoice: Invoice; paid: boolean }) =>
+      invoiceService.patch(invoice.id, {
+        paymentStatus: paid ? "PAID" : "PENDING",
+        paymentDate: paid ? todayIso() : null,
+      }),
+    onMutate: async ({ invoice, paid }) => {
+      await queryClient.cancelQueries({ queryKey: financeKeys.periodInvoicesRoot })
+      const snapshot = queryClient.getQueriesData<Invoice[]>({
+        queryKey: financeKeys.periodInvoicesRoot,
+      })
+      queryClient.setQueriesData<Invoice[]>(
+        { queryKey: financeKeys.periodInvoicesRoot },
+        (current) =>
+          Array.isArray(current)
+            ? current.map((item) =>
+                item.id === invoice.id
+                  ? {
+                      ...item,
+                      paymentStatus: paid ? "PAID" : "PENDING",
+                      paymentDate: paid ? todayIso() : null,
+                    }
+                  : item
               )
             : current
       )

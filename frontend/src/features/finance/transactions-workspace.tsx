@@ -48,11 +48,13 @@ import {
   type ConfirmationDialogState,
 } from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
+import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
+  useInvoicePayment,
   usePeriodInvoiceManager,
   useTransactionPayment,
   useTransactionLinking,
@@ -85,6 +87,7 @@ import type {
 } from "@/features/finance/types.ts"
 import {
   canTogglePayment,
+  invoiceAsBill,
   formatCurrency,
   formatDateOnly,
   formatDateTime,
@@ -613,11 +616,14 @@ function InvoiceRow({
   isEditing,
   editingAmount,
   onEditingAmountChange,
+  editingDueDate,
+  onEditingDueDateChange,
   savePending,
   onSave,
   onCancel,
   onEdit,
   onDelete,
+  onTogglePaid,
   onShowActions,
 }: {
   label: string
@@ -625,25 +631,37 @@ function InvoiceRow({
   isEditing: boolean
   editingAmount: string
   onEditingAmountChange: (amount: string) => void
+  editingDueDate: string
+  onEditingDueDateChange: (dueDate: string) => void
   savePending: boolean
   onSave: () => void
   onCancel: () => void
   onEdit: () => void
   onDelete: () => void
+  onTogglePaid: () => void
   onShowActions: () => void
 }) {
   if (isEditing) {
     return (
       <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
         <td colSpan={3} className="max-w-0 px-3 py-2 sm:px-4">
-          <div data-carousel-no-drag className="flex items-center gap-2">
-            <span className="mr-auto flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+          <div data-carousel-no-drag className="flex flex-wrap items-center gap-2">
+            <span className="flex w-full min-w-0 items-center gap-2 text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
               <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
               <span className="truncate">{label}</span>
             </span>
-            <div className="w-28 shrink-0 sm:w-44">
+            <div className="w-32 shrink-0 sm:w-40">
               <CurrencyInput value={editingAmount} onValueChange={onEditingAmountChange} />
             </div>
+            <label className="min-w-0 flex-1 sm:w-40 sm:flex-none">
+              <span className="sr-only">Vencimento da fatura</span>
+              <Input
+                type="date"
+                value={editingDueDate}
+                onChange={(event) => onEditingDueDateChange(event.target.value)}
+                title="Vencimento (opcional)"
+              />
+            </label>
             <Button
               type="button"
               className="h-11 shrink-0 max-sm:w-11 max-sm:px-0"
@@ -669,21 +687,35 @@ function InvoiceRow({
     )
   }
 
+  const bill = invoiceAsBill(invoice, label)
+  const canPay = Boolean(invoice.dueDate)
+  const isPaid = canPay && invoice.paymentStatus === "PAID"
+  const overdue = getTransactionDueAlert(bill) === "overdue"
+
   return (
     <tr
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("button")) return
         onShowActions()
       }}
-      className="cursor-pointer border-b border-border/60 transition-colors last:border-b-0 hover:bg-secondary/60 active:bg-secondary"
+      className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 ${
+        overdue
+          ? "bg-amber-500/[0.07] hover:bg-amber-500/[0.12] active:bg-amber-500/[0.16]"
+          : "hover:bg-secondary/60 active:bg-secondary"
+      }`}
     >
-      <td className="w-full max-w-0 py-2.5 pr-2 pl-3 align-middle sm:pl-4">
+      <td className="w-full max-w-0 py-2 pr-2 pl-3 align-middle sm:pl-4">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
           <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
           <span className="truncate">{label}</span>
         </span>
+        {canPay ? (
+          <span className="mt-0.5 block pl-[22px] text-[11px] leading-4">
+            <PaymentBadge transaction={bill} />
+          </span>
+        ) : null}
       </td>
-      <td className="w-px py-2.5 pr-3 text-right align-middle text-sm font-semibold whitespace-nowrap text-rose-600 tabular-nums sm:pr-3 dark:text-rose-400">
+      <td className="w-px py-2 pr-3 text-right align-middle text-sm font-semibold whitespace-nowrap text-rose-600 tabular-nums sm:pr-3 dark:text-rose-400">
         {formatCurrency(invoice.amount)}
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
@@ -692,10 +724,33 @@ function InvoiceRow({
             type="button"
             variant="ghost"
             size="icon"
+            className={`size-8 ${
+              isPaid
+                ? "text-emerald-500 dark:text-emerald-400"
+                : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+            }`}
+            onClick={onTogglePaid}
+            disabled={!canPay}
+            aria-pressed={canPay ? isPaid : undefined}
+            aria-label={isPaid ? `Marcar fatura ${label} como pendente` : `Marcar fatura ${label} como paga`}
+            title={
+              canPay
+                ? isPaid
+                  ? "Marcar como pendente"
+                  : "Marcar como paga hoje"
+                : "Defina o vencimento (editar) para registrar o pagamento"
+            }
+          >
+            <CheckCircle2 size={14} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             className="size-8 text-muted-foreground"
             onClick={onEdit}
             aria-label={`Editar fatura ${label}`}
-            title="Editar fatura"
+            title="Editar valor e vencimento"
           >
             <Pencil size={14} />
           </Button>
@@ -1425,6 +1480,10 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         : {}),
     })
 
+  const invoicePayment = useInvoicePayment(panel.period.planId)
+  const toggleInvoicePaid = (invoice: Invoice) =>
+    invoicePayment.mutate({ invoice, paid: invoice.paymentStatus !== "PAID" })
+
   const confirmDeleteInvoice = (invoice: Invoice) => {
     const linkedCount = linkedTransactionsOf(invoice).length
     setConfirmationDialog({
@@ -1547,7 +1606,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               data-carousel-no-drag
               className="border-b border-border/70 bg-secondary/40 p-3 sm:p-4"
             >
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
                 <div>
                   <Label>Cartão</Label>
                   <Select
@@ -1580,6 +1639,20 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                       invoiceManager.setCreateForm((current) => ({
                         ...current,
                         amount,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`invoice-due-${panel.period.id}`}>Vencimento (opcional)</Label>
+                  <Input
+                    id={`invoice-due-${panel.period.id}`}
+                    type="date"
+                    value={invoiceManager.createForm.dueDate}
+                    onChange={(event) =>
+                      invoiceManager.setCreateForm((current) => ({
+                        ...current,
+                        dueDate: event.target.value,
                       }))
                     }
                   />
@@ -1638,11 +1711,14 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         isEditing={isEditing}
                         editingAmount={invoiceManager.editingAmount}
                         onEditingAmountChange={invoiceManager.setEditingAmount}
+                        editingDueDate={invoiceManager.editingDueDate}
+                        onEditingDueDateChange={invoiceManager.setEditingDueDate}
                         savePending={invoiceManager.updateInvoice.isPending}
                         onSave={() => invoiceManager.updateInvoice.mutate()}
                         onCancel={invoiceManager.cancelEdit}
                         onEdit={() => invoiceManager.startEdit(invoice)}
                         onDelete={() => confirmDeleteInvoice(invoice)}
+                        onTogglePaid={() => toggleInvoicePaid(invoice)}
                         onShowActions={() => setActionsInvoice(invoice)}
                       />
                     )
@@ -1656,9 +1732,14 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               <FormError message={invoiceManager.updateErrorMessage} />
             </div>
           ) : null}
-          {invoiceManager.deleteErrorMessage ? (
+          {invoiceManager.deleteErrorMessage || invoicePayment.error ? (
             <div className="px-3 pb-2 sm:px-4">
-              <FormError message={invoiceManager.deleteErrorMessage} />
+              <FormError
+                message={
+                  invoiceManager.deleteErrorMessage ||
+                  getErrorMessage(invoicePayment.error, "Não foi possível atualizar o pagamento da fatura.")
+                }
+              />
             </div>
           ) : null}
         </Card>
@@ -1668,6 +1749,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           subtitle={
             <>
               <span>Fatura de cartão · {panel.label}</span>
+              {actionsInvoice?.dueDate ? (
+                <PaymentBadge transaction={invoiceAsBill(actionsInvoice, invoiceLabel(actionsInvoice))} />
+              ) : null}
               {actionsInvoiceLinked.length > 0 ? (
                 <span>
                   · {actionsInvoiceLinked.length}{" "}
@@ -1681,8 +1765,23 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
           amountTone="negative"
           actions={[
+            ...(actionsInvoice?.dueDate
+              ? [
+                  actionsInvoice.paymentStatus === "PAID"
+                    ? {
+                        label: "Marcar como pendente",
+                        icon: Clock3,
+                        onClick: () => actionsInvoice && toggleInvoicePaid(actionsInvoice),
+                      }
+                    : {
+                        label: "Marcar como paga hoje",
+                        icon: CheckCircle2,
+                        onClick: () => actionsInvoice && toggleInvoicePaid(actionsInvoice),
+                      },
+                ]
+              : []),
             {
-              label: "Editar valor",
+              label: actionsInvoice?.dueDate ? "Editar valor e vencimento" : "Editar valor e definir vencimento",
               icon: Pencil,
               onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
             },

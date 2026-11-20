@@ -15,6 +15,13 @@
       "when": 1790979058430,
       "tag": "0001_transactions_due_date_index",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795202383307,
+      "tag": "0002_invoice_payment",
+      "breakpoints": true
     }
   ]
 }

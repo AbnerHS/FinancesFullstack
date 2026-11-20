@@ -153,6 +153,43 @@ describe("faturas", () => {
     expect(moved).toMatchObject({ referenceDate: "2026-02-28", order: 2 })
   })
 
+  it("vencimento e pagamento: PATCH parcial, dono do cartão e regras de consistência", async () => {
+    const owner = await createUser()
+    const plan = await createPlan(owner)
+    const card = await createCard(owner)
+    const invoice = await json(
+      as(owner).post("/credit-card-invoices", {
+        planId: plan.id,
+        creditCardId: card.id,
+        referenceMonth: "2026-04",
+        amount: 300,
+        dueDate: "2026-04-10",
+      }),
+      201,
+    )
+    expect(invoice).toMatchObject({
+      dueDate: "2026-04-10",
+      paymentStatus: "PENDING",
+      paymentDate: null,
+      creditCardOwnerId: owner.id,
+    })
+
+    const paid = await json(
+      as(owner).patch(`/credit-card-invoices/${invoice.id}`, { paymentStatus: "PAID", paymentDate: "2026-04-08" }),
+    )
+    expect(paid).toMatchObject({ amount: 300, dueDate: "2026-04-10", paymentStatus: "PAID", paymentDate: "2026-04-08" })
+
+    // PUT antigo (sem os campos novos) não apaga vencimento nem pagamento.
+    const kept = await json(
+      as(owner).put(`/credit-card-invoices/${invoice.id}`, { creditCardId: card.id, referenceMonth: "2026-04", amount: 310 }),
+    )
+    expect(kept).toMatchObject({ amount: 310, dueDate: "2026-04-10", paymentStatus: "PAID" })
+
+    // Sem vencimento não há pagamento.
+    const cleared = await json(as(owner).patch(`/credit-card-invoices/${invoice.id}`, { dueDate: null }))
+    expect(cleared).toMatchObject({ dueDate: null, paymentStatus: "PENDING", paymentDate: null })
+  })
+
   it("excluir a fatura desvincula as transações", async () => {
     const owner = await createUser()
     const plan = await createPlan(owner)

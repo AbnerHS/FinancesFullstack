@@ -86,8 +86,13 @@ export type Invoice = EntityModel<{
   planId: string
   creditCardId: string
   creditCardName?: string | null
+  /** Dono do cartão: a fatura conta para ele no filtro por responsável. */
+  creditCardOwnerId?: string | null
   referenceMonth: string
   amount: number
+  dueDate?: string | null
+  paymentStatus?: PaymentStatus | null
+  paymentDate?: string | null
 }>
 
 export type Transaction = EntityModel<{

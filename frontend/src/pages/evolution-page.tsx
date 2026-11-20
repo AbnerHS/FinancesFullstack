@@ -119,14 +119,15 @@ export function EvolutionPage() {
   )
 
   const categories = useMemo(
-    () => buildCategorySpending(panels, !responsibleFilter),
-    [panels, responsibleFilter]
+    () => buildCategorySpending(panels),
+    [panels]
   )
   const responsibles = useMemo(
     () =>
       buildResponsibleSpending(
         panels.flatMap((panel) => panel.transactions),
-        responsibleOptions
+        responsibleOptions,
+        panels.flatMap((panel) => panel.invoices)
       ),
     [panels, responsibleOptions]
   )
@@ -262,7 +263,7 @@ export function EvolutionPage() {
           items={responsibles}
           limit={CATEGORY_LIMIT}
           empty="Nenhuma despesa no período."
-          note={responsibleFilter ? undefined : "Faturas de cartão não têm responsável e ficam de fora."}
+          note={responsibleFilter ? undefined : "Faturas de cartão contam para o dono do cartão."}
         />
       </div>
 

@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { z } from "zod"
-import { id, yearMonth } from "../lib/query.ts"
+import { paymentStatuses } from "../db/schema.ts"
+import { id, isoDate, yearMonth } from "../lib/query.ts"
 import { validate } from "../lib/validation.ts"
 import * as invoices from "../services/invoices.ts"
 import type { AppEnv } from "../types.ts"
@@ -9,6 +10,9 @@ const invoiceSchema = z.object({
   creditCardId: id("O id do cartão de crédito é obrigatório"),
   referenceMonth: yearMonth,
   amount: z.coerce.number().positive("O valor da fatura deve ser positivo"),
+  dueDate: isoDate.nullable().optional(),
+  paymentStatus: z.enum(paymentStatuses).nullable().optional(),
+  paymentDate: isoDate.nullable().optional(),
 })
 
 const createSchema = invoiceSchema.extend({ planId: id("O id do plano é obrigatório") })
@@ -24,6 +28,10 @@ export const invoiceRoutes = new Hono<AppEnv>()
     return c.json(await invoices.findModel(c.var.db, invoice.id))
   })
   .put("/:id", validate("json", invoiceSchema), async (c) => {
+    await invoices.update(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))
+    return c.json(await invoices.findModel(c.var.db, c.req.param("id")))
+  })
+  .patch("/:id", validate("json", invoiceSchema.partial()), async (c) => {
     await invoices.update(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))
     return c.json(await invoices.findModel(c.var.db, c.req.param("id")))
   })

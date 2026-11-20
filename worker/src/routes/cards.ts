@@ -34,7 +34,7 @@ export const cardRoutes = new Hono<AppEnv>()
     return c.json(
       collection(
         "invoices",
-        list.map((invoice) => invoices.invoiceModel(invoice, card.name)),
+        list.map((invoice) => invoices.invoiceModel(invoice, card.name, card.userId)),
         `/api/credit-cards/${card.id}/invoices`,
       ),
     )

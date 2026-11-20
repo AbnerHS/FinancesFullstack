@@ -1,4 +1,5 @@
 import type {
+  Invoice,
   PaymentStatus,
   Period,
   Transaction,
@@ -307,6 +308,26 @@ export function canTogglePayment(transaction: {
   return transaction.type === "EXPENSE" && Boolean(transaction.dueDate)
 }
 
+/** Conta a pagar: transação ou fatura com vencimento (a fatura vem em `invoiceBill`). */
+export type BillTransaction = Transaction & { invoiceBill?: Invoice }
+
+/** Fatura com vencimento no formato de conta, para entrar em "Contas a pagar" com as despesas. */
+export function invoiceAsBill(invoice: Invoice, label: string): BillTransaction {
+  return {
+    id: `invoice:${invoice.id}`,
+    description: `Fatura ${label}`,
+    amount: Number(invoice.amount || 0),
+    type: "EXPENSE",
+    planId: invoice.planId,
+    referenceDate: `${invoice.referenceMonth}-01`,
+    dueDate: invoice.dueDate ?? null,
+    paymentStatus: invoice.paymentStatus ?? "PENDING",
+    paymentDate: invoice.paymentDate ?? null,
+    isClearedByInvoice: false,
+    invoiceBill: invoice,
+  } as BillTransaction
+}
+
 export function todayIso(today = new Date()) {
   return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
 }
@@ -367,6 +388,7 @@ export function buildMonthInsights({
   transactions,
   invoices,
   previousStats,
+  invoiceBills = [],
   today = todayIso(),
 }: {
   period: Period
@@ -374,11 +396,16 @@ export function buildMonthInsights({
   transactions: Transaction[]
   invoices: Array<{ amount: number | string }>
   previousStats: { incomes: number; expenses: number } | null
+  /** Faturas com vencimento, já no formato de conta (ver invoiceAsBill). */
+  invoiceBills?: Transaction[]
   today?: string
 }): MonthInsights {
   const { incomes, expenses, balance } = stats
 
-  const bills = transactions.filter((t) => isCountedExpense(t) && t.dueDate)
+  const bills = [
+    ...transactions.filter((t) => isCountedExpense(t) && t.dueDate),
+    ...invoiceBills,
+  ]
   const paid = bills.filter((t) => t.paymentStatus === "PAID")
   const pending = bills.filter((t) => t.paymentStatus !== "PAID")
   const overdue = pending.filter((t) => getTransactionDueAlert(t) === "overdue")
@@ -494,13 +521,21 @@ export function formatPercent(value: number | null | undefined, fractionDigits =
 
 type StatsPanel = {
   transactions: Transaction[]
-  invoices: Array<{ amount: number | string }>
+  invoices: Array<{ amount: number | string; creditCardOwnerId?: string | null }>
   stats: { incomes: number; expenses: number; balance: number }
 }
 
+/** A fatura conta para o dono do cartão. */
+export function invoiceBelongsTo(
+  invoice: { creditCardOwnerId?: string | null },
+  responsibleId: string
+) {
+  return !responsibleId || invoice.creditCardOwnerId === responsibleId
+}
+
 /**
- * Painéis vistos por um responsável: só as transações dele, e as faturas (que não têm dono) ficam
- * fora dos totais. Sem filtro, devolve os mesmos painéis.
+ * Painéis vistos por um responsável: as transações dele e as faturas dos cartões dele. Sem filtro,
+ * devolve os mesmos painéis.
  */
 export function filterPanelsByResponsible<Panel extends StatsPanel>(
   panels: Panel[],
@@ -514,7 +549,19 @@ export function filterPanelsByResponsible<Panel extends StatsPanel>(
     const transactions = panel.transactions.filter(
       (transaction) => transaction.responsibleUserId === responsibleId
     )
-    return { ...panel, transactions, stats: calculateStats(transactions, 0) }
+    const invoices = panel.invoices.filter((invoice) =>
+      invoiceBelongsTo(invoice, responsibleId)
+    )
+    const invoicesTotal = invoices.reduce(
+      (total, invoice) => total + Number(invoice.amount || 0),
+      0
+    )
+    return {
+      ...panel,
+      transactions,
+      invoices,
+      stats: calculateStats(transactions, invoicesTotal),
+    }
   })
 }
 
@@ -529,7 +576,7 @@ const withShares = (totals: Map<string, { label: string; total: number }>): Spen
 }
 
 /** Despesas por categoria; faturas de cartão entram juntas como "Cartão de Crédito". */
-export function buildCategorySpending(panels: StatsPanel[], includeInvoices: boolean) {
+export function buildCategorySpending(panels: StatsPanel[]) {
   const totals = new Map<string, { label: string; total: number }>()
   const add = (label: string, amount: number) => {
     const current = totals.get(label)
@@ -540,20 +587,29 @@ export function buildCategorySpending(panels: StatsPanel[], includeInvoices: boo
     panel.transactions.filter(isCountedExpense).forEach((transaction) => {
       add(transaction.category?.name || "Sem categoria", Number(transaction.amount || 0))
     })
-    if (includeInvoices) {
-      panel.invoices.forEach((invoice) => add("Cartão de Crédito", Number(invoice.amount || 0)))
-    }
+    panel.invoices.forEach((invoice) => add("Cartão de Crédito", Number(invoice.amount || 0)))
   })
 
   return withShares(totals)
 }
 
-/** Despesas por responsável (transações sem responsável ficam em "Geral"). */
+/**
+ * Despesas por responsável (transações sem responsável ficam em "Geral"); faturas entram para o
+ * dono do cartão.
+ */
 export function buildResponsibleSpending(
   transactions: Transaction[],
-  responsibleOptions: Array<{ id: string; label: string }>
+  responsibleOptions: Array<{ id: string; label: string }>,
+  invoices: Array<{ amount: number | string; creditCardOwnerId?: string | null }> = []
 ) {
   const totals = new Map<string, { label: string; total: number }>()
+  invoices.forEach((invoice) => {
+    const id = invoice.creditCardOwnerId || "__unassigned__"
+    const label =
+      responsibleOptions.find((option) => option.id === invoice.creditCardOwnerId)?.label ||
+      "Geral"
+    totals.set(id, { label, total: (totals.get(id)?.total ?? 0) + Number(invoice.amount || 0) })
+  })
   transactions.filter(isCountedExpense).forEach((transaction) => {
     const id = transaction.responsibleUserId || "__unassigned__"
     const label =

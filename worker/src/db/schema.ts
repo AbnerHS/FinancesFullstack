@@ -99,6 +99,10 @@ export const creditCardInvoices = sqliteTable(
       .references(() => creditCards.id),
     referenceMonth: text("reference_month").notNull(), // 'YYYY-MM'
     amountCents: integer("amount_cents"),
+    // Opcionais: com vencimento, a fatura entra em "Contas a pagar" como as despesas.
+    dueDate: text("due_date"), // 'YYYY-MM-DD'
+    paymentStatus: text("payment_status", { enum: paymentStatuses }).notNull().default("PENDING"),
+    paymentDate: text("payment_date"),
   },
   (t) => [
     uniqueIndex("uk_credit_card_invoices_plan_card_month").on(

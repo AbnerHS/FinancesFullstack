@@ -5,6 +5,7 @@ import type { EmbeddedCollection } from "@/lib/api/types.ts"
 import type {
   CreditCard,
   Invoice,
+  PaymentStatus,
   Period,
   Plan,
   PlanMonthSummary,
@@ -269,15 +270,35 @@ export const invoiceService = {
     creditCardId: string
     referenceMonth: string
     amount: number
+    dueDate?: string | null
   }) {
     const { data } = await http.post<Invoice>("/credit-card-invoices", payload)
     return data
   },
   async update(
     id: string,
-    payload: { creditCardId: string; referenceMonth: string; amount: number }
+    payload: {
+      creditCardId: string
+      referenceMonth: string
+      amount: number
+      dueDate?: string | null
+    }
   ) {
     const { data } = await http.put<Invoice>(
+      `/credit-card-invoices/${id}`,
+      payload
+    )
+    return data
+  },
+  async patch(
+    id: string,
+    payload: {
+      dueDate?: string | null
+      paymentStatus?: PaymentStatus | null
+      paymentDate?: string | null
+    }
+  ) {
+    const { data } = await http.patch<Invoice>(
       `/credit-card-invoices/${id}`,
       payload
     )
