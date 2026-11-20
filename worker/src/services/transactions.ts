@@ -275,8 +275,18 @@ function applyLinkDocument(
   }
   assertCanAttachDocument(hadExistingDocument, draft.dueDate)
   const url = document.url?.trim()
-  if (!url) throw badRequest("Informe um link válido para o documento.")
+  if (!url || !isHttpUrl(url)) throw badRequest("Informe um link válido (http ou https) para o documento.")
   Object.assign(draft, EMPTY_DOCUMENT, { billingDocumentType: "LINK", billingDocumentUrl: url })
+}
+
+/** Só http(s): o link é aberto pelo app, e `javascript:`/`data:` rodariam código na origem dele. */
+function isHttpUrl(value: string) {
+  try {
+    const { protocol } = new URL(value)
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
 }
 
 export function assertCanAttachDocument(hadExistingDocument: boolean, dueDate: string | null) {

@@ -28,6 +28,7 @@ import {
   ExternalLink,
   GripVertical,
   Link,
+  Paperclip,
   Pencil,
   Plus,
   Repeat2,
@@ -125,6 +126,7 @@ type TransactionActions = {
   onEdit: (transaction: Transaction) => void
   onDelete: (transaction: Transaction) => void
   onTogglePaid: (transaction: Transaction) => void
+  onOpenDocument: (transaction: Transaction) => void
 }
 
 type TransactionRowProps = TransactionActions & {
@@ -135,6 +137,62 @@ type TransactionRowProps = TransactionActions & {
 }
 
 const shortDate = (value: string) => formatDateOnly(value).slice(0, 5)
+
+function isHttpUrl(value: string) {
+  try {
+    const { protocol } = new URL(value)
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
+/** Documento que dá para abrir: arquivo enviado ou link http(s). */
+function hasOpenableDocument(transaction: Transaction) {
+  const doc = transaction.billingDocument
+  if (!doc) return false
+  return doc.type === "FILE" || Boolean(doc.url && isHttpUrl(doc.url))
+}
+
+function billingDocumentLabel(transaction: Transaction) {
+  return transaction.paymentStatus === "PAID" ? "comprovante" : "boleto"
+}
+
+/**
+ * Abre o boleto/comprovante numa nova aba. A aba é aberta já no clique (antes do download), senão o
+ * Safari/iOS bloqueia como pop-up; o arquivo entra nela quando chegar.
+ */
+async function openBillingDocument(transaction: Transaction) {
+  const doc = transaction.billingDocument
+  if (!doc) return
+
+  if (doc.type === "LINK") {
+    if (!doc.url || !isHttpUrl(doc.url)) {
+      throw new Error("O link do documento é inválido.")
+    }
+    window.open(doc.url, "_blank", "noopener,noreferrer")
+    return
+  }
+
+  const tab = window.open("", "_blank")
+  if (tab) {
+    tab.opener = null
+    tab.document.title = "Abrindo documento..."
+  }
+  try {
+    const blob = await transactionService.downloadBillingDocument(transaction.id)
+    const objectUrl = window.URL.createObjectURL(blob)
+    if (tab) {
+      tab.location.href = objectUrl
+    } else {
+      window.location.assign(objectUrl)
+    }
+    window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+  } catch (error) {
+    tab?.close()
+    throw error
+  }
+}
 
 /** Situação de pagamento de uma despesa, para a coluna de vencimento (ou a 2ª linha no mobile). */
 function getPaymentBadge(transaction: Transaction) {
@@ -268,6 +326,11 @@ function SortableTransactionRow({
             <Repeat2 size={12} className="shrink-0 text-primary" aria-label="Recorrente">
               <title>Recorrente</title>
             </Repeat2>
+          ) : null}
+          {transaction.billingDocument ? (
+            <Paperclip size={12} className="shrink-0 text-muted-foreground" aria-label="Com documento anexado">
+              <title>{transaction.billingDocument.type === "LINK" ? "Link do documento" : "Documento anexado"}</title>
+            </Paperclip>
           ) : null}
           {isExpense && transaction.isClearedByInvoice ? (
             <Link size={12} className="shrink-0 text-emerald-500 sm:hidden" aria-label="Vinculada a fatura" />
@@ -467,6 +530,7 @@ function TransactionActionSheet({
   onEdit,
   onDelete,
   onTogglePaid,
+  onOpenDocument,
 }: TransactionActions & {
   transaction: Transaction | null
   onClose: () => void
@@ -482,6 +546,15 @@ function TransactionActionSheet({
           transaction.paymentStatus === "PAID"
             ? { label: "Marcar como pendente", icon: Clock3, onClick: () => onTogglePaid(transaction) }
             : { label: "Marcar como pago hoje", icon: CheckCircle2, onClick: () => onTogglePaid(transaction) },
+        ]
+      : []),
+    ...(hasOpenableDocument(transaction)
+      ? [
+          {
+            label: `Abrir ${billingDocumentLabel(transaction)}`,
+            icon: Paperclip,
+            onClick: () => onOpenDocument(transaction),
+          },
         ]
       : []),
     { label: "Ver detalhes", icon: Eye, onClick: () => onOpenDetails(transaction) },
@@ -721,21 +794,14 @@ function TransactionDetailsModal({
   }
 
   const handlePreviewBillingDocument = async () => {
-    if (!billingDocument || billingDocument.type !== "FILE") {
-      return
-    }
-
     setPreviewPending(true)
     setDownloadError(null)
 
     try {
-      const blob = await transactionService.downloadBillingDocument(transaction.id)
-      const objectUrl = window.URL.createObjectURL(blob)
-      window.open(objectUrl, "_blank", "noopener,noreferrer")
-      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+      await openBillingDocument(transaction)
     } catch (error) {
       setDownloadError(
-        getErrorMessage(error, "Nao foi possivel visualizar o documento.")
+        getErrorMessage(error, "Não foi possível abrir o documento.")
       )
     } finally {
       setPreviewPending(false)
@@ -796,17 +862,11 @@ function TransactionDetailsModal({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap gap-2">
-            {billingDocument?.type === "LINK" && billingDocument.url ? (
+            {billingDocument?.type === "LINK" && hasOpenableDocument(transaction) ? (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  window.open(
-                    billingDocument.url!,
-                    "_blank",
-                    "noopener,noreferrer"
-                  )
-                }
+                onClick={handlePreviewBillingDocument}
               >
                 Abrir documento
                 <ExternalLink size={16} />
@@ -953,6 +1013,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   } = useTransactionMutations(panel.period)
   const transactionLinking = useTransactionLinking(panel.period)
   const transactionPayment = useTransactionPayment(panel.period.planId)
+  const [documentError, setDocumentError] = useState<string | null>(null)
   const invoiceManager = usePeriodInvoiceManager({
     creditCards: shared.creditCards,
     invoices: panel.invoices,
@@ -1304,6 +1365,14 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         transaction,
         paid: transaction.paymentStatus !== "PAID",
       }),
+    onOpenDocument: (transaction) => {
+      setDocumentError(null)
+      openBillingDocument(transaction).catch((error) =>
+        setDocumentError(
+          getErrorMessage(error, "Não foi possível abrir o documento.")
+        )
+      )
+    },
   }
   const closeActions = useCallback(() => setActionsTransaction(null), [])
   const closeInvoiceActions = useCallback(() => setActionsInvoice(null), [])
@@ -1594,7 +1663,11 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         <Card className="gap-0 overflow-hidden border-border bg-card p-0">
           <div className="flex items-baseline justify-between gap-3 border-b border-border/70 px-3 py-2.5 sm:px-4">
             <h4 className="app-eyebrow">Transações</h4>
-            {groupedTransactions.length > 0 ? (
+            {documentError ? (
+              <p role="alert" className="truncate text-[11px] text-rose-600 dark:text-rose-400">
+                {documentError}
+              </p>
+            ) : groupedTransactions.length > 0 ? (
               <p className="truncate text-[11px] text-muted-foreground sm:hidden">
                 Toque na linha para ações
               </p>
