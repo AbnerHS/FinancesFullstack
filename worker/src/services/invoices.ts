@@ -160,6 +160,10 @@ function moveLinkedTransactions(db: Database, invoice: CreditCardInvoice, month:
 
 export async function remove(db: Database, user: User, id: string) {
   await getAccessibleInvoice(db, user, id)
-  // Transações vinculadas ficam sem fatura (ON DELETE SET NULL).
-  await db.delete(creditCardInvoices).where(eq(creditCardInvoices.id, id))
+  // Transações vinculadas ficam sem fatura (ON DELETE SET NULL) e deixam de contar como quitadas
+  // por ela, senão sairiam dos totais sem fatura nenhuma cobrindo o valor.
+  await db.batch([
+    db.update(transactions).set({ clearedByInvoice: false }).where(eq(transactions.creditCardInvoiceId, id)),
+    db.delete(creditCardInvoices).where(eq(creditCardInvoices.id, id)),
+  ])
 }

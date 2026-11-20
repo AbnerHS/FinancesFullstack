@@ -161,11 +161,13 @@ describe("faturas", () => {
       as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: "2026-03", amount: 100 }),
       201,
     )
-    const linked = await json(as(owner).post("/transactions", tx(plan.id, "2026-03-05", { creditCardInvoiceId: invoice.id })), 201)
+    const linked = await json(as(owner).post("/transactions", tx(plan.id, "2026-03-05", { creditCardInvoiceId: invoice.id, isClearedByInvoice: true })), 201)
+    expect(linked.isClearedByInvoice).toBe(true)
 
     expect((await as(owner).delete(`/credit-card-invoices/${invoice.id}`)).status).toBe(204)
     expect(await json(as(owner).get(`/transactions/${linked.id}`))).toMatchObject({
       creditCardInvoiceId: null,
+      isClearedByInvoice: false,
       referenceDate: "2026-03-05",
     })
   })

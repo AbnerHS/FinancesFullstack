@@ -28,6 +28,9 @@ export const financeKeys = {
   ownCards: ["credit-cards", "me"] as const,
   planCards: (planId?: string | null) =>
     ["credit-cards", "plan", planId] as const,
+  // Sob a raiz das faturas: criar/editar/excluir fatura já invalida ["period-invoices"].
+  cardInvoices: (cardId?: string | null) =>
+    ["period-invoices", "card", cardId] as const,
   categories: ["transaction-categories"] as const,
   // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
   periodTransactionsRoot: ["period-transactions"] as const,
@@ -249,6 +252,15 @@ export const creditCardService = {
     const { data } = await http.put<CreditCard>(`/credit-cards/${id}`, payload)
     return data
   },
+  async delete(id: string) {
+    await http.delete(`/credit-cards/${id}`)
+  },
+  async getInvoices(cardId: string) {
+    const { data } = await http.get<
+      EmbeddedCollection<Invoice, "invoices">
+    >(`/credit-cards/${cardId}/invoices`)
+    return embedded(data, "invoices")
+  },
 }
 
 export const invoiceService = {
@@ -271,6 +283,9 @@ export const invoiceService = {
     )
     return data
   },
+  async delete(id: string) {
+    await http.delete(`/credit-card-invoices/${id}`)
+  },
 }
 
 export const transactionCategoryService = {
@@ -286,6 +301,16 @@ export const transactionCategoryService = {
       payload
     )
     return data
+  },
+  async update(id: string, payload: { name: string }) {
+    const { data } = await http.put<TransactionCategory>(
+      `/transaction-categories/${id}`,
+      payload
+    )
+    return data
+  },
+  async delete(id: string) {
+    await http.delete(`/transaction-categories/${id}`)
   },
 }
 

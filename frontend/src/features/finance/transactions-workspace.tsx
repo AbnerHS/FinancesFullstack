@@ -349,6 +349,7 @@ function ActionSheet({
   amountTone,
   actions,
   onClose,
+  children,
 }: {
   open: boolean
   title: string
@@ -357,6 +358,7 @@ function ActionSheet({
   amountTone: "positive" | "negative"
   actions: SheetAction[]
   onClose: () => void
+  children?: ReactNode
 }) {
   useEffect(() => {
     if (!open) return
@@ -403,6 +405,7 @@ function ActionSheet({
             {amount}
           </span>
         </div>
+        {children}
         <div className="px-2 pt-2">
           {actions.map((action) => (
             <button
@@ -487,6 +490,7 @@ function InvoiceRow({
   onSave,
   onCancel,
   onEdit,
+  onDelete,
   onShowActions,
 }: {
   label: string
@@ -498,6 +502,7 @@ function InvoiceRow({
   onSave: () => void
   onCancel: () => void
   onEdit: () => void
+  onDelete: () => void
   onShowActions: () => void
 }) {
   if (isEditing) {
@@ -566,6 +571,17 @@ function InvoiceRow({
             title="Editar fatura"
           >
             <Pencil size={14} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+            onClick={onDelete}
+            aria-label={`Excluir fatura ${label}`}
+            title="Excluir fatura"
+          >
+            <Trash2 size={14} />
           </Button>
         </div>
       </td>
@@ -1219,6 +1235,20 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         : {}),
     })
 
+  const confirmDeleteInvoice = (invoice: Invoice) => {
+    const linkedCount = linkedTransactionsOf(invoice).length
+    setConfirmationDialog({
+      confirmLabel: "Excluir Fatura",
+      title: "Excluir fatura?",
+      description:
+        `A fatura de ${invoiceLabel(invoice)} em ${panel.label} será removida.` +
+        (linkedCount > 0
+          ? ` ${linkedCount === 1 ? "A transação vinculada será desvinculada e volta" : `As ${linkedCount} transações vinculadas serão desvinculadas e voltam`} a contar nos totais do mês.`
+          : ""),
+      onConfirm: () => invoiceManager.deleteInvoice.mutate(invoice),
+    })
+  }
+
   const transactionActions: TransactionActions = {
     onOpenDetails: setDetailsTransaction,
     onLink: transactionLinking.openPaymentModal,
@@ -1227,6 +1257,13 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   }
   const closeActions = useCallback(() => setActionsTransaction(null), [])
   const closeInvoiceActions = useCallback(() => setActionsInvoice(null), [])
+  const linkedTransactionsOf = (invoice: Invoice) =>
+    panel.transactions.filter(
+      (transaction) => transaction.creditCardInvoiceId === invoice.id
+    )
+  const actionsInvoiceLinked = actionsInvoice
+    ? linkedTransactionsOf(actionsInvoice)
+    : []
 
   const invoiceLabel = (invoice: Invoice) =>
     invoice.creditCardName ||
@@ -1390,6 +1427,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         onSave={() => invoiceManager.updateInvoice.mutate()}
                         onCancel={invoiceManager.cancelEdit}
                         onEdit={() => invoiceManager.startEdit(invoice)}
+                        onDelete={() => confirmDeleteInvoice(invoice)}
                         onShowActions={() => setActionsInvoice(invoice)}
                       />
                     )
@@ -1403,11 +1441,28 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               <FormError message={invoiceManager.updateErrorMessage} />
             </div>
           ) : null}
+          {invoiceManager.deleteErrorMessage ? (
+            <div className="px-3 pb-2 sm:px-4">
+              <FormError message={invoiceManager.deleteErrorMessage} />
+            </div>
+          ) : null}
         </Card>
         <ActionSheet
           open={Boolean(actionsInvoice)}
           title={actionsInvoice ? invoiceLabel(actionsInvoice) : ""}
-          subtitle={<span>Fatura de cartão · {panel.label}</span>}
+          subtitle={
+            <>
+              <span>Fatura de cartão · {panel.label}</span>
+              {actionsInvoiceLinked.length > 0 ? (
+                <span>
+                  · {actionsInvoiceLinked.length}{" "}
+                  {actionsInvoiceLinked.length === 1
+                    ? "transação vinculada"
+                    : "transações vinculadas"}
+                </span>
+              ) : null}
+            </>
+          }
           amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
           amountTone="negative"
           actions={[
@@ -1416,9 +1471,38 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               icon: Pencil,
               onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
             },
+            {
+              label: "Excluir fatura",
+              icon: Trash2,
+              destructive: true,
+              onClick: () => actionsInvoice && confirmDeleteInvoice(actionsInvoice),
+            },
           ]}
           onClose={closeInvoiceActions}
-        />
+        >
+          {actionsInvoiceLinked.length > 0 ? (
+            <div className="border-b border-border/70 px-4 py-2">
+              <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                Transações vinculadas
+              </p>
+              <ul className="mt-1 max-h-40 divide-y divide-border/50 overflow-y-auto">
+                {actionsInvoiceLinked.map((transaction) => (
+                  <li
+                    key={transaction.id}
+                    className="flex items-center justify-between gap-3 py-1.5 text-sm"
+                  >
+                    <span className="min-w-0 truncate text-foreground">
+                      {transaction.description}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      {formatCurrency(transaction.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </ActionSheet>
 
         <div>
           <TransactionComposer

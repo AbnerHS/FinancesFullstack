@@ -28,6 +28,7 @@ import type {
   PlanInviteLink,
   ResponsibleOption,
   Transaction,
+  TransactionCategory,
 } from "@/features/finance/types.ts"
 import {
   addDaysIso,
@@ -731,15 +732,31 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (card: CreditCard) => creditCardService.delete(card.id),
+    onSuccess: async (_data, card) => {
+      if (editingCard?.id === card.id) {
+        resetForm()
+      }
+      await queryClient.invalidateQueries({ queryKey: financeKeys.cards })
+    },
+  })
+
   return {
     form,
     setForm: (next: { name: string }) => setFormState(next),
     editingCard,
     isEditing: Boolean(editingCard?.id),
     saveMutation,
+    deleteMutation,
     errorMessage: saveMutation.error
       ? getErrorMessage(saveMutation.error, "Não foi possível salvar o cartão.")
-      : null,
+      : deleteMutation.error
+        ? getErrorMessage(
+            deleteMutation.error,
+            "Não foi possível excluir o cartão."
+          )
+        : null,
     startCreate: resetForm,
     startEdit: (card: CreditCard) => {
       setEditingCard(card)
@@ -747,6 +764,16 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
     },
     cancelEdit: resetForm,
   }
+}
+
+/** Faturas já lançadas de um cartão (nos planos de que o usuário participa). */
+export function useCardInvoices(cardId: string | null) {
+  return useQuery({
+    queryKey: financeKeys.cardInvoices(cardId),
+    queryFn: () => creditCardService.getInvoices(cardId!),
+    enabled: Boolean(cardId),
+    staleTime: 1000 * 60 * 5,
+  })
 }
 
 export function useInvoiceManager({
@@ -913,6 +940,18 @@ export function usePeriodInvoiceManager({
     },
   })
 
+  // Excluir a fatura desvincula as transações (voltam a contar nos totais do mês).
+  const deleteInvoice = useMutation({
+    mutationFn: (invoice: Invoice) => invoiceService.delete(invoice.id),
+    onSuccess: async (_data, invoice) => {
+      if (editingInvoiceId === invoice.id) {
+        setEditingInvoiceId(null)
+        setEditingAmount("")
+      }
+      await invalidateTransactionViews(queryClient, period.planId)
+    },
+  })
+
   const startCreate = () => {
     setEditingInvoiceId(null)
     setEditingAmount("")
@@ -953,6 +992,10 @@ export function usePeriodInvoiceManager({
     startEdit,
     cancelEdit,
     updateInvoice,
+    deleteInvoice,
+    deleteErrorMessage: deleteInvoice.error
+      ? getErrorMessage(deleteInvoice.error, "Não foi possível excluir a fatura.")
+      : null,
     createErrorMessage: createInvoice.error
       ? getErrorMessage(createInvoice.error, "Não foi possível criar a fatura.")
       : null,
@@ -1177,15 +1220,66 @@ export function useCategoryManager() {
     },
   })
 
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(
+    null
+  )
+
+  // Renomear/excluir muda a categoria nas transações já lançadas.
+  const invalidateCategoryViews = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.periodTransactionsRoot,
+      }),
+    ])
+
+  const renameMutation = useMutation({
+    mutationFn: async () => {
+      if (!editing) {
+        throw new Error("Categoria inválida.")
+      }
+      const name = editing.name.trim()
+      if (!name) {
+        throw new Error("Informe um nome para a categoria.")
+      }
+      return transactionCategoryService.update(editing.id, { name })
+    },
+    onSuccess: async () => {
+      setEditing(null)
+      await invalidateCategoryViews()
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (category: TransactionCategory) =>
+      transactionCategoryService.delete(category.id),
+    onSuccess: async (_data, category) => {
+      if (editing?.id === category.id) {
+        setEditing(null)
+      }
+      await invalidateCategoryViews()
+    },
+  })
+
+  const error =
+    createMutation.error ?? renameMutation.error ?? deleteMutation.error
+
   return {
     draft,
     setDraft,
     createMutation,
-    errorMessage: createMutation.error
-      ? getErrorMessage(
-          createMutation.error,
-          "Não foi possível salvar a categoria."
-        )
+    editing,
+    startEdit: (category: TransactionCategory) => {
+      renameMutation.reset()
+      setEditing({ id: category.id, name: category.name })
+    },
+    setEditingName: (name: string) =>
+      setEditing((current) => (current ? { ...current, name } : current)),
+    cancelEdit: () => setEditing(null),
+    renameMutation,
+    deleteMutation,
+    errorMessage: error
+      ? getErrorMessage(error, "Não foi possível salvar a categoria.")
       : null,
   }
 }

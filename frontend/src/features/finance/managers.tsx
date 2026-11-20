@@ -1,15 +1,29 @@
 import { useMemo, useState } from "react"
 import { createPortal } from "react-dom"
-import { Plus, Tags, Trash2, Users } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  Pencil,
+  Plus,
+  Tags,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogState,
+} from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import {
+  useCardInvoices,
   useCategoryManager,
   useCreditCardManager,
   useInvoiceManager,
@@ -30,57 +44,7 @@ import {
   formatMonthLabel,
   formatMonthYear,
 } from "@/features/finance/utils.ts"
-
-type ConfirmationDialogState = {
-  confirmLabel: string
-  description: string
-  title: string
-  onConfirm: () => void
-}
-
-function ConfirmationDialog({
-  onClose,
-  state,
-}: {
-  onClose: () => void
-  state: ConfirmationDialogState | null
-}) {
-  if (!state) {
-    return null
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-        <p className="app-eyebrow">Confirmar exclusão</p>
-        <h3 className="mt-2 text-xl font-semibold text-foreground">
-          {state.title}
-        </h3>
-        <p className="mt-3 text-sm text-muted-foreground">
-          {state.description}
-        </p>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            className="bg-rose-600 text-white hover:bg-rose-700"
-            onClick={() => {
-              state.onConfirm()
-              onClose()
-            }}
-          >
-            <Trash2 size={16} />
-            {state.confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
+import { getErrorMessage } from "@/lib/errors.ts"
 
 export function PlanManager({
   plans,
@@ -319,6 +283,71 @@ export function PlanManager({
   )
 }
 
+function CardInvoiceHistory({ cardId }: { cardId: string }) {
+  const { data: invoices = [], isLoading, error } = useCardInvoices(cardId)
+  // Mais recentes primeiro.
+  const recent = useMemo(() => [...invoices].reverse(), [invoices])
+  const total = invoices.reduce(
+    (sum, invoice) => sum + Number(invoice.amount || 0),
+    0
+  )
+
+  if (isLoading) {
+    return (
+      <p className="px-3 py-2 text-xs text-muted-foreground">
+        Carregando faturas...
+      </p>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="px-3 py-2">
+        <FormError
+          message={getErrorMessage(error, "Não foi possível carregar as faturas.")}
+        />
+      </div>
+    )
+  }
+
+  if (recent.length === 0) {
+    return (
+      <p className="px-3 py-2 text-xs text-muted-foreground">
+        Nenhuma fatura lançada neste cartão.
+      </p>
+    )
+  }
+
+  return (
+    <div className="px-3 pb-2">
+      <ul className="max-h-60 divide-y divide-border/60 overflow-y-auto">
+        {recent.map((invoice) => (
+          <li
+            key={invoice.id}
+            className="flex items-center justify-between gap-3 py-1.5 text-sm"
+          >
+            <span className="text-foreground">
+              {formatMonthLabel(Number(invoice.referenceMonth.slice(5, 7)))}/
+              {invoice.referenceMonth.slice(0, 4)}
+            </span>
+            <span className="font-medium text-rose-600 tabular-nums dark:text-rose-400">
+              {formatCurrency(invoice.amount)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1 flex items-center justify-between border-t border-border/70 pt-2 text-xs text-muted-foreground">
+        <span>
+          {invoices.length} {invoices.length === 1 ? "fatura" : "faturas"}
+        </span>
+        <span className="font-semibold text-foreground tabular-nums">
+          Total {formatCurrency(total)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function CreditCardsManager({
   creditCards,
   userId,
@@ -332,11 +361,15 @@ export function CreditCardsManager({
     isEditing,
     editingCard,
     saveMutation,
+    deleteMutation,
     errorMessage,
     startCreate,
     startEdit,
     cancelEdit,
   } = useCreditCardManager({ userId })
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
 
   return (
     <Card className="border-border bg-secondary/60 p-5">
@@ -361,24 +394,68 @@ export function CreditCardsManager({
             Nenhum cartão cadastrado.
           </p>
         ) : null}
-        {creditCards.map((card) => (
-          <div
-            key={card.id}
-            className="flex items-center justify-between rounded-[1rem] border border-border bg-card/90 px-3 py-2"
-          >
-            <span className="text-sm font-medium text-foreground">
-              {card.name}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => startEdit(card)}
+        {creditCards.map((card) => {
+          const isExpanded = expandedCardId === card.id
+          return (
+            <div
+              key={card.id}
+              className="rounded-[1rem] border border-border bg-card/90"
             >
-              Editar
-            </Button>
-          </div>
-        ))}
+              <div className="flex items-center gap-1 py-1 pr-1 pl-3">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left text-sm font-medium text-foreground"
+                  aria-expanded={isExpanded}
+                  onClick={() =>
+                    setExpandedCardId(isExpanded ? null : card.id)
+                  }
+                  title={isExpanded ? "Ocultar faturas" : "Ver faturas"}
+                >
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                  />
+                  <span className="truncate">{card.name}</span>
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 text-muted-foreground"
+                  onClick={() => startEdit(card)}
+                  aria-label={`Editar cartão ${card.name}`}
+                  title="Editar"
+                >
+                  <Pencil size={15} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                  disabled={deleteMutation.isPending}
+                  onClick={() =>
+                    setConfirmationDialog({
+                      confirmLabel: "Excluir Cartão",
+                      title: "Excluir cartão?",
+                      description: `O cartão "${card.name}" será removido. Cartões com faturas lançadas não podem ser excluídos: exclua as faturas antes.`,
+                      onConfirm: () => deleteMutation.mutate(card),
+                    })
+                  }
+                  aria-label={`Excluir cartão ${card.name}`}
+                  title="Excluir"
+                >
+                  <Trash2 size={15} />
+                </Button>
+              </div>
+              {isExpanded ? (
+                <div className="border-t border-border/70 pt-2">
+                  <CardInvoiceHistory cardId={card.id} />
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
       </div>
 
       <form
@@ -427,6 +504,10 @@ export function CreditCardsManager({
         ) : null}
         <FormError message={errorMessage} />
       </form>
+      <ConfirmationDialog
+        onClose={() => setConfirmationDialog(null)}
+        state={confirmationDialog}
+      />
     </Card>
   )
 }
@@ -521,48 +602,152 @@ export function CategoryManager({
 }: {
   categories: TransactionCategory[]
 }) {
-  const { draft, setDraft, createMutation, errorMessage } = useCategoryManager()
+  const {
+    draft,
+    setDraft,
+    createMutation,
+    editing,
+    startEdit,
+    setEditingName,
+    cancelEdit,
+    renameMutation,
+    deleteMutation,
+    errorMessage,
+  } = useCategoryManager()
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
+  const sortedCategories = useMemo(
+    () =>
+      [...categories].sort((left, right) =>
+        left.name.localeCompare(right.name, "pt-BR")
+      ),
+    [categories]
+  )
 
   return (
     <section className="app-panel">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <p className="app-eyebrow">Categorias</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground">
             Base de classificação
           </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Renomeie ou exclua categorias criadas por engano. Excluir uma
+            categoria deixa as transações dela sem categoria.
+          </p>
         </div>
         <div className="rounded-full bg-primary/12 p-3 text-primary">
           <Tags size={18} />
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4">
-        <div className="flex flex-wrap gap-2">
-          {categories.length === 0 ? (
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div>
+          {sortedCategories.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nenhuma categoria cadastrada.
             </p>
-          ) : null}
-          {categories.map((category) => (
-            <span
-              key={category.id}
-              className="rounded-full border border-border bg-secondary/70 px-2.5 py-1 text-xs font-medium text-foreground"
-            >
-              {category.name}
-            </span>
-          ))}
+          ) : (
+            <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+              {sortedCategories.map((category) =>
+                editing?.id === category.id ? (
+                  <li key={category.id}>
+                    <form
+                      className="flex items-center gap-1 rounded-[0.9rem] border border-primary/40 bg-primary/5 p-1"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        renameMutation.mutate()
+                      }}
+                    >
+                      <Input
+                        autoFocus
+                        className="h-9"
+                        value={editing.name}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") cancelEdit()
+                        }}
+                        aria-label={`Novo nome para ${category.name}`}
+                      />
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="size-9 shrink-0"
+                        disabled={renameMutation.isPending}
+                        aria-label="Salvar nome"
+                        title="Salvar"
+                      >
+                        <Check size={15} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-9 shrink-0"
+                        onClick={cancelEdit}
+                        aria-label="Cancelar edição"
+                        title="Cancelar"
+                      >
+                        <X size={15} />
+                      </Button>
+                    </form>
+                  </li>
+                ) : (
+                  <li
+                    key={category.id}
+                    className="flex items-center gap-1 rounded-[0.9rem] border border-border bg-secondary/70 py-1 pr-1 pl-3"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      {category.name}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0 text-muted-foreground"
+                      onClick={() => startEdit(category)}
+                      aria-label={`Renomear categoria ${category.name}`}
+                      title="Renomear"
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                      disabled={deleteMutation.isPending}
+                      onClick={() =>
+                        setConfirmationDialog({
+                          confirmLabel: "Excluir Categoria",
+                          title: "Excluir categoria?",
+                          description: `A categoria "${category.name}" será removida e as transações dela ficarão sem categoria.`,
+                          onConfirm: () => deleteMutation.mutate(category),
+                        })
+                      }
+                      aria-label={`Excluir categoria ${category.name}`}
+                      title="Excluir"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
         </div>
 
-        <Card className="border-border bg-secondary/60 p-4">
+        <Card className="h-fit border-border bg-secondary/60 p-4">
           <form
             onSubmit={(event) => {
               event.preventDefault()
               createMutation.mutate()
             }}
           >
-            <Label>Nova Categoria</Label>
+            <Label htmlFor="new-category">Nova Categoria</Label>
             <Input
+              id="new-category"
               className="mt-3"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -576,12 +761,16 @@ export function CategoryManager({
               <Plus size={16} />
               {createMutation.isPending ? "Salvando..." : "Criar Categoria"}
             </Button>
-            <div className="mt-3">
-              <FormError message={errorMessage} />
-            </div>
           </form>
         </Card>
+        <div className="lg:col-span-2 empty:hidden">
+          <FormError message={errorMessage} />
+        </div>
       </div>
+      <ConfirmationDialog
+        onClose={() => setConfirmationDialog(null)}
+        state={confirmationDialog}
+      />
     </section>
   )
 }
