@@ -4,13 +4,23 @@ import { badRequest } from "../lib/errors.ts"
 import { collection } from "../lib/hal.ts"
 import { id, parseDateRange, yearMonth } from "../lib/query.ts"
 import { validate } from "../lib/validation.ts"
-import { isIsoDate, isYearMonth, monthBounds } from "../lib/dates.ts"
+import {
+  currentYearMonth,
+  isIsoDate,
+  isYearMonth,
+  monthBounds,
+  monthRange,
+  monthsBetween,
+  toYearMonth,
+} from "../lib/dates.ts"
 import { paymentStatuses } from "../db/schema.ts"
 import { requirePlanAccess, requirePlanOwner } from "../services/access.ts"
 import * as cards from "../services/cards.ts"
 import * as invoices from "../services/invoices.ts"
 import * as plans from "../services/plans.ts"
+import * as subscriptions from "../services/subscriptions.ts"
 import * as transactions from "../services/transactions.ts"
+import { createSubscriptionSchema } from "./subscriptions.ts"
 import type { AppEnv } from "../types.ts"
 
 const nameSchema = z.object({ name: z.string().trim().min(1, "O nome do plano é obrigatório") })
@@ -26,22 +36,6 @@ const selfHref = (url: string) => {
 }
 
 const MONTH_DATA_LIMIT = 24
-
-/** Quantos meses de `from` a `to`, inclusive (AAAA-MM). */
-function monthsBetween(from: string, to: string) {
-  const [fy, fm] = from.split("-").map(Number) as [number, number]
-  const [ty, tm] = to.split("-").map(Number) as [number, number]
-  return (ty - fy) * 12 + (tm - fm) + 1
-}
-
-/** Lista AAAA-MM de `from` a `to`, inclusive. */
-function monthRange(from: string, to: string) {
-  const [fy, fm] = from.split("-").map(Number) as [number, number]
-  return Array.from({ length: monthsBetween(from, to) }, (_, index) => {
-    const date = new Date(Date.UTC(fy, fm - 1 + index, 1))
-    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
-  })
-}
 
 /** `month=AAAA-MM` ou `from`/`to` (AAAA-MM), para faturas. */
 function parseMonthRange(query: Record<string, string | undefined>) {
@@ -123,6 +117,14 @@ export const planRoutes = new Hono<AppEnv>()
         "Informe 'month' (AAAA-MM), 'from' e 'to' (AAAA-MM-DD), 'recurringGroupId' ou 'dueFrom'/'dueTo' (AAAA-MM-DD)",
       )
     }
+    // Assinaturas: gera as cobranças até o último mês consultado (o resumo da semana consulta por vencimento).
+    await requirePlanAccess(c.var.db, c.req.param("id"), c.var.user)
+    const reach = [range?.to, dueTo, dueFrom].filter(Boolean).map((date) => toYearMonth(date!))
+    await subscriptions.ensureGenerated(
+      c.var.db,
+      c.req.param("id"),
+      reach.length > 0 ? reach.sort().at(-1)! : currentYearMonth(),
+    )
     const list = await transactions.listByPlan(c.var.db, c.var.user, c.req.param("id"), {
       range,
       recurringGroupId,
@@ -153,6 +155,8 @@ export const planRoutes = new Hono<AppEnv>()
       throw badRequest(`Intervalo máximo de ${MONTH_DATA_LIMIT} meses`)
     }
     const planId = c.req.param("id")
+    await requirePlanAccess(c.var.db, planId, c.var.user)
+    await subscriptions.ensureGenerated(c.var.db, planId, to)
     const [transactionList, invoiceList] = await Promise.all([
       transactions.listByPlan(c.var.db, c.var.user, planId, {
         range: { from: monthBounds(from).from, to: monthBounds(to).to },
@@ -166,7 +170,37 @@ export const planRoutes = new Hono<AppEnv>()
     }))
     return c.json({ months })
   })
-  .get("/:id/months", async (c) => c.json(await transactions.months(c.var.db, c.var.user, c.req.param("id"))))
+  .get("/:id/months", async (c) => {
+    await requirePlanAccess(c.var.db, c.req.param("id"), c.var.user)
+    await subscriptions.ensureGenerated(c.var.db, c.req.param("id"), currentYearMonth())
+    return c.json(await transactions.months(c.var.db, c.var.user, c.req.param("id")))
+  })
+  .get("/:id/subscriptions", async (c) => {
+    const list = await subscriptions.list(c.var.db, c.var.user, c.req.param("id"))
+    return c.json(collection("subscriptions", list, `/api/plans/${c.req.param("id")}/subscriptions`))
+  })
+  .post("/:id/subscriptions", validate("json", createSubscriptionSchema), async (c) => {
+    const created = await subscriptions.create(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))
+    c.header("Location", `/api/subscriptions/${created.id}`)
+    return c.json(created, 201)
+  })
+  .get("/:id/recurring-groups", async (c) =>
+    c.json({ recurringGroups: await subscriptions.recurringGroups(c.var.db, c.var.user, c.req.param("id")) }),
+  )
+  .post(
+    "/:id/subscriptions/from-recurring",
+    validate("json", z.object({ recurringGroupId: z.string().min(1, "Informe a recorrência") })),
+    async (c) => {
+      const created = await subscriptions.fromRecurring(
+        c.var.db,
+        c.var.user,
+        c.req.param("id"),
+        c.req.valid("json").recurringGroupId,
+      )
+      c.header("Location", `/api/subscriptions/${created.id}`)
+      return c.json(created, 201)
+    },
+  )
   .get("/:id/summary", async (c) =>
     c.json(await transactions.summary(c.var.db, c.var.user, c.req.param("id"), parseDateRange(c.req.query()))),
   )

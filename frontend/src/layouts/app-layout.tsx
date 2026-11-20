@@ -34,6 +34,10 @@ const routeMeta: Record<string, { title: string; description: string }> = {
     description:
       "Centralize cartões, faturas e recorte das despesas ligadas ao crédito.",
   },
+  "/assinaturas": {
+    title: "Assinaturas",
+    description: "Contas que se repetem todo mês, sem data para acabar.",
+  },
   "/partner": {
     title: "Participantes do Plano",
     description:

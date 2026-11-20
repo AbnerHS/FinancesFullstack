@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import {
+  CalendarSync,
   CreditCard,
   FolderKanban,
   LayoutDashboard,
@@ -53,6 +54,12 @@ const navItems = [
     label: "Cartões",
     description: "Cartões e faturas",
     icon: CreditCard,
+  },
+  {
+    to: "/assinaturas",
+    label: "Assinaturas",
+    description: "Contas mensais",
+    icon: CalendarSync,
   },
   {
     to: "/partner",

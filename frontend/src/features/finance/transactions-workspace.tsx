@@ -16,10 +16,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import {
   AlertTriangle,
+  CalendarSync,
   CheckCircle2,
   Clock3,
   CreditCard as CreditCardIcon,
@@ -56,6 +58,7 @@ import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
   useInvoicePayment,
   usePeriodInvoiceManager,
+  useSubscriptionMutations,
   useTransactionPayment,
   useTransactionLinking,
   useTransactionMutations,
@@ -141,6 +144,7 @@ type TransactionActions = {
   onDelete: (transaction: Transaction) => void
   onTogglePaid: (transaction: Transaction) => void
   onOpenDocument: (transaction: Transaction) => void
+  onSubscription: (transaction: Transaction) => void
 }
 
 type TransactionRowProps = TransactionActions & {
@@ -342,7 +346,11 @@ function SortableTransactionRow({
           <span className="truncate text-sm font-medium text-foreground">
             {transaction.description}
           </span>
-          {transaction.recurringGroupId ? (
+          {transaction.subscriptionId ? (
+            <CalendarSync size={12} className="shrink-0 text-primary" aria-label="Assinatura">
+              <title>Assinatura</title>
+            </CalendarSync>
+          ) : transaction.recurringGroupId ? (
             <Repeat2 size={12} className="shrink-0 text-primary" aria-label="Recorrente">
               <title>Recorrente</title>
             </Repeat2>
@@ -551,6 +559,7 @@ function TransactionActionSheet({
   onDelete,
   onTogglePaid,
   onOpenDocument,
+  onSubscription,
 }: TransactionActions & {
   transaction: Transaction | null
   onClose: () => void
@@ -588,6 +597,11 @@ function TransactionActionSheet({
           },
         ]
       : []),
+    ...(transaction.subscriptionId
+      ? [{ label: "Ver assinatura", icon: CalendarSync, onClick: () => onSubscription(transaction) }]
+      : isExpense && transaction.recurringGroupId
+        ? [{ label: "Transformar em assinatura", icon: CalendarSync, onClick: () => onSubscription(transaction) }]
+        : []),
     { label: "Excluir", icon: Trash2, onClick: () => onDelete(transaction), destructive: true },
   ]
 
@@ -1095,6 +1109,8 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   } = useTransactionMutations(panel.period)
   const transactionLinking = useTransactionLinking(panel.period)
   const transactionPayment = useTransactionPayment(panel.period.planId)
+  const subscriptionMutations = useSubscriptionMutations(panel.period.planId)
+  const navigate = useNavigate()
   useEscapeKey(
     Boolean(transactionLinking.paymentModalEntry),
     transactionLinking.closePaymentModal
@@ -1508,6 +1524,20 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         transaction,
         paid: transaction.paymentStatus !== "PAID",
       }),
+    // Cobrança de assinatura: abre a tela de assinaturas. Recorrência: vira assinatura e abre a tela.
+    onSubscription: (transaction) => {
+      if (transaction.subscriptionId) {
+        void navigate({ to: "/assinaturas" })
+        return
+      }
+      if (!transaction.recurringGroupId) return
+      setDocumentError(null)
+      subscriptionMutations.fromRecurring.mutate(transaction.recurringGroupId, {
+        onSuccess: () => void navigate({ to: "/assinaturas" }),
+        onError: (error) =>
+          setDocumentError(getErrorMessage(error, "Não foi possível criar a assinatura.")),
+      })
+    },
     onOpenDocument: (transaction) => {
       setDocumentError(null)
       openBillingDocument(transaction).catch((error) =>

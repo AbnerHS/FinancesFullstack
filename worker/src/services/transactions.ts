@@ -40,7 +40,8 @@ export type TransactionInput = {
 type Ctx = { env: Env; db: Database; user: User }
 
 // Campos graváveis (sem id, planId, createdAt, displayOrder).
-type Draft = Omit<Transaction, "id" | "planId" | "createdAt" | "displayOrder">
+// O vínculo com assinatura é da geração (services/subscriptions.ts), não da edição da transação.
+type Draft = Omit<Transaction, "id" | "planId" | "createdAt" | "displayOrder" | "subscriptionId" | "subscriptionMonth">
 
 const EMPTY_DOCUMENT = {
   billingDocumentType: null,
@@ -76,6 +77,7 @@ export function transactionModel({ transaction: t, category }: Row) {
       responsibleUserId: t.responsibleUserId,
       order: t.displayOrder,
       recurringGroupId: t.recurringGroupId,
+      subscriptionId: t.subscriptionId,
       creditCardInvoiceId: t.creditCardInvoiceId,
       isClearedByInvoice: t.clearedByInvoice,
       dueDate: t.dueDate,
@@ -166,7 +168,7 @@ export async function listByPlan(
 // Escrita
 
 /** Próxima posição no fim do (plano, mês). Subquery para ser calculada no próprio INSERT/UPDATE. */
-function nextOrder(planId: string, referenceDate: string) {
+export function nextOrder(planId: string, referenceDate: string) {
   const { from, to } = monthBounds(toYearMonth(referenceDate))
   return sql`(select coalesce(max(${transactions.displayOrder}), 0) + 1 from ${transactions}
               where ${transactions.planId} = ${planId}
@@ -191,7 +193,7 @@ function defaults(): Draft {
   }
 }
 
-const draftOf = ({ id, planId, createdAt, displayOrder, ...draft }: Transaction): Draft => draft
+const draftOf = ({ id, planId, createdAt, displayOrder, subscriptionId, subscriptionMonth, ...draft }: Transaction): Draft => draft
 
 async function findInvoice(db: Database, id: string): Promise<CreditCardInvoice> {
   const invoice = await db.query.creditCardInvoices.findFirst({ where: eq(creditCardInvoices.id, id) })

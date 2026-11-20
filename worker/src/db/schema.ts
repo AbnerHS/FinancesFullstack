@@ -118,6 +118,40 @@ export const creditCardInvoices = sqliteTable(
   ],
 )
 
+export const subscriptionChargeModes = ["BILL", "AUTO"] as const
+
+/**
+ * Assinatura: conta mensal sem fim fixo. As transações de cada mês são geradas sob demanda
+ * (services/subscriptions.ts) até `generated_through`, que só avança; apagar uma cobrança gerada
+ * não a recria.
+ */
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => financialPlans.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    categoryId: text("category_id").references(() => transactionCategories.id, { onDelete: "set null" }),
+    responsibleUserId: text("responsible_user_id").references(() => users.id),
+    // Dia da cobrança (1–31, limitado ao fim do mês).
+    billingDay: integer("billing_day").notNull(),
+    // BILL: gera vencimento (entra em "Contas a pagar"). AUTO: débito automático/cartão, sem vencimento.
+    chargeMode: text("charge_mode", { enum: subscriptionChargeModes }).notNull(),
+    startMonth: text("start_month").notNull(), // 'YYYY-MM'
+    endMonth: text("end_month"), // último mês cobrado; null = ativa
+    generatedThrough: text("generated_through"), // último mês já gerado
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_subscriptions_plan").on(t.planId),
+    check("chk_subscriptions_billing_day", sql`${t.billingDay} between 1 and 31`),
+    check("chk_subscriptions_charge_mode", sql`${t.chargeMode} in ('BILL', 'AUTO')`),
+  ],
+)
+
 export const transactions = sqliteTable(
   "transactions",
   {
@@ -151,8 +185,12 @@ export const transactions = sqliteTable(
     billingDocumentMimeType: text("billing_document_mime_type"),
     billingDocumentStorageKey: text("billing_document_storage_key"),
     billingDocumentUploadedAt: text("billing_document_uploaded_at"),
+    // Cobrança gerada por uma assinatura, e o mês dela (a geração não duplica o mês).
+    subscriptionId: text("subscription_id").references(() => subscriptions.id, { onDelete: "set null" }),
+    subscriptionMonth: text("subscription_month"),
   },
   (t) => [
+    uniqueIndex("uk_transactions_subscription_month").on(t.subscriptionId, t.subscriptionMonth),
     index("idx_transactions_plan_reference_date").on(t.planId, t.referenceDate),
     // Resumo da semana: vencimentos por plano.
     index("idx_transactions_plan_due_date").on(t.planId, t.dueDate),
@@ -173,5 +211,6 @@ export type User = typeof users.$inferSelect
 export type FinancialPlan = typeof financialPlans.$inferSelect
 export type CreditCard = typeof creditCards.$inferSelect
 export type CreditCardInvoice = typeof creditCardInvoices.$inferSelect
+export type Subscription = typeof subscriptions.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type TransactionCategory = typeof transactionCategories.$inferSelect

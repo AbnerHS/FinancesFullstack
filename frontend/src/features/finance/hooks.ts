@@ -20,6 +20,7 @@ import {
   invoiceService,
   periodService,
   planService,
+  subscriptionService,
   transactionCategoryService,
   transactionService,
   userService,
@@ -31,6 +32,8 @@ import type {
   Plan,
   PlanInviteLink,
   ResponsibleOption,
+  Subscription,
+  SubscriptionPayload,
   Transaction,
   TransactionCategory,
 } from "@/features/finance/types.ts"
@@ -1494,6 +1497,74 @@ export function useInvoicePayment(planId: string | null | undefined) {
     },
     onSettled: () => invalidateTransactionViews(queryClient, planId),
   })
+}
+
+export function useSubscriptions(planId: string | null | undefined) {
+  return useQuery({
+    queryKey: financeKeys.subscriptions(planId),
+    queryFn: () => subscriptionService.list(planId!),
+    enabled: Boolean(planId),
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useRecurringGroups(planId: string | null | undefined) {
+  return useQuery({
+    queryKey: financeKeys.recurringGroups(planId),
+    queryFn: () => subscriptionService.recurringGroups(planId!),
+    enabled: Boolean(planId),
+    staleTime: 1000 * 60,
+  })
+}
+
+/**
+ * Criar/editar/encerrar/excluir assinaturas e converter recorrências. Tudo isso gera ou apaga
+ * cobranças, então as telas de transações também são revalidadas.
+ */
+export function useSubscriptionMutations(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["subscriptions", planId] }),
+      invalidateTransactionViews(queryClient, planId),
+    ])
+
+  const save = useMutation({
+    mutationFn: ({ id, payload }: { id?: string; payload: SubscriptionPayload }) => {
+      if (!planId) throw new Error("Selecione um plano.")
+      return id
+        ? subscriptionService.update(id, payload)
+        : subscriptionService.create(planId, payload)
+    },
+    onSuccess: invalidate,
+  })
+  const setEndMonth = useMutation({
+    mutationFn: ({ subscription, endMonth }: { subscription: Subscription; endMonth: string | null }) =>
+      subscriptionService.update(subscription.id, { endMonth }),
+    onSuccess: invalidate,
+  })
+  const remove = useMutation({
+    mutationFn: (subscription: Subscription) => subscriptionService.delete(subscription.id),
+    onSuccess: invalidate,
+  })
+  const fromRecurring = useMutation({
+    mutationFn: (recurringGroupId: string) => {
+      if (!planId) throw new Error("Selecione um plano.")
+      return subscriptionService.fromRecurring(planId, recurringGroupId)
+    },
+    onSuccess: invalidate,
+  })
+
+  const error = save.error ?? setEndMonth.error ?? remove.error ?? fromRecurring.error
+  return {
+    save,
+    setEndMonth,
+    remove,
+    fromRecurring,
+    errorMessage: error
+      ? getErrorMessage(error, "Não foi possível salvar a assinatura.")
+      : null,
+  }
 }
 
 export function useTransactionLinking(period: Period) {

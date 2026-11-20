@@ -46,3 +46,37 @@ export function moveToMonth(date: string, yearMonth: string): string {
   const d = Number(date.slice(8, 10))
   return `${yearMonth}-${pad(Math.min(d, daysInMonth(y, m)))}`
 }
+
+/** Quantos meses de `from` a `to`, inclusive (AAAA-MM). */
+export function monthsBetween(from: string, to: string) {
+  const [fy, fm] = from.split("-").map(Number) as [number, number]
+  const [ty, tm] = to.split("-").map(Number) as [number, number]
+  return (ty - fy) * 12 + (tm - fm) + 1
+}
+
+/** Lista AAAA-MM de `from` a `to`, inclusive. */
+export function monthRange(from: string, to: string) {
+  const [fy, fm] = from.split("-").map(Number) as [number, number]
+  return Array.from({ length: Math.max(monthsBetween(from, to), 0) }, (_, index) => {
+    const date = new Date(Date.UTC(fy, fm - 1 + index, 1))
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
+  })
+}
+
+/** Soma meses a um AAAA-MM. */
+export function addMonthsToYearMonth(yearMonth: string, months: number) {
+  return addMonths(`${yearMonth}-01`, months).slice(0, 7)
+}
+
+/** Dia `day` do mês, limitado ao último dia (31 em fevereiro → 28/29). */
+export function dayOfMonth(yearMonth: string, day: number) {
+  const [y, m] = yearMonth.split("-").map(Number) as [number, number]
+  return `${yearMonth}-${pad(Math.min(day, daysInMonth(y, m)))}`
+}
+
+/** Mês atual no fuso do app (America/Sao_Paulo), AAAA-MM. */
+export function currentYearMonth(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit" })
+    .format(now)
+    .slice(0, 7)
+}

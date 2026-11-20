@@ -107,6 +107,8 @@ export type Transaction = EntityModel<{
   responsibleUserId?: string | null
   order?: number | null
   recurringGroupId?: string | null
+  /** Cobrança gerada por uma assinatura. */
+  subscriptionId?: string | null
   creditCardInvoiceId?: string | null
   isClearedByInvoice?: boolean | null
   dueDate?: string | null
@@ -114,6 +116,45 @@ export type Transaction = EntityModel<{
   paymentStatus?: PaymentStatus | null
   billingDocument?: BillingDocument | null
 }>
+
+export type SubscriptionChargeMode = "BILL" | "AUTO"
+
+export type Subscription = EntityModel<{
+  id: string
+  planId: string
+  name: string
+  amount: number
+  category?: { id: string; name: string | null } | null
+  responsibleUserId?: string | null
+  /** Dia da cobrança (1–31, limitado ao fim do mês). */
+  billingDay: number
+  /** BILL: gera vencimento ("Contas a pagar"). AUTO: débito automático/cartão. */
+  chargeMode: SubscriptionChargeMode
+  startMonth: string
+  endMonth?: string | null
+  active: boolean
+  createdAt: string
+}>
+
+export type RecurringGroupSummary = {
+  recurringGroupId: string
+  description: string
+  amount: number
+  occurrences: number
+  firstMonth: string
+  lastMonth: string
+}
+
+export type SubscriptionPayload = {
+  name: string
+  amount: number
+  category: { id?: string; name?: string } | null
+  responsibleUserId: string | null
+  billingDay: number
+  chargeMode: SubscriptionChargeMode
+  startMonth: string
+  endMonth: string | null
+}
 
 export type CategorySpending = {
   category: string

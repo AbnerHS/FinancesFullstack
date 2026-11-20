@@ -11,6 +11,8 @@ export type ConfirmationDialogState = {
   onConfirm: () => void
   secondaryConfirmLabel?: string
   onSecondaryConfirm?: () => void
+  /** Rótulo acima do título (padrão "Excluir"). */
+  eyebrow?: string
 }
 
 export function ConfirmationDialog({
@@ -38,7 +40,7 @@ export function ConfirmationDialog({
         onClick={(event) => event.stopPropagation()}
         className="grid w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
         <div className="border-b border-border/70 px-4 py-4 sm:px-5">
-          <p className="app-eyebrow">Excluir</p>
+          <p className="app-eyebrow">{state.eyebrow ?? "Excluir"}</p>
           <h3 className="mt-2 text-xl font-semibold text-foreground">
             {state.title}
           </h3>

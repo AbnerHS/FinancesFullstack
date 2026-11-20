@@ -653,6 +653,13 @@ function TransactionEditFormLayout({
           setEditingScope={setEditingScope}
         />
       </div>
+
+      {editingTransaction.subscriptionId ? (
+        <p className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+          Cobrança de assinatura: as mudanças aqui valem só para este mês. Para mudar o valor dos próximos
+          meses, edite a assinatura na tela Assinaturas.
+        </p>
+      ) : null}
     </>
   )
 }
