@@ -596,7 +596,7 @@ function BillsCard({
                     </p>
                     <p
                       className={cn(
-                        "flex items-center gap-1 text-[11px]",
+                        "flex items-center gap-1 overflow-hidden text-[11px] whitespace-nowrap",
                         overdue
                           ? "font-semibold text-amber-600 dark:text-amber-400"
                           : "text-muted-foreground"
