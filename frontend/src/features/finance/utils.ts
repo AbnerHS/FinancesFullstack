@@ -299,6 +299,14 @@ export function toneForBalance(value: number): TransactionType | "NEUTRAL" {
 // Resumo do mês / semana
 
 /** Data local de hoje em AAAA-MM-DD (sem fuso: o app trabalha com datas de calendário). */
+/** Só despesas com vencimento têm situação de pagamento (mesma regra do formulário). */
+export function canTogglePayment(transaction: {
+  type: TransactionType
+  dueDate?: string | null
+}) {
+  return transaction.type === "EXPENSE" && Boolean(transaction.dueDate)
+}
+
 export function todayIso(today = new Date()) {
   return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
 }

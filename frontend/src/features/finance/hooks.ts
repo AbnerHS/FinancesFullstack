@@ -1390,6 +1390,48 @@ export function useTransactionMutations(period: Period) {
   }
 }
 
+/**
+ * Baixa rápida: marca a despesa como paga hoje (ou volta para pendente). Atualiza o cache na hora
+ * para o toque parecer instantâneo e revalida as telas depois.
+ */
+export function useTransactionPayment(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transaction, paid }: { transaction: Transaction; paid: boolean }) =>
+      transactionService.updatePartial(transaction.id, {
+        paymentStatus: paid ? "PAID" : "PENDING",
+        paymentDate: paid ? todayIso() : null,
+      }),
+    onMutate: async ({ transaction, paid }) => {
+      await queryClient.cancelQueries({
+        queryKey: financeKeys.periodTransactionsRoot,
+      })
+      const patch = {
+        paymentStatus: paid ? ("PAID" as const) : ("PENDING" as const),
+        paymentDate: paid ? todayIso() : null,
+      }
+      const snapshot = queryClient.getQueriesData<Transaction[]>({
+        queryKey: financeKeys.periodTransactionsRoot,
+      })
+      queryClient.setQueriesData<Transaction[]>(
+        { queryKey: financeKeys.periodTransactionsRoot },
+        (current) =>
+          Array.isArray(current)
+            ? current.map((item) =>
+                item.id === transaction.id ? { ...item, ...patch } : item
+              )
+            : current
+      )
+      return { snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      context?.snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => invalidateTransactionViews(queryClient, planId),
+  })
+}
+
 export function useTransactionLinking(period: Period) {
   const queryClient = useQueryClient()
   const [paymentModalEntry, setPaymentModalEntry] =

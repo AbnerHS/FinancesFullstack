@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { todayIso } from "@/features/finance/utils.ts"
 import type {
   ResponsibleOption,
   Transaction,
@@ -265,7 +266,8 @@ function PaymentStatusField({
             setForm((current) => ({
               ...current,
               isPaid: !current.isPaid,
-              paymentDate: current.isPaid ? "" : current.paymentDate,
+              // Ao marcar como pago, a data padrão é hoje.
+              paymentDate: current.isPaid ? "" : current.paymentDate || todayIso(),
             }))
           }
         />

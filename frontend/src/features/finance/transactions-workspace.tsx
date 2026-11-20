@@ -52,6 +52,7 @@ import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
   usePeriodInvoiceManager,
+  useTransactionPayment,
   useTransactionLinking,
   useTransactionMutations,
 } from "@/features/finance/hooks.ts"
@@ -72,6 +73,7 @@ import type {
   TransactionFormValues,
 } from "@/features/finance/types.ts"
 import {
+  canTogglePayment,
   formatCurrency,
   formatDateOnly,
   formatDateTime,
@@ -122,6 +124,7 @@ type TransactionActions = {
   onLink: (transaction: Transaction) => void
   onEdit: (transaction: Transaction) => void
   onDelete: (transaction: Transaction) => void
+  onTogglePaid: (transaction: Transaction) => void
 }
 
 type TransactionRowProps = TransactionActions & {
@@ -205,6 +208,7 @@ function SortableTransactionRow({
   onLink,
   onEdit,
   onDelete,
+  onTogglePaid,
 }: TransactionRowProps) {
   const {
     attributes,
@@ -223,6 +227,8 @@ function SortableTransactionRow({
   const categoryLabel = transaction.category?.name || "Sem categoria"
   const isExpense = transaction.type === "EXPENSE"
   const linkLabel = transaction.isClearedByInvoice ? "Vínculo com fatura" : "Vincular a uma fatura"
+  const canPay = canTogglePayment(transaction)
+  const isPaid = canPay && transaction.paymentStatus === "PAID"
 
   return (
     <tr
@@ -291,6 +297,29 @@ function SortableTransactionRow({
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
         <div className="flex items-center justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`size-8 ${
+              isPaid
+                ? "text-emerald-500 dark:text-emerald-400"
+                : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+            }`}
+            onClick={() => onTogglePaid(transaction)}
+            disabled={!canPay}
+            aria-label={isPaid ? "Marcar como pendente" : "Marcar como pago"}
+            aria-pressed={canPay ? isPaid : undefined}
+            title={
+              canPay
+                ? isPaid
+                  ? "Marcar como pendente"
+                  : "Marcar como pago hoje"
+                : "Sem vencimento: não há pagamento a registrar"
+            }
+          >
+            <CheckCircle2 size={14} />
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -437,6 +466,7 @@ function TransactionActionSheet({
   onLink,
   onEdit,
   onDelete,
+  onTogglePaid,
 }: TransactionActions & {
   transaction: Transaction | null
   onClose: () => void
@@ -447,6 +477,13 @@ function TransactionActionSheet({
 
   const isExpense = transaction.type === "EXPENSE"
   const actions: SheetAction[] = [
+    ...(canTogglePayment(transaction)
+      ? [
+          transaction.paymentStatus === "PAID"
+            ? { label: "Marcar como pendente", icon: Clock3, onClick: () => onTogglePaid(transaction) }
+            : { label: "Marcar como pago hoje", icon: CheckCircle2, onClick: () => onTogglePaid(transaction) },
+        ]
+      : []),
     { label: "Ver detalhes", icon: Eye, onClick: () => onOpenDetails(transaction) },
     { label: "Editar", icon: Pencil, onClick: () => onEdit(transaction) },
     ...(isExpense
@@ -915,6 +952,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     deleteTransaction,
   } = useTransactionMutations(panel.period)
   const transactionLinking = useTransactionLinking(panel.period)
+  const transactionPayment = useTransactionPayment(panel.period.planId)
   const invoiceManager = usePeriodInvoiceManager({
     creditCards: shared.creditCards,
     invoices: panel.invoices,
@@ -979,8 +1017,15 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         "Não foi possível remover a transação."
       )
     }
+    if (transactionPayment.error) {
+      return getErrorMessage(
+        transactionPayment.error,
+        "Não foi possível atualizar o pagamento."
+      )
+    }
     return null
   }, [
+    transactionPayment.error,
     createRecurringTransaction.error,
     createTransaction.error,
     deleteTransaction.error,
@@ -1254,6 +1299,11 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     onLink: transactionLinking.openPaymentModal,
     onEdit: startEditing,
     onDelete: confirmDelete,
+    onTogglePaid: (transaction) =>
+      transactionPayment.mutate({
+        transaction,
+        paid: transaction.paymentStatus !== "PAID",
+      }),
   }
   const closeActions = useCallback(() => setActionsTransaction(null), [])
   const closeInvoiceActions = useCallback(() => setActionsInvoice(null), [])

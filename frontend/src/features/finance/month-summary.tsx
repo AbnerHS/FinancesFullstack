@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   CalendarDays,
+  CheckCircle2,
   CreditCard,
   PiggyBank,
   TrendingDown,
@@ -15,7 +16,10 @@ import {
 } from "lucide-react"
 
 import { getCategoryColor } from "@/features/finance/category-colors.ts"
-import { useMonthSummaryData } from "@/features/finance/hooks.ts"
+import {
+  useMonthSummaryData,
+  useTransactionPayment,
+} from "@/features/finance/hooks.ts"
 import type {
   Invoice,
   Period,
@@ -33,6 +37,7 @@ import {
   type MonthInsights,
   type WeekDue,
 } from "@/features/finance/utils.ts"
+import { getErrorMessage } from "@/lib/errors.ts"
 import { cn } from "@/lib/utils"
 
 type SummaryPanel = {
@@ -399,6 +404,7 @@ function BillsCard({
 }) {
   const { bills } = insights
   const total = bills.paidCount + bills.pendingCount
+  const payment = useTransactionPayment(period.planId)
   const byDueDate = (a: Transaction, b: Transaction) =>
     (a.dueDate ?? "").localeCompare(b.dueDate ?? "")
   const monthPending = transactions
@@ -551,15 +557,37 @@ function BillsCard({
                         : ""}
                     </p>
                   </div>
-                  <p className="shrink-0 text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
-                    {formatCurrency(transaction.amount)}
-                  </p>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <p className="text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
+                      {formatCurrency(transaction.amount)}
+                    </p>
+                    <button
+                      type="button"
+                      data-carousel-no-drag
+                      className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-600 active:bg-emerald-500/15 disabled:opacity-50 dark:hover:text-emerald-400"
+                      onClick={() => payment.mutate({ transaction, paid: true })}
+                      disabled={
+                        payment.isPending &&
+                        payment.variables?.transaction.id === transaction.id
+                      }
+                      aria-label={`Marcar ${transaction.description} como pago`}
+                      title="Marcar como pago hoje"
+                    >
+                      <CheckCircle2 size={16} />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+        {payment.error ? (
+          <p role="alert" className="line-clamp-2 h-8 text-[11px] leading-4 text-rose-600 dark:text-rose-400">
+            {getErrorMessage(payment.error, "Não foi possível marcar a conta como paga.")}
+          </p>
+        ) : (
+          <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+        )}
       </div>
     </SummaryCard>
   )
