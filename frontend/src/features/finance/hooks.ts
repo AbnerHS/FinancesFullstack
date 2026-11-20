@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import {
   useMutation,
   useQueries,
@@ -422,6 +423,19 @@ type PeriodPanelData = {
  * Sem mês escolhido na sessão, abre no mês atual.
  */
 const WINDOW_RADIUS = 6
+
+/** Abre o dashboard já no mês pedido (AAAA-MM). Usado no drill-down de Evolução e Planos. */
+export function useOpenMonthInDashboard() {
+  const navigate = useNavigate()
+  const setSelectedMonthId = useDashboardStore((state) => state.setSelectedMonthId)
+  return useCallback(
+    (monthId: string) => {
+      setSelectedMonthId(monthId)
+      void navigate({ to: "/" })
+    },
+    [navigate, setSelectedMonthId]
+  )
+}
 
 export function useDashboard() {
   const context = usePlanContext()

@@ -7,11 +7,11 @@ import {
 } from "@/features/finance/chart-colors.ts"
 import type { CategorySlice, EvolutionPoint } from "@/features/finance/charts.tsx"
 import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
-import { useEvolution } from "@/features/finance/hooks.ts"
+import { useEvolution, useOpenMonthInDashboard } from "@/features/finance/hooks.ts"
 import {
   FiltersPanel,
   MonthYearPicker,
-  PlanResponsibleSelects,
+  ResponsibleSelect,
   ShortcutButtons,
 } from "@/features/finance/period-filters.tsx"
 import type { Period } from "@/features/finance/types.ts"
@@ -52,11 +52,8 @@ const shortMonth = (period: Period) =>
 /** Comparação entre meses: totais do intervalo, tendência, categorias, responsáveis e mês a mês. */
 export function EvolutionPage() {
   const {
-    plans,
     plansLoading,
     activePlan,
-    selectedPlanId,
-    setSelectedPlanId,
     periods,
     periodsLoading,
     responsibleOptions,
@@ -161,10 +158,7 @@ export function EvolutionPage() {
     <div className="space-y-6">
       <FiltersPanel title={activePlan?.name || "Sem plano"} subtitle={rangeLabel}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <PlanResponsibleSelects
-            plans={plans}
-            selectedPlanId={selectedPlanId}
-            onPlanChange={setSelectedPlanId}
+          <ResponsibleSelect
             responsibleOptions={responsibleOptions}
             responsibleFilter={responsibleFilter}
             onResponsibleChange={setResponsibleFilter}
@@ -463,6 +457,7 @@ function MonthTable({
   panels: Array<{ period: Period; stats: { incomes: number; expenses: number; balance: number } }>
   summary: { incomes: number; expenses: number; balance: number }
 }) {
+  const openMonth = useOpenMonthInDashboard()
   const balanceClass = (value: number) =>
     value < 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
   const rate = (incomes: number, balance: number) =>
@@ -489,10 +484,25 @@ function MonthTable({
           </thead>
           <tbody>
             {panels.map((panel) => (
-              <tr key={panel.period.id} className="border-t border-border/60">
+              <tr
+                key={panel.period.id}
+                onClick={() => openMonth(panel.period.id)}
+                className="cursor-pointer border-t border-border/60 transition-colors hover:bg-secondary/60"
+              >
                 <th scope="row" className="py-2 pr-1 pl-4 text-left font-medium text-foreground capitalize sm:px-5">
-                  <span className="sm:hidden">{shortMonth(panel.period)}</span>
-                  <span className="hidden sm:inline">{formatMonthYear(panel.period)}</span>
+                  {/* Botão de verdade para teclado e leitores de tela; a linha toda também é clicável. */}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      openMonth(panel.period.id)
+                    }}
+                    className="capitalize underline-offset-2 hover:underline"
+                    title="Abrir este mês no dashboard"
+                  >
+                    <span className="sm:hidden">{shortMonth(panel.period)}</span>
+                    <span className="hidden sm:inline">{formatMonthYear(panel.period)}</span>
+                  </button>
                 </th>
                 <td className="px-1.5 py-2 sm:px-2 text-right whitespace-nowrap text-foreground">
                   {formatAmount(panel.stats.incomes)}

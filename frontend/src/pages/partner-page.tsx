@@ -1,50 +1,22 @@
 import { Users } from "lucide-react"
 
-import { Select } from "@/components/ui/select.tsx"
 import { usePlanContext } from "@/features/finance/hooks.ts"
 import { PlanParticipantsManager } from "@/features/finance/managers.tsx"
 
 export function PartnerPage() {
-  const {
-    plans,
-    activePlan,
-    participants,
-    isPlanOwner,
-    selectedPlanId,
-    setSelectedPlanId,
-  } = usePlanContext()
+  const { activePlan, participants, isPlanOwner } = usePlanContext()
 
   return (
     <div className="space-y-6">
       <section className="app-panel">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div>
-            <p className="app-eyebrow">Participantes</p>
-            <h2 className="font-serif text-3xl font-semibold text-foreground">
-              Colaboração do plano
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Gere links, acompanhe quem faz parte do plano e mantenha a composição atualizada.
-            </p>
-          </div>
-
-          <div>
-            <label className="app-label">Plano ativo</label>
-            <Select
-              className="mt-2"
-              disabled={plans.length === 0}
-              value={selectedPlanId || activePlan?.id || ""}
-              onChange={(event) => setSelectedPlanId(event.target.value)}
-            >
-              {plans.length === 0 ? <option value="">Nenhum plano ainda</option> : null}
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
+        <p className="app-eyebrow">Participantes</p>
+        <h2 className="font-serif text-3xl font-semibold text-foreground">
+          {activePlan ? `Colaboração em ${activePlan.name}` : "Colaboração do plano"}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Gere links, acompanhe quem faz parte do plano e mantenha a composição atualizada.
+          O plano ativo se troca no topo da tela.
+        </p>
       </section>
 
       {!activePlan ? (

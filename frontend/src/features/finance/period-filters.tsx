@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import { ChevronDown, SlidersHorizontal } from "lucide-react"
 
 import { Select } from "@/components/ui/select.tsx"
-import type { Period, Plan, ResponsibleOption } from "@/features/finance/types.ts"
+import type { Period, ResponsibleOption } from "@/features/finance/types.ts"
 import { formatMonthLabel } from "@/features/finance/utils.ts"
 import { cn } from "@/lib/utils"
 
@@ -57,63 +57,36 @@ export function FiltersPanel({
 }
 
 /** Plano e responsável lado a lado. */
-export function PlanResponsibleSelects({
-  plans,
-  selectedPlanId,
-  onPlanChange,
+/** Filtro de responsável (o plano se escolhe no cabeçalho). */
+export function ResponsibleSelect({
   responsibleOptions,
   responsibleFilter,
   onResponsibleChange,
 }: {
-  plans: Plan[]
-  selectedPlanId: string | null
-  onPlanChange: (planId: string) => void
   responsibleOptions: ResponsibleOption[]
   responsibleFilter: string
   onResponsibleChange: (responsibleId: string) => void
 }) {
   return (
-    <>
-      <div className="min-w-0">
-        <label className="app-label" htmlFor="filter-plan">
-          Plano financeiro
-        </label>
-        <Select
-          id="filter-plan"
-          className="mt-2"
-          disabled={plans.length === 0}
-          value={selectedPlanId || ""}
-          onChange={(event) => onPlanChange(event.target.value)}
-        >
-          {plans.length === 0 ? <option value="">Nenhum plano ainda</option> : null}
-          {plans.map((plan) => (
-            <option key={plan.id} value={plan.id}>
-              {plan.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      <div className="min-w-0">
-        <label className="app-label" htmlFor="filter-responsible">
-          Responsável
-        </label>
-        <Select
-          id="filter-responsible"
-          className="mt-2"
-          disabled={responsibleOptions.length === 0}
-          value={responsibleFilter}
-          onChange={(event) => onResponsibleChange(event.target.value)}
-        >
-          <option value="">Todos os participantes</option>
-          {responsibleOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-    </>
+    <div className="min-w-0">
+      <label className="app-label" htmlFor="filter-responsible">
+        Responsável
+      </label>
+      <Select
+        id="filter-responsible"
+        className="mt-2"
+        disabled={responsibleOptions.length === 0}
+        value={responsibleFilter}
+        onChange={(event) => onResponsibleChange(event.target.value)}
+      >
+        <option value="">Todos os participantes</option>
+        {responsibleOptions.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+    </div>
   )
 }
 

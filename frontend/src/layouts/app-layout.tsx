@@ -5,6 +5,7 @@ import {
   AppShellSidebar,
   MobileSidebarButton,
 } from "@/components/app-shell-sidebar.tsx"
+import { HeaderPlanSelect } from "@/components/header-plan-select.tsx"
 import { MobileBottomNav } from "@/components/mobile-bottom-nav.tsx"
 import { authService } from "@/features/auth/auth-service.ts"
 import { useAuthStore } from "@/stores/auth-store.ts"
@@ -110,11 +111,7 @@ export function AppLayout() {
                 </h1>
               </div>
             </div>
-            <div className="hidden items-center gap-3 md:flex">
-              <div className="rounded-full border border-border bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm">
-                {user?.name || "Usuário"}
-              </div>
-            </div>
+            <HeaderPlanSelect />
           </div>
         </header>
 

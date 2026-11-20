@@ -33,6 +33,7 @@ import {
   Plus,
   Repeat2,
   Save,
+  Search,
   SendHorizonal,
   Trash2,
   X,
@@ -65,7 +66,12 @@ import { TransactionComposer } from "@/features/finance/transaction-composer.tsx
 import { financeKeys, transactionService } from "@/features/finance/services.ts"
 import {
   buildTransactionGroups,
+  matchesQuickFilter,
+  matchesSearch,
+  normalizeSearchText,
+  TRANSACTION_QUICK_FILTERS,
   useTransactionReorder,
+  type TransactionQuickFilter,
 } from "@/features/finance/transaction-workspace-utils.ts"
 import type {
   CreditCard,
@@ -1070,6 +1076,40 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       buildTransactionGroups(reorder.transactions, shared.responsibleOptions),
     [reorder.transactions, shared.responsibleOptions]
   )
+
+  // Busca e filtro rápido. Com filtro ativo a ordenação por arrastar fica desligada: reordenar
+  // uma lista parcial embaralharia a posição das linhas escondidas.
+  const [searchQuery, setSearchQuery] = useState("")
+  const [quickFilter, setQuickFilter] = useState<TransactionQuickFilter>("ALL")
+  const normalizedQuery = normalizeSearchText(searchQuery)
+  const isFiltering = normalizedQuery !== "" || quickFilter !== "ALL"
+  const quickFilterCounts = useMemo(() => {
+    const counts = {} as Record<TransactionQuickFilter, number>
+    for (const { value } of TRANSACTION_QUICK_FILTERS) {
+      counts[value] = reorder.transactions.filter(
+        (transaction) =>
+          matchesSearch(transaction, normalizedQuery) &&
+          matchesQuickFilter(transaction, value)
+      ).length
+    }
+    return counts
+  }, [normalizedQuery, reorder.transactions])
+  const visibleGroups = useMemo(
+    () =>
+      isFiltering
+        ? groupedTransactions
+            .map((group) => ({
+              ...group,
+              transactions: group.transactions.filter(
+                (transaction) =>
+                  matchesSearch(transaction, normalizedQuery) &&
+                  matchesQuickFilter(transaction, quickFilter)
+              ),
+            }))
+            .filter((group) => group.transactions.length > 0)
+        : groupedTransactions,
+    [groupedTransactions, isFiltering, normalizedQuery, quickFilter]
+  )
   const categoryOptions = useMemo(
     () =>
       shared.transactionCategories.map((category) => ({
@@ -1730,6 +1770,60 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               </p>
             ) : null}
           </div>
+          {groupedTransactions.length > 0 ? (
+            <div
+              data-carousel-no-drag
+              className="flex flex-col gap-2 border-b border-border/70 px-3 py-2 sm:flex-row sm:items-center sm:px-4"
+            >
+              <label className="relative block sm:w-56 sm:shrink-0">
+                <span className="sr-only">Buscar transação</span>
+                <Search
+                  size={14}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && searchQuery) {
+                      event.preventDefault()
+                      setSearchQuery("")
+                    }
+                  }}
+                  placeholder="Buscar descrição ou categoria"
+                  className="h-9 w-full rounded-lg border border-border bg-card/90 pr-3 pl-8 text-base outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 sm:text-sm"
+                />
+              </label>
+              <div
+                role="group"
+                aria-label="Filtro rápido"
+                className="-mx-3 flex min-w-0 gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:flex-1 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+              >
+                {TRANSACTION_QUICK_FILTERS.map(({ value, label }) => {
+                  const selected = quickFilter === value
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setQuickFilter(selected && value !== "ALL" ? "ALL" : value)}
+                      className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition ${
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                      <span className={`tabular-nums ${selected ? "opacity-85" : "opacity-70"}`}>
+                        {quickFilterCounts[value]}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
           {panel.transactionsLoading ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">
               Carregando transações...
@@ -1738,6 +1832,21 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             <p className="px-4 py-3 text-sm text-muted-foreground">
               Nenhuma transação cadastrada.
             </p>
+          ) : visibleGroups.length === 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted-foreground">
+              <span>Nenhuma transação com esse filtro.</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery("")
+                  setQuickFilter("ALL")
+                }}
+              >
+                Limpar filtros
+              </Button>
+            </div>
           ) : (
             <DndContext
               sensors={sensors}
@@ -1762,7 +1871,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                     </th>
                   </tr>
                 </thead>
-                {groupedTransactions.map((group) => {
+                {visibleGroups.map((group) => {
                   const groupBalance = group.transactions.reduce(
                     (total, transaction) =>
                       total +
@@ -1812,7 +1921,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                               reorder.overId === transaction.id &&
                               reorder.activeId !== transaction.id
                             }
-                            reorderPending={reorder.reorderPending}
+                            reorderPending={reorder.reorderPending || isFiltering}
                             onShowActions={setActionsTransaction}
                             {...transactionActions}
                           />

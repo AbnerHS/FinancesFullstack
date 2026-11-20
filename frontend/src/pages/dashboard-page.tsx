@@ -11,10 +11,11 @@ import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
 import { useDashboard, type PeriodPanel } from "@/features/finance/hooks.ts"
 import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { MonthCarousel } from "@/features/finance/month-carousel.tsx"
+import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
 import { MonthSummary } from "@/features/finance/month-summary.tsx"
 import {
   FiltersPanel,
-  PlanResponsibleSelects,
+  ResponsibleSelect,
 } from "@/features/finance/period-filters.tsx"
 import {
   TransactionsWorkspace,
@@ -33,7 +34,6 @@ export function DashboardPage() {
   const {
     plans,
     plansLoading,
-    selectedPlanId,
     activePlan,
     setSelectedPlanId,
     activePeriod,
@@ -44,7 +44,15 @@ export function DashboardPage() {
     transactionCategories,
     responsibleOptions,
     userId,
+    monthSummaries,
   } = useDashboard()
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
+  const openMonthPicker = useCallback(() => setMonthPickerOpen(true), [])
+  const closeMonthPicker = useCallback(() => setMonthPickerOpen(false), [])
+  const monthsWithData = useMemo(
+    () => monthSummaries.map((summary) => summary.month),
+    [monthSummaries]
+  )
   const responsibleFilter = useDashboardStore((state) => state.responsibleFilter)
   const setResponsibleFilter = useDashboardStore((state) => state.setResponsibleFilter)
 
@@ -87,18 +95,13 @@ export function DashboardPage() {
         subtitle={activePeriod ? formatMonthYear(activePeriod) : "Sem plano"}
       >
         {/* O mês se escolhe no carrossel (setas, swipe, teclado), sem limite de intervalo. */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <PlanResponsibleSelects
-            plans={plans}
-            selectedPlanId={selectedPlanId}
-            onPlanChange={setSelectedPlanId}
+        {/* O plano se escolhe no cabeçalho; criar outro plano é raro e fica como ação secundária. */}
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <ResponsibleSelect
             responsibleOptions={responsibleOptions}
             responsibleFilter={responsibleFilter}
             onResponsibleChange={setResponsibleFilter}
           />
-        </div>
-
-        <div className="mt-4">
           <DashboardPlanQuickCreate
             activePlan={activePlan}
             hasPlans={plans.length > 0}
@@ -126,6 +129,7 @@ export function DashboardPage() {
           panel={activePanel}
           responsibleFilter={responsibleFilter}
           onGoToCurrentMonth={goToCurrentMonth}
+          onOpenMonthPicker={openMonthPicker}
         />
       </KeepHeightWhileLoading>
 
@@ -149,9 +153,20 @@ export function DashboardPage() {
             activeId={activePeriod?.id ?? null}
             onActiveIdChange={setSelectedMonthId}
             renderPanel={renderPanel}
+            onLabelClick={openMonthPicker}
           />
         )}
       </section>
+
+      {activePeriod ? (
+        <MonthPickerDialog
+          open={monthPickerOpen}
+          value={activePeriod.id}
+          monthsWithData={monthsWithData}
+          onSelect={setSelectedMonthId}
+          onClose={closeMonthPicker}
+        />
+      ) : null}
     </div>
   )
 }

@@ -29,6 +29,7 @@ import {
   useCreditCardManager,
   useInvoiceManager,
   usePlanCollaborationManager,
+  useOpenMonthInDashboard,
   usePlanDeleteManager,
   usePlanManager,
 } from "@/features/finance/hooks.ts"
@@ -83,6 +84,7 @@ export function PlanManager({
   )
   const [confirmationDialog, setConfirmationDialog] =
     useState<ConfirmationDialogState | null>(null)
+  const openMonth = useOpenMonthInDashboard()
   // Mais recentes primeiro.
   const recentMonths = useMemo(
     () => [...monthSummaries].reverse(),
@@ -155,9 +157,12 @@ export function PlanManager({
                 </p>
               ) : (
                 recentMonths.map((summary) => (
-                  <div
+                  <button
+                    type="button"
                     key={summary.month}
-                    className="w-full rounded-[1rem] border border-border bg-card/80 px-3 py-2"
+                    onClick={() => openMonth(summary.month)}
+                    title="Abrir este mês no dashboard"
+                    className="w-full rounded-[1rem] border border-border bg-card/80 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-card"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -178,7 +183,7 @@ export function PlanManager({
                         {formatCurrency(summary.balance)}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
@@ -802,10 +807,17 @@ export function DashboardPlanQuickCreate({
   return (
     <>
       <div className="flex items-end">
-        <Button type="button" className="h-11 w-full" onClick={openModal}>
-          {hasPlans ? "Novo Plano" : "Criar Primeiro Plano"}
-          <Plus size={16} />
-        </Button>
+        {hasPlans ? (
+          <Button type="button" variant="outline" className="h-11 w-full md:w-auto" onClick={openModal}>
+            <Plus size={16} />
+            Novo plano
+          </Button>
+        ) : (
+          <Button type="button" className="h-11 w-full" onClick={openModal}>
+            Criar Primeiro Plano
+            <Plus size={16} />
+          </Button>
+        )}
       </div>
 
       {isOpen

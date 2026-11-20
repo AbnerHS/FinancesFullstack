@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   CreditCard,
   PiggyBank,
   TrendingDown,
@@ -58,10 +59,12 @@ export function MonthSummary({
   panel,
   responsibleFilter,
   onGoToCurrentMonth,
+  onOpenMonthPicker,
 }: {
   panel: SummaryPanel | null
   responsibleFilter: string
   onGoToCurrentMonth: () => void
+  onOpenMonthPicker?: () => void
 }) {
   const data = useMonthSummaryData({ activePeriod: panel?.period ?? null })
 
@@ -115,7 +118,19 @@ export function MonthSummary({
         <div>
           <p className="app-eyebrow">Resumo do mês</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl">
-            {panel.label}
+            {onOpenMonthPicker ? (
+              <button
+                type="button"
+                onClick={onOpenMonthPicker}
+                className="-mx-1 inline-flex items-center gap-1 rounded-lg px-1 capitalize transition hover:bg-secondary"
+                title="Escolher outro mês"
+              >
+                {panel.label}
+                <ChevronDown size={20} className="text-muted-foreground" aria-hidden="true" />
+              </button>
+            ) : (
+              panel.label
+            )}
           </h3>
         </div>
         <div className="flex items-center gap-2">
