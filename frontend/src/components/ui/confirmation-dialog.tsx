@@ -2,6 +2,7 @@ import { createPortal } from "react-dom"
 import { Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
 export type ConfirmationDialogState = {
   confirmLabel: string
@@ -19,13 +20,23 @@ export function ConfirmationDialog({
   onClose: () => void
   state: ConfirmationDialogState | null
 }) {
+  useEscapeKey(Boolean(state), onClose)
+
   if (!state) {
     return null
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="grid w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={state.title}
+        onClick={(event) => event.stopPropagation()}
+        className="grid w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
         <div className="border-b border-border/70 px-4 py-4 sm:px-5">
           <p className="app-eyebrow">Excluir</p>
           <h3 className="mt-2 text-xl font-semibold text-foreground">

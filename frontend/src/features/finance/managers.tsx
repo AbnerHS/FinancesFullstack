@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   Check,
@@ -46,6 +46,7 @@ import {
   formatMonthYear,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
 export function PlanManager({
   plans,
@@ -795,6 +796,8 @@ export function DashboardPlanQuickCreate({
     startCreate()
     setIsOpen(true)
   }
+  const closeModal = useCallback(() => setIsOpen(false), [])
+  useEscapeKey(isOpen, closeModal)
 
   return (
     <>
@@ -807,8 +810,17 @@ export function DashboardPlanQuickCreate({
 
       {isOpen
         ? createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            onClick={closeModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={hasPlans ? "Novo plano" : "Criar primeiro plano"}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="app-eyebrow">
@@ -821,7 +833,7 @@ export function DashboardPlanQuickCreate({
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {hasPlans
-                      ? "Você pode começar do zero, e o ano atual será preparado automaticamente."
+                      ? "Você pode começar do zero; todos os meses ficam disponíveis no dashboard."
                       : "Comece criando um plano para organizar suas transações, categorias, cartões e períodos."}
                   </p>
                 </div>

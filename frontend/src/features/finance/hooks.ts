@@ -8,7 +8,10 @@ import {
 
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
-import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
+import {
+  resolveActiveMonthId,
+  useDashboardStore,
+} from "@/features/finance/dashboard-store.ts"
 import {
   creditCardService,
   financeKeys,
@@ -427,8 +430,7 @@ export function useDashboard() {
   const setSelectedMonthId = useDashboardStore((state) => state.setSelectedMonthId)
 
   const currentMonthId = todayIso().slice(0, 7)
-  const activeMonthId =
-    selectedMonthId && /^\d{4}-\d{2}$/.test(selectedMonthId) ? selectedMonthId : currentMonthId
+  const activeMonthId = resolveActiveMonthId(selectedMonthId)
 
   const activePeriod = useMemo<Period | null>(() => {
     if (!activePlan) return null

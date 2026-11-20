@@ -271,7 +271,9 @@ export function Combobox({
             return
           }
 
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && isOpen) {
+            // Só fecha a lista; o modal em volta não deve fechar junto.
+            event.preventDefault()
             setIsOpen(false)
           }
         }}

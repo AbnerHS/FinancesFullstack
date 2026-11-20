@@ -272,7 +272,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       {multiple ? (
         <div
           className={cn(
-            "fixed inset-x-4 bottom-4 z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition lg:hidden",
+            "fixed inset-x-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition lg:hidden",
             inViewport ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
           )}
         >

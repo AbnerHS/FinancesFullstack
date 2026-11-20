@@ -57,6 +57,10 @@ import {
   useTransactionLinking,
   useTransactionMutations,
 } from "@/features/finance/hooks.ts"
+import {
+  resolveActiveMonthId,
+  useDashboardStore,
+} from "@/features/finance/dashboard-store.ts"
 import { TransactionComposer } from "@/features/finance/transaction-composer.tsx"
 import { financeKeys, transactionService } from "@/features/finance/services.ts"
 import {
@@ -83,6 +87,7 @@ import {
   parseCurrencyInput,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
 type TransactionWorkspaceProps = {
   panel: {
@@ -137,6 +142,9 @@ type TransactionRowProps = TransactionActions & {
 }
 
 const shortDate = (value: string) => formatDateOnly(value).slice(0, 5)
+
+/** Mesmo corte do `sm:` do Tailwind, a partir do qual a linha mostra os botões de ação. */
+const isDesktopViewport = () => window.matchMedia("(min-width: 640px)").matches
 
 function isHttpUrl(value: string) {
   try {
@@ -263,6 +271,7 @@ function SortableTransactionRow({
   isDragOver,
   reorderPending,
   onShowActions,
+  onOpenDetails,
   onLink,
   onEdit,
   onDelete,
@@ -297,7 +306,9 @@ function SortableTransactionRow({
       }}
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("button")) return
-        onShowActions(transaction)
+        // No desktop a linha já tem os botões de ação; o clique abre os detalhes. No celular, as ações.
+        if (isDesktopViewport()) onOpenDetails(transaction)
+        else onShowActions(transaction)
       }}
       className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 ${
         isDragging
@@ -713,6 +724,7 @@ function TransactionDetailsModal({
   const [previewPending, setPreviewPending] = useState(false)
   const [downloadPending, setDownloadPending] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
+  useEscapeKey(Boolean(transaction), onClose)
 
   if (!transaction) {
     return null
@@ -809,8 +821,17 @@ function TransactionDetailsModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+    <div
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalhes de ${transaction.description}`}
+        onClick={(event) => event.stopPropagation()}
+        className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]"
+      >
         <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
           <div>
             <p className="app-eyebrow">Detalhes da transação</p>
@@ -821,7 +842,7 @@ function TransactionDetailsModal({
               {formatCurrency(transaction.amount)}
             </p>
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Fechar">
             <X size={16} />
           </Button>
         </div>
@@ -1013,7 +1034,12 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   } = useTransactionMutations(panel.period)
   const transactionLinking = useTransactionLinking(panel.period)
   const transactionPayment = useTransactionPayment(panel.period.planId)
+  useEscapeKey(
+    Boolean(transactionLinking.paymentModalEntry),
+    transactionLinking.closePaymentModal
+  )
   const [documentError, setDocumentError] = useState<string | null>(null)
+  const [focusSignal, setFocusSignal] = useState(0)
   const invoiceManager = usePeriodInvoiceManager({
     creditCards: shared.creditCards,
     invoices: panel.invoices,
@@ -1100,6 +1126,24 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     setSubmitPending(false)
     setForm(emptyForm())
   }
+
+  // Pedido de nova transação vindo de fora (atalho N, botão + do celular): só o mês ativo atende.
+  // Também confere na montagem, para o pedido feito antes de o painel carregar.
+  const periodId = panel.period.id
+  useEffect(() => {
+    const handle = (state: ReturnType<typeof useDashboardStore.getState>) => {
+      if (!state.composerRequested) return
+      if (resolveActiveMonthId(state.selectedMonthId) !== periodId) return
+      state.consumeComposerRequest()
+      setEditingTransaction(null)
+      setEditingScope("SINGLE")
+      setFormError(null)
+      setForm(emptyForm())
+      setIsComposerOpen(true)
+    }
+    handle(useDashboardStore.getState())
+    return useDashboardStore.subscribe(handle)
+  }, [periodId])
 
   const refreshTransactionViews = async () => {
     await Promise.all([
@@ -1393,11 +1437,23 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     0
   )
 
-  const submit = async () => {
+  const submit = async ({ keepOpen }: { keepOpen: boolean }) => {
     setFormError(null)
     setSubmitPending(true)
     try {
       await saveTransactionWithBillingDocument()
+      if (keepOpen) {
+        // Lançamento em sequência: mantém tipo e responsável, limpa o resto e volta o foco.
+        setEditingTransaction(null)
+        setEditingScope("SINGLE")
+        setForm((current) => ({
+          ...emptyForm(),
+          type: current.type,
+          responsibleUserId: current.responsibleUserId,
+        }))
+        setFocusSignal((value) => value + 1)
+        return
+      }
       resetComposer()
       setIsComposerOpen(false)
       return
@@ -1641,10 +1697,11 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             createRecurringPending={createRecurringTransaction.isPending}
             updatePending={updateTransaction.isPending}
             submitPending={submitPending}
-            onSubmit={async (event) => {
+            focusSignal={focusSignal}
+            onSubmit={async (event, options) => {
               event.preventDefault()
               try {
-                await submit()
+                await submit(options)
               } catch (error) {
                 setFormError(
                   error instanceof Error
@@ -1785,8 +1842,17 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         />
         {/* Portal: dentro do painel do mês, o fixed ficaria preso à coluna em vez da tela. */}
         {transactionLinking.paymentModalEntry ? createPortal(
-          <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-            <div className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+          <div
+            className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            onClick={transactionLinking.closePaymentModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Vincular transação a uma fatura"
+              onClick={(event) => event.stopPropagation()}
+              className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]"
+            >
               <div className="border-b border-border/70 px-4 py-4 sm:px-5">
                 <p className="app-eyebrow">Fatura</p>
                 <h3 className="mt-2 text-xl font-semibold text-foreground">

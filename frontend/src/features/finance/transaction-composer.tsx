@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { Save, SendHorizonal, X } from "lucide-react"
 
@@ -11,6 +12,7 @@ import { Select } from "@/components/ui/select.tsx"
 import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { todayIso } from "@/features/finance/utils.ts"
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 import type {
   ResponsibleOption,
   Transaction,
@@ -34,8 +36,13 @@ type TransactionComposerProps = {
   createRecurringPending: boolean
   updatePending: boolean
   submitPending: boolean
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>
+  onSubmit: (
+    event: React.FormEvent<HTMLFormElement>,
+    options: { keepOpen: boolean }
+  ) => void | Promise<void>
   onCancel: () => void
+  /** Muda a cada "Salvar e adicionar outra": devolve o foco para a descrição. */
+  focusSignal?: number
 }
 
 type SharedLayoutProps = {
@@ -56,6 +63,8 @@ type ActionsRowProps = {
   onCancel: () => void
   formId?: string
 }
+
+const CONTINUE_INTENT = "continue"
 
 const fieldClassName = "flex flex-col gap-2"
 
@@ -124,12 +133,16 @@ function shouldShowBillingDocumentField(form: TransactionFormValues) {
 function TransactionCommonRow({
   form,
   setForm,
-}: Pick<SharedLayoutProps, "form" | "setForm">) {
+  descriptionRef,
+}: Pick<SharedLayoutProps, "form" | "setForm"> & {
+  descriptionRef?: React.Ref<HTMLInputElement>
+}) {
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
       <div className={fieldClassName}>
         <Label>Descrição</Label>
         <Input
+          ref={descriptionRef}
           value={form.description}
           onChange={(event) =>
             setForm((current) => ({
@@ -519,6 +532,26 @@ function ActionButtons({
                 : "Enviar"}
         {editingTransaction ? <Save size={16} /> : <SendHorizonal size={16} />}
       </Button>
+      {!editingTransaction ? (
+        <Button
+          type="submit"
+          form={formId}
+          variant="outline"
+          className="h-11"
+          name="intent"
+          value={CONTINUE_INTENT}
+          disabled={
+            createPending ||
+            createRecurringPending ||
+            updatePending ||
+            submitPending
+          }
+          title="Salvar e manter o formulário aberto para outra transação"
+        >
+          <span className="sm:hidden">Salvar e nova</span>
+          <span className="hidden sm:inline">Salvar e adicionar outra</span>
+        </Button>
+      ) : null}
       {showCancel ? (
         <Button
           type="button"
@@ -643,18 +676,37 @@ export function TransactionComposer({
   submitPending,
   onSubmit,
   onCancel,
+  focusSignal,
 }: TransactionComposerProps) {
   const isEditing = Boolean(editingTransaction)
   const formId = "transaction-composer-form"
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const descriptionRef = useRef<HTMLInputElement | null>(null)
+
+  // Esc fecha (o Combobox aberto consome o Esc antes, fechando só a lista).
+  useEscapeKey(isOpen, onCancel)
+
+  // Foco na descrição ao abrir uma nova transação e depois de "Salvar e adicionar outra". Só no
+  // desktop: no celular, focar abriria o teclado por cima do formulário.
+  useEffect(() => {
+    if (!isOpen || isEditing) return
+    if (!window.matchMedia("(min-width: 640px)").matches) return
+    descriptionRef.current?.focus()
+  }, [isOpen, isEditing, focusSignal])
 
   if (!isOpen) {
     return null
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="flex min-h-full items-start justify-center py-4">
-        <Card className="grid max-h-[90dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+    // Celular: folha que sobe do rodapé (sobra mais tela com o teclado aberto). Desktop: modal.
+    <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/55 sm:items-start sm:p-4 sm:py-8 sm:backdrop-blur-sm">
+        <Card
+          role="dialog"
+          aria-modal="true"
+          aria-label={isEditing ? "Editar transação" : "Nova transação"}
+          className="grid max-h-[92dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-b-none border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)] sm:max-h-[90dvh] sm:rounded-b-[1.5rem]"
+        >
           <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
             <div>
               <p className="app-eyebrow">
@@ -669,6 +721,7 @@ export function TransactionComposer({
               variant="outline"
               size="icon"
               onClick={onCancel}
+              aria-label="Fechar"
             >
               <X size={16} />
             </Button>
@@ -676,11 +729,29 @@ export function TransactionComposer({
 
           <div className="overflow-y-auto px-4 py-4 sm:px-5">
             <form
+              ref={formRef}
               id={formId}
               className="space-y-4"
-              onSubmit={onSubmit}
+              onSubmit={(event) => {
+                const submitter = (event.nativeEvent as SubmitEvent).submitter
+                const keepOpen =
+                  submitter instanceof HTMLButtonElement &&
+                  submitter.value === CONTINUE_INTENT
+                return onSubmit(event, { keepOpen })
+              }}
+              onKeyDown={(event) => {
+                // Ctrl/Cmd + Enter salva de qualquer campo.
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault()
+                  formRef.current?.requestSubmit()
+                }
+              }}
             >
-              <TransactionCommonRow form={form} setForm={setForm} />
+              <TransactionCommonRow
+                form={form}
+                setForm={setForm}
+                descriptionRef={descriptionRef}
+              />
 
               {isEditing && editingTransaction ? (
                 <TransactionEditFormLayout
@@ -703,7 +774,7 @@ export function TransactionComposer({
             </form>
           </div>
 
-          <div className="border-t border-border/70 px-4 py-4 sm:px-5">
+          <div className="border-t border-border/70 px-4 pt-4 pb-[max(env(safe-area-inset-bottom),1rem)] sm:px-5 sm:pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
               <FormError message={formError || mutationError} />
               <ActionButtons
@@ -720,7 +791,6 @@ export function TransactionComposer({
             </div>
           </div>
         </Card>
-      </div>
     </div>,
     document.body
   )
