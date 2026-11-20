@@ -201,11 +201,11 @@
   }
 
   .app-input {
-    @apply h-11 w-full rounded-xl border border-border bg-card/90 px-4 py-2 text-sm text-card-foreground transition outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10;
+    @apply h-11 w-full rounded-xl border border-border bg-card/90 px-4 py-2 text-base sm:text-sm text-card-foreground transition outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10;
   }
 
   .app-field-trigger {
-    @apply flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm text-card-foreground transition outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card/90 px-4 py-2 text-base sm:text-sm text-card-foreground transition outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .app-field-popup {

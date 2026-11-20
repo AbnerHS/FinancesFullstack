@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Pencil,
   Plus,
+  Share2,
   Tags,
   Trash2,
   Users,
@@ -857,8 +858,8 @@ export function DashboardPlanQuickCreate({
                 </div>
 
                 <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4 text-sm text-muted-foreground">
-                  Janeiro a Dezembro do ano atual serão criados
-                  automaticamente assim que o plano for salvo.
+                  Todos os meses ficam disponíveis no dashboard assim que o
+                  plano for salvo; é só navegar até o mês e lançar.
                 </div>
 
                 {!hasPlans ? (
@@ -922,6 +923,8 @@ export function PlanParticipantsManager({
   const partnerCount = participants.filter(
     (participant) => participant.role === "PARTNER"
   ).length
+  const canShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function"
   const inviteUrl =
     inviteLink?.active && inviteLink.inviteToken
       ? `${window.location.origin}/invite/${inviteLink.inviteToken}`
@@ -973,6 +976,32 @@ export function PlanParticipantsManager({
                     ? "Gerando..."
                     : "Gerar link"}
               </Button>
+
+              {inviteUrl && canShare ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      await navigator.share({
+                        title: "Convite para o plano",
+                        text: activePlan
+                          ? `Entre no plano "${activePlan.name}" no Finances:`
+                          : "Entre no meu plano no Finances:",
+                        url: inviteUrl,
+                      })
+                    } catch (error) {
+                      // Fechar a folha de compartilhamento não é erro.
+                      if (!(error instanceof DOMException && error.name === "AbortError")) {
+                        setCopyFeedback("Não foi possível compartilhar o link.")
+                      }
+                    }
+                  }}
+                >
+                  <Share2 size={16} />
+                  Compartilhar
+                </Button>
+              ) : null}
 
               <Button
                 type="button"
