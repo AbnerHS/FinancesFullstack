@@ -7,6 +7,12 @@ type DashboardPeriodRange = {
   endPeriodId: string | null
 }
 
+/** Mês aberto no dashboard: o escolhido, se válido, ou o mês atual. */
+export function resolveActiveMonthId(selectedMonthId: string | null, today = new Date()) {
+  if (selectedMonthId && /^\d{4}-\d{2}$/.test(selectedMonthId)) return selectedMonthId
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
+}
+
 type DashboardStoreState = {
   selectedPlanId: string | null
   /** Mês do dashboard (AAAA-MM). Não é salvo: cada visita abre no mês atual. */
@@ -15,6 +21,13 @@ type DashboardStoreState = {
   responsibleFilter: string
   selectedStartPeriodId: string | null
   selectedEndPeriodId: string | null
+  /**
+   * Pedido de "nova transação" vindo de fora do painel do mês (atalho N, botão + do celular). O
+   * painel do mês ativo abre o formulário e limpa o pedido.
+   */
+  composerRequested: boolean
+  requestComposer: () => void
+  consumeComposerRequest: () => void
   setSelectedPlanId: (selectedPlanId: string | null) => void
   setSelectedMonthId: (selectedMonthId: string | null) => void
   setResponsibleFilter: (responsibleFilter: string) => void
@@ -34,6 +47,9 @@ export const useDashboardStore = create<DashboardStoreState>()(
       responsibleFilter: "",
       selectedStartPeriodId: null,
       selectedEndPeriodId: null,
+      composerRequested: false,
+      requestComposer: () => set({ composerRequested: true }),
+      consumeComposerRequest: () => set({ composerRequested: false }),
       setSelectedPlanId: (selectedPlanId) => set({ selectedPlanId }),
       setSelectedMonthId: (selectedMonthId) => set({ selectedMonthId }),
       setResponsibleFilter: (responsibleFilter) => set({ responsibleFilter }),

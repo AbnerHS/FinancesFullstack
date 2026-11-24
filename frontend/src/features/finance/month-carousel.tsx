@@ -29,10 +29,13 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   activeId,
   onActiveIdChange,
   renderPanel,
+  onLabelClick,
 }: {
   panels: Panel[]
   activeId: string | null
   onActiveIdChange: (periodId: string) => void
+  /** Toque no nome do mês da pílula flutuante (abre o seletor de mês). */
+  onLabelClick?: () => void
   /** `near`: o mês parado ou um vizinho dele; os demais podem renderizar algo leve (esqueleto). */
   renderPanel: (panel: Panel, near: boolean) => ReactNode
 }) {
@@ -272,16 +275,27 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       {multiple ? (
         <div
           className={cn(
-            "fixed inset-x-4 bottom-4 z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition lg:hidden",
+            "fixed inset-x-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition lg:hidden",
             inViewport ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
           )}
         >
           <NavButton onClick={scrollPrev} label="Mês anterior">
             <ChevronLeft size={18} />
           </NavButton>
-          <p className="min-w-0 truncate text-center text-sm font-semibold capitalize text-foreground">
-            {activePanel ? formatMonthYear(activePanel.period) : ""}
-          </p>
+          {onLabelClick ? (
+            <button
+              type="button"
+              onClick={onLabelClick}
+              className="min-w-0 flex-1 truncate rounded-full py-2 text-center text-sm font-semibold capitalize text-foreground active:bg-secondary"
+              aria-label="Escolher mês"
+            >
+              {activePanel ? formatMonthYear(activePanel.period) : ""}
+            </button>
+          ) : (
+            <p className="min-w-0 truncate text-center text-sm font-semibold capitalize text-foreground">
+              {activePanel ? formatMonthYear(activePanel.period) : ""}
+            </p>
+          )}
           <NavButton onClick={scrollNext} label="Próximo mês">
             <ChevronRight size={18} />
           </NavButton>

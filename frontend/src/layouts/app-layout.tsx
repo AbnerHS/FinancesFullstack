@@ -1,10 +1,12 @@
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router"
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
   AppShellSidebar,
   MobileSidebarButton,
 } from "@/components/app-shell-sidebar.tsx"
+import { HeaderPlanSelect } from "@/components/header-plan-select.tsx"
+import { MobileBottomNav } from "@/components/mobile-bottom-nav.tsx"
 import { authService } from "@/features/auth/auth-service.ts"
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { useDashboardStore } from "@/features/finance/dashboard-store"
@@ -46,6 +48,35 @@ export function AppLayout() {
   const clearTokens = useAuthStore((state) => state.clearTokens)
   const clearSelections = useDashboardStore((state) => state.clearSelections)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const requestComposer = useDashboardStore((state) => state.requestComposer)
+
+  // Nova transação de qualquer tela: vai para o dashboard e o mês ativo abre o formulário.
+  const openNewTransaction = useCallback(() => {
+    requestComposer()
+    if (location.pathname !== "/") {
+      void navigate({ to: "/" })
+    }
+  }, [location.pathname, navigate, requestComposer])
+
+  // Atalho N (fora de campos de texto e sem modal aberto).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "n" || event.repeat) return
+      if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.closest("input, textarea, select, [role='combobox']"))
+      ) {
+        return
+      }
+      if (document.querySelector("[aria-modal='true']")) return
+      event.preventDefault()
+      openNewTransaction()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [openNewTransaction])
 
   const meta = useMemo(
     () => routeMeta[location.pathname] ?? routeMeta["/"],
@@ -80,18 +111,20 @@ export function AppLayout() {
                 </h1>
               </div>
             </div>
-            <div className="hidden items-center gap-3 md:flex">
-              <div className="rounded-full border border-border bg-card/80 px-4 py-2 text-sm text-muted-foreground shadow-sm">
-                {user?.name || "Usuário"}
-              </div>
-            </div>
+            <HeaderPlanSelect />
           </div>
         </header>
 
-        <main className="mx-auto max-w-[110rem] px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+        {/* No celular, espaço para a barra inferior fixa. */}
+        <main className="mx-auto max-w-[110rem] px-4 pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-10 lg:py-8">
           <Outlet />
         </main>
       </div>
+
+      <MobileBottomNav
+        onNewTransaction={openNewTransaction}
+        onOpenMenu={() => setSidebarOpen(true)}
+      />
     </div>
   )
 }

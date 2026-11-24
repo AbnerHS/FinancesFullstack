@@ -86,8 +86,13 @@ export type Invoice = EntityModel<{
   planId: string
   creditCardId: string
   creditCardName?: string | null
+  /** Dono do cartão: a fatura conta para ele no filtro por responsável. */
+  creditCardOwnerId?: string | null
   referenceMonth: string
   amount: number
+  dueDate?: string | null
+  paymentStatus?: PaymentStatus | null
+  paymentDate?: string | null
 }>
 
 export type Transaction = EntityModel<{
@@ -102,6 +107,8 @@ export type Transaction = EntityModel<{
   responsibleUserId?: string | null
   order?: number | null
   recurringGroupId?: string | null
+  /** Cobrança gerada por uma assinatura. */
+  subscriptionId?: string | null
   creditCardInvoiceId?: string | null
   isClearedByInvoice?: boolean | null
   dueDate?: string | null
@@ -109,6 +116,39 @@ export type Transaction = EntityModel<{
   paymentStatus?: PaymentStatus | null
   billingDocument?: BillingDocument | null
 }>
+
+export type SubscriptionChargeMode = "BILL" | "AUTO"
+
+export type Subscription = EntityModel<{
+  id: string
+  planId: string
+  name: string
+  amount: number
+  category?: { id: string; name: string | null } | null
+  responsibleUserId?: string | null
+  /** Dia da cobrança (1–31, limitado ao fim do mês). */
+  billingDay: number
+  /** BILL: gera vencimento ("Contas a pagar"). AUTO: débito automático/cartão. */
+  chargeMode: SubscriptionChargeMode
+  /** Cartão: cada cobrança entra na fatura do cartão no mesmo mês. */
+  creditCardId?: string | null
+  startMonth: string
+  endMonth?: string | null
+  active: boolean
+  createdAt: string
+}>
+
+export type SubscriptionPayload = {
+  name: string
+  amount: number
+  category: { id?: string; name?: string } | null
+  responsibleUserId: string | null
+  billingDay: number
+  chargeMode: SubscriptionChargeMode
+  creditCardId?: string | null
+  startMonth: string
+  endMonth: string | null
+}
 
 export type CategorySpending = {
   category: string
@@ -129,6 +169,10 @@ export type TransactionFormValues = {
   categoryName: string
   isRecurring: boolean
   occurrences: number
+  /** Despesa mensal sem fim: vira assinatura (cobrança gerada a cada mês). */
+  isSubscription: boolean
+  /** Cartão da assinatura ("" = sem cartão). */
+  subscriptionCardId: string
   recurringGroupId?: string | null
   hasDueDate: boolean
   dueDate: string

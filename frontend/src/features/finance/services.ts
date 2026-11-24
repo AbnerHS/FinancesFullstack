@@ -5,12 +5,15 @@ import type { EmbeddedCollection } from "@/lib/api/types.ts"
 import type {
   CreditCard,
   Invoice,
+  PaymentStatus,
   Period,
   Plan,
   PlanMonthSummary,
   PlanInvitation,
   PlanInviteLink,
   PlanParticipant,
+  Subscription,
+  SubscriptionPayload,
   Transaction,
   TransactionCategory,
   User,
@@ -28,7 +31,14 @@ export const financeKeys = {
   ownCards: ["credit-cards", "me"] as const,
   planCards: (planId?: string | null) =>
     ["credit-cards", "plan", planId] as const,
+  // Sob a raiz das faturas: criar/editar/excluir fatura já invalida ["period-invoices"].
+  planInvoices: (planId?: string | null) =>
+    ["period-invoices", "plan", planId] as const,
+  // Sob a raiz das transações: vincular/desvincular/excluir já invalida ["period-transactions"].
+  invoiceTransactions: (invoiceId?: string | null) =>
+    ["period-transactions", "invoice", invoiceId] as const,
   categories: ["transaction-categories"] as const,
+  subscriptions: (planId?: string | null) => ["subscriptions", planId] as const,
   // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
   periodTransactionsRoot: ["period-transactions"] as const,
   periodTransactions: (period?: Pick<Period, "planId" | "id"> | null) =>
@@ -249,26 +259,85 @@ export const creditCardService = {
     const { data } = await http.put<CreditCard>(`/credit-cards/${id}`, payload)
     return data
   },
+  async delete(id: string) {
+    await http.delete(`/credit-cards/${id}`)
+  },
 }
 
 export const invoiceService = {
+  /** Todas as faturas do plano (todos os meses). */
+  async listByPlan(planId: string) {
+    const { data } = await http.get<EmbeddedCollection<Invoice, "invoices">>(
+      `/plans/${planId}/invoices`
+    )
+    return embedded(data, "invoices")
+  },
+  async transactions(invoiceId: string) {
+    const { data } = await http.get<
+      EmbeddedCollection<Transaction, "transactions">
+    >(`/credit-card-invoices/${invoiceId}/transactions`)
+    return embedded(data, "transactions")
+  },
   async create(payload: {
     planId: string
     creditCardId: string
     referenceMonth: string
     amount: number
+    dueDate?: string | null
   }) {
     const { data } = await http.post<Invoice>("/credit-card-invoices", payload)
     return data
   },
   async update(
     id: string,
-    payload: { creditCardId: string; referenceMonth: string; amount: number }
+    payload: {
+      creditCardId: string
+      referenceMonth: string
+      amount: number
+      dueDate?: string | null
+    }
   ) {
     const { data } = await http.put<Invoice>(
       `/credit-card-invoices/${id}`,
       payload
     )
+    return data
+  },
+  async patch(
+    id: string,
+    payload: {
+      dueDate?: string | null
+      paymentStatus?: PaymentStatus | null
+      paymentDate?: string | null
+    }
+  ) {
+    const { data } = await http.patch<Invoice>(
+      `/credit-card-invoices/${id}`,
+      payload
+    )
+    return data
+  },
+  async delete(id: string) {
+    await http.delete(`/credit-card-invoices/${id}`)
+  },
+}
+
+export const subscriptionService = {
+  async list(planId: string) {
+    const { data } = await http.get<
+      EmbeddedCollection<Subscription, "subscriptions">
+    >(`/plans/${planId}/subscriptions`)
+    return embedded(data, "subscriptions")
+  },
+  async create(planId: string, payload: SubscriptionPayload) {
+    const { data } = await http.post<Subscription>(
+      `/plans/${planId}/subscriptions`,
+      payload
+    )
+    return data
+  },
+  async update(id: string, payload: Partial<SubscriptionPayload>) {
+    const { data } = await http.patch<Subscription>(`/subscriptions/${id}`, payload)
     return data
   },
 }
@@ -286,6 +355,16 @@ export const transactionCategoryService = {
       payload
     )
     return data
+  },
+  async update(id: string, payload: { name: string }) {
+    const { data } = await http.put<TransactionCategory>(
+      `/transaction-categories/${id}`,
+      payload
+    )
+    return data
+  },
+  async delete(id: string) {
+    await http.delete(`/transaction-categories/${id}`)
   },
 }
 

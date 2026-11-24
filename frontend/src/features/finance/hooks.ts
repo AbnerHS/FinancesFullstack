@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import {
   useMutation,
   useQueries,
@@ -8,7 +9,10 @@ import {
 
 import { useAuthStore } from "@/stores/auth-store.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
-import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
+import {
+  resolveActiveMonthId,
+  useDashboardStore,
+} from "@/features/finance/dashboard-store.ts"
 import {
   creditCardService,
   financeKeys,
@@ -16,6 +20,7 @@ import {
   invoiceService,
   periodService,
   planService,
+  subscriptionService,
   transactionCategoryService,
   transactionService,
   userService,
@@ -27,7 +32,9 @@ import type {
   Plan,
   PlanInviteLink,
   ResponsibleOption,
+  SubscriptionPayload,
   Transaction,
+  TransactionCategory,
 } from "@/features/finance/types.ts"
 import {
   addDaysIso,
@@ -419,6 +426,19 @@ type PeriodPanelData = {
  */
 const WINDOW_RADIUS = 6
 
+/** Abre o dashboard já no mês pedido (AAAA-MM). Usado no drill-down de Evolução e Planos. */
+export function useOpenMonthInDashboard() {
+  const navigate = useNavigate()
+  const setSelectedMonthId = useDashboardStore((state) => state.setSelectedMonthId)
+  return useCallback(
+    (monthId: string) => {
+      setSelectedMonthId(monthId)
+      void navigate({ to: "/" })
+    },
+    [navigate, setSelectedMonthId]
+  )
+}
+
 export function useDashboard() {
   const context = usePlanContext()
   const { activePlan } = context
@@ -426,8 +446,7 @@ export function useDashboard() {
   const setSelectedMonthId = useDashboardStore((state) => state.setSelectedMonthId)
 
   const currentMonthId = todayIso().slice(0, 7)
-  const activeMonthId =
-    selectedMonthId && /^\d{4}-\d{2}$/.test(selectedMonthId) ? selectedMonthId : currentMonthId
+  const activeMonthId = resolveActiveMonthId(selectedMonthId)
 
   const activePeriod = useMemo<Period | null>(() => {
     if (!activePlan) return null
@@ -731,15 +750,31 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (card: CreditCard) => creditCardService.delete(card.id),
+    onSuccess: async (_data, card) => {
+      if (editingCard?.id === card.id) {
+        resetForm()
+      }
+      await queryClient.invalidateQueries({ queryKey: financeKeys.cards })
+    },
+  })
+
   return {
     form,
     setForm: (next: { name: string }) => setFormState(next),
     editingCard,
     isEditing: Boolean(editingCard?.id),
     saveMutation,
+    deleteMutation,
     errorMessage: saveMutation.error
       ? getErrorMessage(saveMutation.error, "Não foi possível salvar o cartão.")
-      : null,
+      : deleteMutation.error
+        ? getErrorMessage(
+            deleteMutation.error,
+            "Não foi possível excluir o cartão."
+          )
+        : null,
     startCreate: resetForm,
     startEdit: (card: CreditCard) => {
       setEditingCard(card)
@@ -749,20 +784,44 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
   }
 }
 
+/** Faturas do plano ativo, de todos os meses. */
+export function usePlanInvoices(planId: string | null | undefined) {
+  return useQuery({
+    queryKey: financeKeys.planInvoices(planId),
+    queryFn: () => invoiceService.listByPlan(planId!),
+    enabled: Boolean(planId),
+    staleTime: 1000 * 60,
+  })
+}
+
+/** Contas vinculadas a uma fatura (carregadas ao abrir a fatura). */
+export function useInvoiceTransactions(invoiceId: string | null) {
+  return useQuery({
+    queryKey: financeKeys.invoiceTransactions(invoiceId),
+    queryFn: () => invoiceService.transactions(invoiceId!),
+    enabled: Boolean(invoiceId),
+    staleTime: 1000 * 60,
+  })
+}
+
 export function useInvoiceManager({
   creditCards,
   periods,
   selectedPeriodIds,
+  initialCardId = "",
 }: {
   creditCards: CreditCard[]
   periods: Period[]
   selectedPeriodIds: string[]
+  /** Cartão já escolhido ao abrir (ex.: "+" de um cartão). */
+  initialCardId?: string
 }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
-    creditCardId: "",
+    creditCardId: initialCardId,
     periodId: "",
     amount: "",
+    dueDate: "",
   })
 
   const resolvedForm = useMemo(() => {
@@ -803,13 +862,16 @@ export function useInvoiceManager({
         creditCardId: resolvedForm.creditCardId,
         referenceMonth: period.id,
         amount: amountNumber,
+        dueDate: resolvedForm.dueDate || null,
       })
     },
     onSuccess: async () => {
-      setForm((current) => ({ ...current, amount: "" }))
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periodInvoicesRoot,
-      })
+      setForm((current) => ({ ...current, amount: "", dueDate: "" }))
+      // A fatura nova pode receber cobranças de assinaturas do cartão: as transações mudam também.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoicesRoot }),
+        queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactionsRoot }),
+      ])
     },
   })
 
@@ -837,9 +899,11 @@ export function usePeriodInvoiceManager({
   const [createForm, setCreateForm] = useState({
     creditCardId: creditCards[0]?.id || "",
     amount: "",
+    dueDate: "",
   })
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [editingAmount, setEditingAmount] = useState("")
+  const [editingDueDate, setEditingDueDate] = useState("")
   const resolvedCreateForm = useMemo(() => {
     const hasCurrentCard = creditCards.some(
       (card) => card.id === createForm.creditCardId
@@ -875,10 +939,11 @@ export function usePeriodInvoiceManager({
         creditCardId: resolvedCreateForm.creditCardId,
         referenceMonth: period.id,
         amount: amountNumber,
+        dueDate: resolvedCreateForm.dueDate || null,
       })
     },
     onSuccess: async () => {
-      setCreateForm((current) => ({ ...current, amount: "" }))
+      setCreateForm((current) => ({ ...current, amount: "", dueDate: "" }))
       setIsCreateOpen(false)
       await invalidatePeriodInvoices()
     },
@@ -904,12 +969,26 @@ export function usePeriodInvoiceManager({
         creditCardId: invoice.creditCardId,
         referenceMonth: invoice.referenceMonth,
         amount: amountNumber,
+        dueDate: editingDueDate || null,
       })
     },
     onSuccess: async () => {
       setEditingInvoiceId(null)
       setEditingAmount("")
+      setEditingDueDate("")
       await invalidatePeriodInvoices()
+    },
+  })
+
+  // Excluir a fatura desvincula as transações (voltam a contar nos totais do mês).
+  const deleteInvoice = useMutation({
+    mutationFn: (invoice: Invoice) => invoiceService.delete(invoice.id),
+    onSuccess: async (_data, invoice) => {
+      if (editingInvoiceId === invoice.id) {
+        setEditingInvoiceId(null)
+        setEditingAmount("")
+      }
+      await invalidateTransactionViews(queryClient, period.planId)
     },
   })
 
@@ -920,7 +999,7 @@ export function usePeriodInvoiceManager({
   }
 
   const cancelCreate = () => {
-    setCreateForm((current) => ({ ...current, amount: "" }))
+    setCreateForm((current) => ({ ...current, amount: "", dueDate: "" }))
     setIsCreateOpen(false)
   }
 
@@ -933,11 +1012,13 @@ export function usePeriodInvoiceManager({
         maximumFractionDigits: 2,
       })
     )
+    setEditingDueDate(invoice.dueDate ?? "")
   }
 
   const cancelEdit = () => {
     setEditingInvoiceId(null)
     setEditingAmount("")
+    setEditingDueDate("")
   }
 
   return {
@@ -950,9 +1031,15 @@ export function usePeriodInvoiceManager({
     editingInvoiceId,
     editingAmount,
     setEditingAmount,
+    editingDueDate,
+    setEditingDueDate,
     startEdit,
     cancelEdit,
     updateInvoice,
+    deleteInvoice,
+    deleteErrorMessage: deleteInvoice.error
+      ? getErrorMessage(deleteInvoice.error, "Não foi possível excluir a fatura.")
+      : null,
     createErrorMessage: createInvoice.error
       ? getErrorMessage(createInvoice.error, "Não foi possível criar a fatura.")
       : null,
@@ -1177,15 +1264,66 @@ export function useCategoryManager() {
     },
   })
 
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(
+    null
+  )
+
+  // Renomear/excluir muda a categoria nas transações já lançadas.
+  const invalidateCategoryViews = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: financeKeys.categories }),
+      queryClient.invalidateQueries({
+        queryKey: financeKeys.periodTransactionsRoot,
+      }),
+    ])
+
+  const renameMutation = useMutation({
+    mutationFn: async () => {
+      if (!editing) {
+        throw new Error("Categoria inválida.")
+      }
+      const name = editing.name.trim()
+      if (!name) {
+        throw new Error("Informe um nome para a categoria.")
+      }
+      return transactionCategoryService.update(editing.id, { name })
+    },
+    onSuccess: async () => {
+      setEditing(null)
+      await invalidateCategoryViews()
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (category: TransactionCategory) =>
+      transactionCategoryService.delete(category.id),
+    onSuccess: async (_data, category) => {
+      if (editing?.id === category.id) {
+        setEditing(null)
+      }
+      await invalidateCategoryViews()
+    },
+  })
+
+  const error =
+    createMutation.error ?? renameMutation.error ?? deleteMutation.error
+
   return {
     draft,
     setDraft,
     createMutation,
-    errorMessage: createMutation.error
-      ? getErrorMessage(
-          createMutation.error,
-          "Não foi possível salvar a categoria."
-        )
+    editing,
+    startEdit: (category: TransactionCategory) => {
+      renameMutation.reset()
+      setEditing({ id: category.id, name: category.name })
+    },
+    setEditingName: (name: string) =>
+      setEditing((current) => (current ? { ...current, name } : current)),
+    cancelEdit: () => setEditing(null),
+    renameMutation,
+    deleteMutation,
+    errorMessage: error
+      ? getErrorMessage(error, "Não foi possível salvar a categoria.")
       : null,
   }
 }
@@ -1294,6 +1432,128 @@ export function useTransactionMutations(period: Period) {
     updateTransaction,
     deleteTransaction,
   }
+}
+
+/** `paymentDate` (AAAA-MM-DD) só vale ao marcar como pago; sem ela, hoje. */
+type PaymentVariables = { paid: boolean; paymentDate?: string }
+
+/**
+ * Baixa rápida: marca a despesa como paga (hoje ou na data escolhida) ou volta para pendente. Atualiza o cache na hora
+ * para o toque parecer instantâneo e revalida as telas depois.
+ */
+export function useTransactionPayment(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transaction, paid, paymentDate }: PaymentVariables & { transaction: Transaction }) =>
+      transactionService.updatePartial(transaction.id, {
+        paymentStatus: paid ? "PAID" : "PENDING",
+        paymentDate: paid ? (paymentDate ?? todayIso()) : null,
+      }),
+    onMutate: async ({ transaction, paid, paymentDate }) => {
+      await queryClient.cancelQueries({
+        queryKey: financeKeys.periodTransactionsRoot,
+      })
+      const patch = {
+        paymentStatus: paid ? ("PAID" as const) : ("PENDING" as const),
+        paymentDate: paid ? (paymentDate ?? todayIso()) : null,
+      }
+      const snapshot = queryClient.getQueriesData<Transaction[]>({
+        queryKey: financeKeys.periodTransactionsRoot,
+      })
+      queryClient.setQueriesData<Transaction[]>(
+        { queryKey: financeKeys.periodTransactionsRoot },
+        (current) =>
+          Array.isArray(current)
+            ? current.map((item) =>
+                item.id === transaction.id ? { ...item, ...patch } : item
+              )
+            : current
+      )
+      return { snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      context?.snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => invalidateTransactionViews(queryClient, planId),
+  })
+}
+
+/** Baixa da fatura (paga na data escolhida, hoje por padrão / volta a pendente), com ou sem vencimento. */
+export function useInvoicePayment(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ invoice, paid, paymentDate }: PaymentVariables & { invoice: Invoice }) =>
+      invoiceService.patch(invoice.id, {
+        paymentStatus: paid ? "PAID" : "PENDING",
+        paymentDate: paid ? (paymentDate ?? todayIso()) : null,
+      }),
+    onMutate: async ({ invoice, paid, paymentDate }) => {
+      await queryClient.cancelQueries({ queryKey: financeKeys.periodInvoicesRoot })
+      const snapshot = queryClient.getQueriesData<Invoice[]>({
+        queryKey: financeKeys.periodInvoicesRoot,
+      })
+      queryClient.setQueriesData<Invoice[]>(
+        { queryKey: financeKeys.periodInvoicesRoot },
+        (current) =>
+          Array.isArray(current)
+            ? current.map((item) =>
+                item.id === invoice.id
+                  ? {
+                      ...item,
+                      paymentStatus: paid ? "PAID" : "PENDING",
+                      paymentDate: paid ? (paymentDate ?? todayIso()) : null,
+                    }
+                  : item
+              )
+            : current
+      )
+      return { snapshot }
+    },
+    onError: (_error, _variables, context) => {
+      context?.snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => invalidateTransactionViews(queryClient, planId),
+  })
+}
+
+export function useSubscriptions(planId: string | null | undefined) {
+  return useQuery({
+    queryKey: financeKeys.subscriptions(planId),
+    queryFn: () => subscriptionService.list(planId!),
+    enabled: Boolean(planId),
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+/**
+ * Assinaturas a partir das transações: criar (pelo formulário), aplicar uma edição às próximas
+ * cobranças e encerrar/reativar. Tudo gera ou apaga cobranças, então as telas de transações são
+ * revalidadas.
+ */
+export function useSubscriptionMutations(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["subscriptions", planId] }),
+      invalidateTransactionViews(queryClient, planId),
+    ])
+
+  const create = useMutation({
+    mutationFn: (payload: SubscriptionPayload) => {
+      if (!planId) throw new Error("Selecione um plano.")
+      return subscriptionService.create(planId, payload)
+    },
+    onSuccess: invalidate,
+  })
+  const update = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<SubscriptionPayload> }) =>
+      subscriptionService.update(id, payload),
+    onSuccess: invalidate,
+  })
+
+  return { create, update }
 }
 
 export function useTransactionLinking(period: Period) {

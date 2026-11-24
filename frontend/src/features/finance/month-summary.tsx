@@ -7,6 +7,8 @@ import {
   ArrowUpRight,
   CalendarClock,
   CalendarDays,
+  CheckCircle2,
+  ChevronDown,
   CreditCard,
   PiggyBank,
   TrendingDown,
@@ -15,7 +17,12 @@ import {
 } from "lucide-react"
 
 import { getCategoryColor } from "@/features/finance/category-colors.ts"
-import { useMonthSummaryData } from "@/features/finance/hooks.ts"
+import { PaymentDateMenu } from "@/features/finance/payment-date-menu.tsx"
+import {
+  useInvoicePayment,
+  useMonthSummaryData,
+  useTransactionPayment,
+} from "@/features/finance/hooks.ts"
 import type {
   Invoice,
   Period,
@@ -30,9 +37,14 @@ import {
   formatMonthYear,
   formatPercent,
   getTransactionDueAlert,
+  invoiceAsBill,
+  invoiceBelongsTo,
+  todayIso,
+  type BillTransaction,
   type MonthInsights,
   type WeekDue,
 } from "@/features/finance/utils.ts"
+import { getErrorMessage } from "@/lib/errors.ts"
 import { cn } from "@/lib/utils"
 
 type SummaryPanel = {
@@ -53,10 +65,12 @@ export function MonthSummary({
   panel,
   responsibleFilter,
   onGoToCurrentMonth,
+  onOpenMonthPicker,
 }: {
   panel: SummaryPanel | null
   responsibleFilter: string
   onGoToCurrentMonth: () => void
+  onOpenMonthPicker?: () => void
 }) {
   const data = useMonthSummaryData({ activePeriod: panel?.period ?? null })
 
@@ -71,25 +85,31 @@ export function MonthSummary({
   const byResponsible = (transaction: Transaction) =>
     !responsibleFilter || transaction.responsibleUserId === responsibleFilter
 
-  // Mesma regra do painel: com filtro de responsável, as faturas (sem dono) ficam de fora.
+  // Mesma regra do painel: com filtro de responsável, contam as faturas dos cartões dele.
   const previousStats = data.previousTransactions
     ? calculateStats(
         data.previousTransactions.filter(byResponsible),
-        responsibleFilter
-          ? 0
-          : (data.previousInvoices ?? []).reduce(
-              (total, invoice) => total + Number(invoice.amount || 0),
-              0
-            )
+        (data.previousInvoices ?? [])
+          .filter((invoice) => invoiceBelongsTo(invoice, responsibleFilter))
+          .reduce((total, invoice) => total + Number(invoice.amount || 0), 0)
       )
     : null
+
+  const monthInvoices = panel.invoices.filter((invoice) =>
+    invoiceBelongsTo(invoice, responsibleFilter)
+  )
+  // Faturas com vencimento entram em "Contas a pagar" junto com as despesas.
+  const invoiceBills = monthInvoices
+    .filter((invoice) => invoice.dueDate)
+    .map((invoice) => invoiceAsBill(invoice, invoice.creditCardName || "Cartão"))
 
   const insights = buildMonthInsights({
     period: panel.period,
     stats: panel.stats,
     transactions: panel.transactions,
-    invoices: responsibleFilter ? [] : panel.invoices,
+    invoices: monthInvoices,
     previousStats,
+    invoiceBills,
   })
 
   const week = data.isCurrentMonth
@@ -110,7 +130,19 @@ export function MonthSummary({
         <div>
           <p className="app-eyebrow">Resumo do mês</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl">
-            {panel.label}
+            {onOpenMonthPicker ? (
+              <button
+                type="button"
+                onClick={onOpenMonthPicker}
+                className="-mx-1 inline-flex items-center gap-1 rounded-lg px-1 capitalize transition hover:bg-secondary"
+                title="Escolher outro mês"
+              >
+                {panel.label}
+                <ChevronDown size={20} className="text-muted-foreground" aria-hidden="true" />
+              </button>
+            ) : (
+              panel.label
+            )}
           </h3>
         </div>
         <div className="flex items-center gap-2">
@@ -187,6 +219,7 @@ export function MonthSummary({
           insights={insights}
           period={panel.period}
           transactions={panel.transactions}
+          invoiceBills={invoiceBills}
           week={week}
           weekLoading={data.weekLoading}
         />
@@ -376,7 +409,7 @@ function ProgressBar({
   )
 }
 
-type DueItem = { transaction: Transaction; overdue: boolean }
+type DueItem = { transaction: BillTransaction; overdue: boolean }
 
 const BILLS_LIST_ROWS = 5
 
@@ -388,28 +421,44 @@ function BillsCard({
   insights,
   period,
   transactions,
+  invoiceBills,
   week,
   weekLoading,
 }: {
   insights: MonthInsights
   period: Period
   transactions: Transaction[]
+  invoiceBills: BillTransaction[]
   week: WeekDue | null
   weekLoading: boolean
 }) {
   const { bills } = insights
   const total = bills.paidCount + bills.pendingCount
+  const payment = useTransactionPayment(period.planId)
+  const invoicePayment = useInvoicePayment(period.planId)
+  const payBill = (bill: BillTransaction, paymentDate: string) =>
+    bill.invoiceBill
+      ? invoicePayment.mutate({ invoice: bill.invoiceBill, paid: true, paymentDate })
+      : payment.mutate({ transaction: bill, paid: true, paymentDate })
+  const isPaying = (bill: BillTransaction) =>
+    bill.invoiceBill
+      ? invoicePayment.isPending &&
+        invoicePayment.variables?.invoice.id === bill.invoiceBill.id
+      : payment.isPending && payment.variables?.transaction.id === bill.id
+  const paymentError = payment.error ?? invoicePayment.error
   const byDueDate = (a: Transaction, b: Transaction) =>
     (a.dueDate ?? "").localeCompare(b.dueDate ?? "")
-  const monthPending = transactions
-    .filter(
+  const pendingInvoiceBills = invoiceBills.filter((bill) => bill.paymentStatus !== "PAID")
+  const monthPending: BillTransaction[] = [
+    ...transactions.filter(
       (t) =>
         t.type === "EXPENSE" &&
         !t.isClearedByInvoice &&
         t.dueDate &&
         t.paymentStatus !== "PAID"
-    )
-    .sort(byDueDate)
+    ),
+    ...pendingInvoiceBills,
+  ].sort(byDueDate)
   const sum = (items: Transaction[]) =>
     items.reduce((acc, item) => acc + Number(item.amount || 0), 0)
 
@@ -418,6 +467,16 @@ function BillsCard({
   let overdueFromOtherMonths = false
 
   if (week) {
+    // As consultas da semana trazem só transações; as faturas do mês entram aqui pela data.
+    const today = todayIso()
+    const invoiceOverdue = pendingInvoiceBills.filter((bill) => (bill.dueDate ?? "") < today)
+    const invoiceUpcoming = pendingInvoiceBills.filter(
+      (bill) => (bill.dueDate ?? "") >= today && (bill.dueDate ?? "") <= week.to
+    )
+    const overdue: BillTransaction[] = [...week.overdue, ...invoiceOverdue].sort((a, b) =>
+      byDueDate(b, a)
+    )
+    const upcoming: BillTransaction[] = [...week.upcoming, ...invoiceUpcoming].sort(byDueDate)
     const later = monthPending.filter((t) => (t.dueDate ?? "") > week.to)
     overdueFromOtherMonths = week.overdue.some(
       (t) => !(t.referenceDate ?? "").startsWith(period.id)
@@ -425,16 +484,16 @@ function BillsCard({
     stats = [
       {
         label: "Atrasadas",
-        value: week.overdueTotal,
-        count: week.overdue.length,
-        tone: week.overdue.length > 0 ? "negative" : "neutral",
+        value: sum(overdue),
+        count: overdue.length,
+        tone: overdue.length > 0 ? "negative" : "neutral",
       },
-      { label: "Até domingo", value: week.upcomingTotal, count: week.upcoming.length, tone: "neutral" },
+      { label: "Até domingo", value: sum(upcoming), count: upcoming.length, tone: "neutral" },
       { label: "Restante", value: sum(later), count: later.length, tone: "neutral" },
     ]
     items = [
-      ...week.overdue.map((transaction) => ({ transaction, overdue: true })),
-      ...week.upcoming.map((transaction) => ({ transaction, overdue: false })),
+      ...overdue.map((transaction) => ({ transaction, overdue: true })),
+      ...upcoming.map((transaction) => ({ transaction, overdue: false })),
       ...later.map((transaction) => ({ transaction, overdue: false })),
     ]
   } else {
@@ -538,7 +597,7 @@ function BillsCard({
                     </p>
                     <p
                       className={cn(
-                        "flex items-center gap-1 text-[11px]",
+                        "flex items-center gap-1 overflow-hidden text-[11px] whitespace-nowrap",
                         overdue
                           ? "font-semibold text-amber-600 dark:text-amber-400"
                           : "text-muted-foreground"
@@ -551,15 +610,33 @@ function BillsCard({
                         : ""}
                     </p>
                   </div>
-                  <p className="shrink-0 text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
-                    {formatCurrency(transaction.amount)}
-                  </p>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <p className="text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
+                      {formatCurrency(transaction.amount)}
+                    </p>
+                    <PaymentDateMenu
+                      data-carousel-no-drag
+                      className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-600 active:bg-emerald-500/15 disabled:opacity-50 data-[popup-open]:bg-emerald-500/10 data-[popup-open]:text-emerald-600 dark:hover:text-emerald-400"
+                      onSelect={(paymentDate) => payBill(transaction, paymentDate)}
+                      disabled={isPaying(transaction)}
+                      aria-label={`Marcar ${transaction.description} como pago`}
+                      title="Marcar como pago (escolha a data)"
+                    >
+                      <CheckCircle2 size={16} />
+                    </PaymentDateMenu>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+        {paymentError ? (
+          <p role="alert" className="line-clamp-2 h-8 text-[11px] leading-4 text-rose-600 dark:text-rose-400">
+            {getErrorMessage(paymentError, "Não foi possível marcar a conta como paga.")}
+          </p>
+        ) : (
+          <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+        )}
       </div>
     </SummaryCard>
   )

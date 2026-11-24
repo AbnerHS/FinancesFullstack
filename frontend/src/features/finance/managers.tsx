@@ -1,25 +1,33 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
-import { Plus, Tags, Trash2, Users } from "lucide-react"
+import {
+  Check,
+  Pencil,
+  Plus,
+  Share2,
+  Tags,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogState,
+} from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
-import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import {
   useCategoryManager,
-  useCreditCardManager,
-  useInvoiceManager,
   usePlanCollaborationManager,
+  useOpenMonthInDashboard,
   usePlanDeleteManager,
   usePlanManager,
 } from "@/features/finance/hooks.ts"
 import type {
-  CreditCard,
-  Period,
   Plan,
   PlanMonthSummary,
   PlanParticipant,
@@ -28,59 +36,8 @@ import type {
 import {
   formatCurrency,
   formatMonthLabel,
-  formatMonthYear,
 } from "@/features/finance/utils.ts"
-
-type ConfirmationDialogState = {
-  confirmLabel: string
-  description: string
-  title: string
-  onConfirm: () => void
-}
-
-function ConfirmationDialog({
-  onClose,
-  state,
-}: {
-  onClose: () => void
-  state: ConfirmationDialogState | null
-}) {
-  if (!state) {
-    return null
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
-        <p className="app-eyebrow">Confirmar exclusão</p>
-        <h3 className="mt-2 text-xl font-semibold text-foreground">
-          {state.title}
-        </h3>
-        <p className="mt-3 text-sm text-muted-foreground">
-          {state.description}
-        </p>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            className="bg-rose-600 text-white hover:bg-rose-700"
-            onClick={() => {
-              state.onConfirm()
-              onClose()
-            }}
-          >
-            <Trash2 size={16} />
-            {state.confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
 export function PlanManager({
   plans,
@@ -117,6 +74,7 @@ export function PlanManager({
   )
   const [confirmationDialog, setConfirmationDialog] =
     useState<ConfirmationDialogState | null>(null)
+  const openMonth = useOpenMonthInDashboard()
   // Mais recentes primeiro.
   const recentMonths = useMemo(
     () => [...monthSummaries].reverse(),
@@ -189,9 +147,12 @@ export function PlanManager({
                 </p>
               ) : (
                 recentMonths.map((summary) => (
-                  <div
+                  <button
+                    type="button"
                     key={summary.month}
-                    className="w-full rounded-[1rem] border border-border bg-card/80 px-3 py-2"
+                    onClick={() => openMonth(summary.month)}
+                    title="Abrir este mês no dashboard"
+                    className="w-full rounded-[1rem] border border-border bg-card/80 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-card"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -212,7 +173,7 @@ export function PlanManager({
                         {formatCurrency(summary.balance)}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
@@ -319,250 +280,157 @@ export function PlanManager({
   )
 }
 
-export function CreditCardsManager({
-  creditCards,
-  userId,
-}: {
-  creditCards: CreditCard[]
-  userId: string | null
-}) {
-  const {
-    form,
-    setForm,
-    isEditing,
-    editingCard,
-    saveMutation,
-    errorMessage,
-    startCreate,
-    startEdit,
-    cancelEdit,
-  } = useCreditCardManager({ userId })
-
-  return (
-    <Card className="border-border bg-secondary/60 p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="app-eyebrow">Cartões de Crédito</h3>
-        {!isEditing ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={startCreate}
-          >
-            <Plus size={16} />
-            Novo Cartão
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="mb-4 space-y-2">
-        {creditCards.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum cartão cadastrado.
-          </p>
-        ) : null}
-        {creditCards.map((card) => (
-          <div
-            key={card.id}
-            className="flex items-center justify-between rounded-[1rem] border border-border bg-card/90 px-3 py-2"
-          >
-            <span className="text-sm font-medium text-foreground">
-              {card.name}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => startEdit(card)}
-            >
-              Editar
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          saveMutation.mutate()
-        }}
-      >
-        <div className="space-y-2">
-          <Label>{isEditing ? "Editar Cartão" : "Novo Cartão"}</Label>
-          <Input
-            value={form.name}
-            onChange={(event) => setForm({ name: event.target.value })}
-            placeholder="Ex.: Nubank"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="submit"
-            className="h-11 flex-1"
-            disabled={saveMutation.isPending}
-          >
-            {!isEditing ? <Plus size={16} /> : null}
-            {saveMutation.isPending
-              ? "Salvando..."
-              : isEditing
-                ? "Salvar edição"
-                : "Criar Cartão"}
-          </Button>
-          {isEditing ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11"
-              onClick={cancelEdit}
-            >
-              Cancelar
-            </Button>
-          ) : null}
-        </div>
-        {editingCard?.name ? (
-          <p className="text-xs text-muted-foreground">
-            Editando: {editingCard.name}
-          </p>
-        ) : null}
-        <FormError message={errorMessage} />
-      </form>
-    </Card>
-  )
-}
-
-export function InvoiceManager({
-  creditCards,
-  periods,
-  selectedPeriodIds,
-}: {
-  creditCards: CreditCard[]
-  periods: Period[]
-  selectedPeriodIds: string[]
-}) {
-  const { form, setForm, createInvoice, errorMessage } = useInvoiceManager({
-    creditCards,
-    periods,
-    selectedPeriodIds,
-  })
-
-  return (
-    <Card className="border-border bg-secondary/60 p-5">
-      <h3 className="app-eyebrow">Criar Fatura</h3>
-      <form
-        className="mt-4 space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          createInvoice.mutate()
-        }}
-      >
-        <Select
-          value={form.creditCardId}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              creditCardId: event.target.value,
-            }))
-          }
-        >
-          {creditCards.length === 0 ? (
-            <option value="">Sem cartões</option>
-          ) : null}
-          {creditCards.length > 0 ? (
-            <option value="">Selecione o cartão</option>
-          ) : null}
-          {creditCards.map((card) => (
-            <option key={card.id} value={card.id}>
-              {card.name}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={form.periodId}
-          onChange={(event) =>
-            setForm((current) => ({ ...current, periodId: event.target.value }))
-          }
-        >
-          {periods.length === 0 ? <option value="">Sem meses</option> : null}
-          {periods.length > 0 ? (
-            <option value="">Selecione o mês</option>
-          ) : null}
-          {periods.map((period) => (
-            <option key={period.id} value={period.id}>
-              {formatMonthYear(period)}
-            </option>
-          ))}
-        </Select>
-
-        <CurrencyInput
-          value={form.amount}
-          onValueChange={(nextValue) =>
-            setForm((current) => ({ ...current, amount: nextValue }))
-          }
-        />
-
-        <Button
-          type="submit"
-          className="h-11 w-full"
-          disabled={createInvoice.isPending}
-        >
-          <Plus size={16} />
-          {createInvoice.isPending ? "Criando..." : "Criar Fatura"}
-        </Button>
-        <FormError message={errorMessage} />
-      </form>
-    </Card>
-  )
-}
-
 export function CategoryManager({
   categories,
 }: {
   categories: TransactionCategory[]
 }) {
-  const { draft, setDraft, createMutation, errorMessage } = useCategoryManager()
+  const {
+    draft,
+    setDraft,
+    createMutation,
+    editing,
+    startEdit,
+    setEditingName,
+    cancelEdit,
+    renameMutation,
+    deleteMutation,
+    errorMessage,
+  } = useCategoryManager()
+  const [confirmationDialog, setConfirmationDialog] =
+    useState<ConfirmationDialogState | null>(null)
+  const sortedCategories = useMemo(
+    () =>
+      [...categories].sort((left, right) =>
+        left.name.localeCompare(right.name, "pt-BR")
+      ),
+    [categories]
+  )
 
   return (
     <section className="app-panel">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <p className="app-eyebrow">Categorias</p>
           <h3 className="font-serif text-2xl font-semibold text-foreground">
             Base de classificação
           </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Renomeie ou exclua categorias criadas por engano. Excluir uma
+            categoria deixa as transações dela sem categoria.
+          </p>
         </div>
         <div className="rounded-full bg-primary/12 p-3 text-primary">
           <Tags size={18} />
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4">
-        <div className="flex flex-wrap gap-2">
-          {categories.length === 0 ? (
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div>
+          {sortedCategories.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nenhuma categoria cadastrada.
             </p>
-          ) : null}
-          {categories.map((category) => (
-            <span
-              key={category.id}
-              className="rounded-full border border-border bg-secondary/70 px-2.5 py-1 text-xs font-medium text-foreground"
-            >
-              {category.name}
-            </span>
-          ))}
+          ) : (
+            <ul className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+              {sortedCategories.map((category) =>
+                editing?.id === category.id ? (
+                  <li key={category.id}>
+                    <form
+                      className="flex items-center gap-1 rounded-[0.9rem] border border-primary/40 bg-primary/5 p-1"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        renameMutation.mutate()
+                      }}
+                    >
+                      <Input
+                        autoFocus
+                        className="h-9"
+                        value={editing.name}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") cancelEdit()
+                        }}
+                        aria-label={`Novo nome para ${category.name}`}
+                      />
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="size-9 shrink-0"
+                        disabled={renameMutation.isPending}
+                        aria-label="Salvar nome"
+                        title="Salvar"
+                      >
+                        <Check size={15} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-9 shrink-0"
+                        onClick={cancelEdit}
+                        aria-label="Cancelar edição"
+                        title="Cancelar"
+                      >
+                        <X size={15} />
+                      </Button>
+                    </form>
+                  </li>
+                ) : (
+                  <li
+                    key={category.id}
+                    className="flex items-center gap-1 rounded-[0.9rem] border border-border bg-secondary/70 py-1 pr-1 pl-3"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      {category.name}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0 text-muted-foreground"
+                      onClick={() => startEdit(category)}
+                      aria-label={`Renomear categoria ${category.name}`}
+                      title="Renomear"
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                      disabled={deleteMutation.isPending}
+                      onClick={() =>
+                        setConfirmationDialog({
+                          confirmLabel: "Excluir Categoria",
+                          title: "Excluir categoria?",
+                          description: `A categoria "${category.name}" será removida e as transações dela ficarão sem categoria.`,
+                          onConfirm: () => deleteMutation.mutate(category),
+                        })
+                      }
+                      aria-label={`Excluir categoria ${category.name}`}
+                      title="Excluir"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
         </div>
 
-        <Card className="border-border bg-secondary/60 p-4">
+        <Card className="h-fit border-border bg-secondary/60 p-4">
           <form
             onSubmit={(event) => {
               event.preventDefault()
               createMutation.mutate()
             }}
           >
-            <Label>Nova Categoria</Label>
+            <Label htmlFor="new-category">Nova Categoria</Label>
             <Input
+              id="new-category"
               className="mt-3"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -576,12 +444,16 @@ export function CategoryManager({
               <Plus size={16} />
               {createMutation.isPending ? "Salvando..." : "Criar Categoria"}
             </Button>
-            <div className="mt-3">
-              <FormError message={errorMessage} />
-            </div>
           </form>
         </Card>
+        <div className="lg:col-span-2 empty:hidden">
+          <FormError message={errorMessage} />
+        </div>
       </div>
+      <ConfirmationDialog
+        onClose={() => setConfirmationDialog(null)}
+        state={confirmationDialog}
+      />
     </section>
   )
 }
@@ -605,20 +477,38 @@ export function DashboardPlanQuickCreate({
     startCreate()
     setIsOpen(true)
   }
+  const closeModal = useCallback(() => setIsOpen(false), [])
+  useEscapeKey(isOpen, closeModal)
 
   return (
     <>
       <div className="flex items-end">
-        <Button type="button" className="h-11 w-full" onClick={openModal}>
-          {hasPlans ? "Novo Plano" : "Criar Primeiro Plano"}
-          <Plus size={16} />
-        </Button>
+        {hasPlans ? (
+          <Button type="button" variant="outline" className="h-11 w-full md:w-auto" onClick={openModal}>
+            <Plus size={16} />
+            Novo plano
+          </Button>
+        ) : (
+          <Button type="button" className="h-11 w-full" onClick={openModal}>
+            Criar Primeiro Plano
+            <Plus size={16} />
+          </Button>
+        )}
       </div>
 
       {isOpen
         ? createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            onClick={closeModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={hasPlans ? "Novo plano" : "Criar primeiro plano"}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-[0_30px_80px_rgba(2,6,23,0.50)]"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="app-eyebrow">
@@ -631,7 +521,7 @@ export function DashboardPlanQuickCreate({
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {hasPlans
-                      ? "Você pode começar do zero, e o ano atual será preparado automaticamente."
+                      ? "Você pode começar do zero; todos os meses ficam disponíveis no dashboard."
                       : "Comece criando um plano para organizar suas transações, categorias, cartões e períodos."}
                   </p>
                 </div>
@@ -668,8 +558,8 @@ export function DashboardPlanQuickCreate({
                 </div>
 
                 <div className="rounded-[1.25rem] border border-border bg-secondary/55 p-4 text-sm text-muted-foreground">
-                  Janeiro a Dezembro do ano atual serão criados
-                  automaticamente assim que o plano for salvo.
+                  Todos os meses ficam disponíveis no dashboard assim que o
+                  plano for salvo; é só navegar até o mês e lançar.
                 </div>
 
                 {!hasPlans ? (
@@ -733,6 +623,8 @@ export function PlanParticipantsManager({
   const partnerCount = participants.filter(
     (participant) => participant.role === "PARTNER"
   ).length
+  const canShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function"
   const inviteUrl =
     inviteLink?.active && inviteLink.inviteToken
       ? `${window.location.origin}/invite/${inviteLink.inviteToken}`
@@ -784,6 +676,32 @@ export function PlanParticipantsManager({
                     ? "Gerando..."
                     : "Gerar link"}
               </Button>
+
+              {inviteUrl && canShare ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      await navigator.share({
+                        title: "Convite para o plano",
+                        text: activePlan
+                          ? `Entre no plano "${activePlan.name}" no Finances:`
+                          : "Entre no meu plano no Finances:",
+                        url: inviteUrl,
+                      })
+                    } catch (error) {
+                      // Fechar a folha de compartilhamento não é erro.
+                      if (!(error instanceof DOMException && error.name === "AbortError")) {
+                        setCopyFeedback("Não foi possível compartilhar o link.")
+                      }
+                    }
+                  }}
+                >
+                  <Share2 size={16} />
+                  Compartilhar
+                </Button>
+              ) : null}
 
               <Button
                 type="button"

@@ -169,6 +169,18 @@ describe("upload de comprovante", () => {
   })
 })
 
+describe("link de documento", () => {
+  it.each(["javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "boleto.pdf"])(
+    "recusa link que não é http(s): %s",
+    async (url) => {
+      const { owner, create } = await setup()
+      const transaction = await create()
+      const response = await as(owner).patch(`/transactions/${transaction.id}`, { billingDocument: { type: "LINK", url } })
+      expect(response.status).toBe(400)
+    },
+  )
+})
+
 describe("download de comprovante", () => {
   it("devolve o arquivo com headers seguros", async () => {
     const { owner, create } = await setup()

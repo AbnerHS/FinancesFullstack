@@ -1,6 +1,13 @@
-import { and, between, eq, max, ne, or, isNull, sql } from "drizzle-orm"
+import { and, between, eq, inArray, max, ne, or, isNull, sql } from "drizzle-orm"
 import type { Database } from "../db/client.ts"
-import { type CreditCardInvoice, creditCardInvoices, creditCards, transactions, type User } from "../db/schema.ts"
+import {
+  type CreditCardInvoice,
+  creditCardInvoices,
+  creditCards,
+  subscriptions,
+  transactions,
+  type User,
+} from "../db/schema.ts"
 import { daysInMonth, monthBounds } from "../lib/dates.ts"
 import { ApiError, badRequest, notFound } from "../lib/errors.ts"
 import { isUniqueViolation } from "../lib/db-errors.ts"
@@ -11,17 +18,33 @@ import { getPlanOrThrow, participantIds, requirePlanAccess } from "./access.ts"
 // Porta do CreditCardInvoiceService. A fatura pertence a um plano e a um mês (`referenceMonth`);
 // as transações vinculadas ficam com a data de competência dentro desse mês.
 
-export type InvoiceInput = { creditCardId: string; referenceMonth: string; amount: number }
+export type InvoiceInput = {
+  creditCardId: string
+  referenceMonth: string
+  amount: number
+  dueDate?: string | null
+  paymentStatus?: "PENDING" | "PAID" | null
+  paymentDate?: string | null
+}
 
-export function invoiceModel(invoice: CreditCardInvoice, creditCardName: string | null) {
+export function invoiceModel(
+  invoice: CreditCardInvoice,
+  creditCardName: string | null,
+  creditCardOwnerId: string | null = null,
+) {
   return withLinks(
     {
       id: invoice.id,
       planId: invoice.planId,
       creditCardId: invoice.creditCardId,
       creditCardName,
+      // Dono do cartão: é a quem a fatura conta no filtro por responsável.
+      creditCardOwnerId,
       referenceMonth: invoice.referenceMonth,
       amount: fromCents(invoice.amountCents),
+      dueDate: invoice.dueDate,
+      paymentStatus: invoice.paymentStatus,
+      paymentDate: invoice.paymentDate,
     },
     {
       self: `/api/credit-card-invoices/${invoice.id}`,
@@ -33,14 +56,14 @@ export function invoiceModel(invoice: CreditCardInvoice, creditCardName: string 
 
 const withCardName = (db: Database) =>
   db
-    .select({ invoice: creditCardInvoices, creditCardName: creditCards.name })
+    .select({ invoice: creditCardInvoices, creditCardName: creditCards.name, creditCardOwnerId: creditCards.userId })
     .from(creditCardInvoices)
     .innerJoin(creditCards, eq(creditCards.id, creditCardInvoices.creditCardId))
 
 export async function findModel(db: Database, id: string) {
   const row = await withCardName(db).where(eq(creditCardInvoices.id, id)).get()
   if (!row) throw notFound("Fatura não encontrada")
-  return invoiceModel(row.invoice, row.creditCardName)
+  return invoiceModel(row.invoice, row.creditCardName, row.creditCardOwnerId)
 }
 
 export async function getAccessibleInvoice(db: Database, user: User, id: string): Promise<CreditCardInvoice> {
@@ -66,16 +89,40 @@ export async function listByPlan(
       ),
     )
     .orderBy(creditCardInvoices.referenceMonth, creditCards.name)
-  return rows.map((r) => invoiceModel(r.invoice, r.creditCardName))
+  return rows.map((r) => invoiceModel(r.invoice, r.creditCardName, r.creditCardOwnerId))
 }
 
-async function assertCardInPlan(db: Database, planId: string, creditCardId: string) {
+export async function assertCardInPlan(db: Database, planId: string, creditCardId: string) {
   const plan = await getPlanOrThrow(db, planId)
   const card = await db.query.creditCards.findFirst({ where: eq(creditCards.id, creditCardId) })
   if (!card) throw notFound("Cartão não encontrado")
   if (!(await participantIds(db, plan)).includes(card.userId)) {
     throw badRequest("O cartão precisa pertencer a um participante do plano.")
   }
+}
+
+/**
+ * Cobranças de assinaturas deste cartão no mês da fatura que ainda não têm fatura passam a fazer
+ * parte dela (geradas antes de a fatura existir).
+ */
+function attachSubscriptionCharges(db: Database, invoice: CreditCardInvoice) {
+  return db
+    .update(transactions)
+    .set({ creditCardInvoiceId: invoice.id, clearedByInvoice: true })
+    .where(
+      and(
+        eq(transactions.planId, invoice.planId),
+        eq(transactions.subscriptionMonth, invoice.referenceMonth),
+        isNull(transactions.creditCardInvoiceId),
+        inArray(
+          transactions.subscriptionId,
+          db
+            .select({ id: subscriptions.id })
+            .from(subscriptions)
+            .where(eq(subscriptions.creditCardId, invoice.creditCardId)),
+        ),
+      ),
+    )
 }
 
 const duplicate = () => new ApiError(409, "Conflito", "Já existe uma fatura deste cartão neste mês para o plano.")
@@ -92,8 +139,10 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
         creditCardId: input.creditCardId,
         referenceMonth: input.referenceMonth,
         amountCents: toCents(input.amount),
+        ...paymentFields(input, null),
       })
       .returning()
+    await attachSubscriptionCharges(db, invoice!)
     return invoice!
   } catch (error) {
     if (isUniqueViolation(error)) throw duplicate()
@@ -101,15 +150,40 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
   }
 }
 
-export async function update(db: Database, user: User, id: string, input: InvoiceInput) {
+/**
+ * Vencimento e pagamento. Campo ausente mantém o valor atual (o PUT antigo, sem esses campos, não
+ * apaga nada). A fatura pode ser paga com ou sem vencimento; a data de pagamento só vale para
+ * fatura paga.
+ */
+function paymentFields(input: Partial<InvoiceInput>, current: CreditCardInvoice | null) {
+  const has = (key: keyof InvoiceInput) => Object.prototype.hasOwnProperty.call(input, key)
+  const dueDate = has("dueDate") ? (input.dueDate ?? null) : (current?.dueDate ?? null)
+  const paymentStatus = has("paymentStatus") ? (input.paymentStatus ?? "PENDING") : (current?.paymentStatus ?? "PENDING")
+  let paymentDate = has("paymentDate") ? (input.paymentDate ?? null) : (current?.paymentDate ?? null)
+  if (paymentStatus !== "PAID") paymentDate = null
+  return { dueDate, paymentStatus, paymentDate }
+}
+
+export async function update(db: Database, user: User, id: string, partial: Partial<InvoiceInput>) {
   const current = await getAccessibleInvoice(db, user, id)
+  const input: InvoiceInput = {
+    ...partial,
+    creditCardId: partial.creditCardId ?? current.creditCardId,
+    referenceMonth: partial.referenceMonth ?? current.referenceMonth,
+    amount: partial.amount ?? fromCents(current.amountCents) ?? 0,
+  }
   if (input.creditCardId !== current.creditCardId) {
     await assertCardInPlan(db, current.planId, input.creditCardId)
   }
 
   const updateInvoice = db
     .update(creditCardInvoices)
-    .set({ creditCardId: input.creditCardId, referenceMonth: input.referenceMonth, amountCents: toCents(input.amount) })
+    .set({
+      creditCardId: input.creditCardId,
+      referenceMonth: input.referenceMonth,
+      amountCents: toCents(input.amount),
+      ...paymentFields(partial, current),
+    })
     .where(eq(creditCardInvoices.id, id))
 
   try {
@@ -160,6 +234,10 @@ function moveLinkedTransactions(db: Database, invoice: CreditCardInvoice, month:
 
 export async function remove(db: Database, user: User, id: string) {
   await getAccessibleInvoice(db, user, id)
-  // Transações vinculadas ficam sem fatura (ON DELETE SET NULL).
-  await db.delete(creditCardInvoices).where(eq(creditCardInvoices.id, id))
+  // Transações vinculadas ficam sem fatura (ON DELETE SET NULL) e deixam de contar como quitadas
+  // por ela, senão sairiam dos totais sem fatura nenhuma cobrindo o valor.
+  await db.batch([
+    db.update(transactions).set({ clearedByInvoice: false }).where(eq(transactions.creditCardInvoiceId, id)),
+    db.delete(creditCardInvoices).where(eq(creditCardInvoices.id, id)),
+  ])
 }

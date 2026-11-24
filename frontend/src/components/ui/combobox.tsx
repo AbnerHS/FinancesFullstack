@@ -65,8 +65,10 @@ export function Combobox({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [popupStyle, setPopupStyle] = useState<{
     left: number
-    top: number
+    top?: number
+    bottom?: number
     width: number
+    maxHeight: number
   } | null>(null)
 
   const normalizedValue = useMemo(() => normalize(value), [value])
@@ -124,10 +126,27 @@ export function Combobox({
       }
 
       const rect = anchor.getBoundingClientRect()
+      // Área visível de verdade: no celular, o teclado virtual encolhe o visualViewport.
+      const viewport = window.visualViewport
+      const viewportTop = viewport?.offsetTop ?? 0
+      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight)
+      const gap = 8
+      const spaceBelow = viewportBottom - rect.bottom - gap * 2
+      const spaceAbove = rect.top - viewportTop - gap * 2
+      const preferred = 288
+      // Abre para cima quando embaixo não cabe e em cima há mais espaço (ex.: teclado aberto).
+      const openUp = spaceBelow < Math.min(preferred, 200) && spaceAbove > spaceBelow
+
       setPopupStyle({
         left: rect.left,
-        top: rect.bottom + 8,
         width: rect.width,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+        maxHeight: Math.max(
+          120,
+          Math.min(preferred, openUp ? spaceAbove : spaceBelow)
+        ),
       })
     }
 
@@ -135,10 +154,14 @@ export function Combobox({
 
     window.addEventListener("resize", updatePopupPosition)
     window.addEventListener("scroll", updatePopupPosition, true)
+    window.visualViewport?.addEventListener("resize", updatePopupPosition)
+    window.visualViewport?.addEventListener("scroll", updatePopupPosition)
 
     return () => {
       window.removeEventListener("resize", updatePopupPosition)
       window.removeEventListener("scroll", updatePopupPosition, true)
+      window.visualViewport?.removeEventListener("resize", updatePopupPosition)
+      window.visualViewport?.removeEventListener("scroll", updatePopupPosition)
     }
   }, [shouldShowPopup])
 
@@ -248,7 +271,9 @@ export function Combobox({
             return
           }
 
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && isOpen) {
+            // Só fecha a lista; o modal em volta não deve fechar junto.
+            event.preventDefault()
             setIsOpen(false)
           }
         }}
@@ -283,10 +308,15 @@ export function Combobox({
             style={{
               left: popupStyle.left,
               top: popupStyle.top,
+              bottom: popupStyle.bottom,
               width: popupStyle.width,
             }}
           >
-            <div className="max-h-72 overflow-y-auto" role="listbox">
+            <div
+              className="overflow-y-auto"
+              style={{ maxHeight: popupStyle.maxHeight }}
+              role="listbox"
+            >
               {filteredOptions.map((option, index) => {
                 const isSelected = matchedOption?.value === option.value
                 const isHighlighted = highlightedOption?.value === option.value

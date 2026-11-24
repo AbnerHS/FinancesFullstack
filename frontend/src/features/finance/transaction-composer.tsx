@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { Save, SendHorizonal, X } from "lucide-react"
 
@@ -10,6 +11,8 @@ import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { todayIso } from "@/features/finance/utils.ts"
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 import type {
   ResponsibleOption,
   Transaction,
@@ -27,14 +30,21 @@ type TransactionComposerProps = {
   setEditingScope: React.Dispatch<React.SetStateAction<"SINGLE" | "GROUP">>
   categoryOptions: Array<{ label: string; value: string }>
   responsibleOptions: ResponsibleOption[]
+  /** Cartões do plano, para a assinatura cobrada no cartão. */
+  cardOptions: Array<{ label: string; value: string }>
   formError: string | null
   mutationError: string | null
   createPending: boolean
   createRecurringPending: boolean
   updatePending: boolean
   submitPending: boolean
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>
+  onSubmit: (
+    event: React.FormEvent<HTMLFormElement>,
+    options: { keepOpen: boolean }
+  ) => void | Promise<void>
   onCancel: () => void
+  /** Muda a cada "Salvar e adicionar outra": devolve o foco para a descrição. */
+  focusSignal?: number
 }
 
 type SharedLayoutProps = {
@@ -42,6 +52,7 @@ type SharedLayoutProps = {
   setForm: React.Dispatch<React.SetStateAction<TransactionFormValues>>
   categoryOptions: Array<{ label: string; value: string }>
   responsibleOptions: ResponsibleOption[]
+  cardOptions: Array<{ label: string; value: string }>
 }
 
 type ActionsRowProps = {
@@ -55,6 +66,8 @@ type ActionsRowProps = {
   onCancel: () => void
   formId?: string
 }
+
+const CONTINUE_INTENT = "continue"
 
 const fieldClassName = "flex flex-col gap-2"
 
@@ -123,12 +136,16 @@ function shouldShowBillingDocumentField(form: TransactionFormValues) {
 function TransactionCommonRow({
   form,
   setForm,
-}: Pick<SharedLayoutProps, "form" | "setForm">) {
+  descriptionRef,
+}: Pick<SharedLayoutProps, "form" | "setForm"> & {
+  descriptionRef?: React.Ref<HTMLInputElement>
+}) {
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
       <div className={fieldClassName}>
         <Label>Descrição</Label>
         <Input
+          ref={descriptionRef}
           value={form.description}
           onChange={(event) =>
             setForm((current) => ({
@@ -265,7 +282,8 @@ function PaymentStatusField({
             setForm((current) => ({
               ...current,
               isPaid: !current.isPaid,
-              paymentDate: current.isPaid ? "" : current.paymentDate,
+              // Ao marcar como pago, a data padrão é hoje.
+              paymentDate: current.isPaid ? "" : current.paymentDate || todayIso(),
             }))
           }
         />
@@ -400,51 +418,114 @@ function BillingDocumentField({
   )
 }
 
+type RepeatMode = "NONE" | "RECURRING" | "SUBSCRIPTION"
+
+const repeatModeOf = (form: TransactionFormValues): RepeatMode =>
+  form.isSubscription && form.type === "EXPENSE"
+    ? "SUBSCRIPTION"
+    : form.isRecurring
+      ? "RECURRING"
+      : "NONE"
+
+/**
+ * Repetição: só este mês, N meses (cria todas as ocorrências agora) ou assinatura (despesa mensal
+ * sem fim; a cobrança de cada mês é gerada quando o mês chega).
+ */
+/** Cartão da assinatura: com cartão, cada cobrança entra na fatura do cartão naquele mês. */
+function SubscriptionCardField({
+  form,
+  setForm,
+  cardOptions,
+}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
+  return (
+    <div className={fieldClassName}>
+      <Label htmlFor="subscription-card">Cobrada no cartão</Label>
+      <Select
+        id="subscription-card"
+        value={form.subscriptionCardId}
+        onChange={(event) =>
+          setForm((current) => ({ ...current, subscriptionCardId: event.target.value }))
+        }
+      >
+        <option value="">Não (conta ou débito)</option>
+        {cardOptions.map((card) => (
+          <option key={card.value} value={card.value}>
+            {card.label}
+          </option>
+        ))}
+      </Select>
+    </div>
+  )
+}
+
 function RecurrenceField({
   form,
   setForm,
-}: Pick<SharedLayoutProps, "form" | "setForm">) {
+  cardOptions,
+}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
+  const mode = repeatModeOf(form)
+  const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
+
   return (
-    <div className="flex items-end">
-      <div className="w-full rounded-xl border border-border bg-card/90 px-3">
-        <div className="flex flex-wrap items-center gap-x-3 xl:flex-nowrap">
-          <Label className="text-[11px] tracking-widest">Recorrente</Label>
-          <div className="flex min-h-11 items-center">
-            <Switch
-              checked={form.isRecurring}
-              onClick={() =>
-                setForm((current) => ({
-                  ...current,
-                  isRecurring: !current.isRecurring,
-                  occurrences:
-                    !current.isRecurring && current.occurrences < 2
-                      ? 2
-                      : current.occurrences,
-                }))
-              }
-            />
-          </div>
-          {form.isRecurring ? (
-            <div className="flex flex-row items-center gap-2 py-2 xl:py-0">
-              <Label className="text-[10px] tracking-widest">Meses</Label>
-              <Input
-                className="h-8 w-20 xl:w-full"
-                type="number"
-                min={2}
-                max={120}
-                disabled={!form.isRecurring}
-                value={form.occurrences}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    occurrences: Number(event.target.value) || 2,
-                  }))
-                }
-              />
-            </div>
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <div className={fieldClassName}>
+        <Label htmlFor="transaction-repeat">Repetição</Label>
+        <Select
+          id="transaction-repeat"
+          value={mode}
+          onChange={(event) => {
+            const next = event.target.value as RepeatMode
+            setForm((current) => ({
+              ...current,
+              isRecurring: next === "RECURRING",
+              isSubscription: next === "SUBSCRIPTION",
+              occurrences:
+                next === "RECURRING" && current.occurrences < 2
+                  ? 2
+                  : current.occurrences,
+            }))
+          }}
+        >
+          <option value="NONE">Não repete</option>
+          <option value="RECURRING">Repetir por alguns meses</option>
+          {form.type === "EXPENSE" ? (
+            <option value="SUBSCRIPTION">Assinatura (todo mês, sem data para acabar)</option>
           ) : null}
-        </div>
+        </Select>
       </div>
+      {mode === "RECURRING" ? (
+        <div className={fieldClassName}>
+          <Label htmlFor="transaction-occurrences">Meses</Label>
+          <Input
+            id="transaction-occurrences"
+            className="sm:w-24"
+            type="number"
+            min={2}
+            max={120}
+            value={form.occurrences}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                occurrences: Number(event.target.value) || 2,
+              }))
+            }
+          />
+        </div>
+      ) : null}
+      {mode === "SUBSCRIPTION" ? (
+        <>
+          <SubscriptionCardField form={form} setForm={setForm} cardOptions={cardOptions} />
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            A cobrança aparece todo mês no mesmo dia
+            {form.hasDueDate && form.dueDate ? " da data informada" : ""}, até você encerrar a assinatura.
+            {cardName
+              ? ` Cada mês entra na fatura do ${cardName} daquele mês (se a fatura ainda não existir, entra quando ela for criada).`
+              : form.hasDueDate && form.dueDate
+                ? " Cada mês entra em Contas a pagar."
+                : " Sem vencimento, conta como débito automático."}
+          </p>
+        </>
+      ) : null}
     </div>
   )
 }
@@ -458,7 +539,8 @@ function EditScopeField({
   editingScope: "SINGLE" | "GROUP"
   setEditingScope: React.Dispatch<React.SetStateAction<"SINGLE" | "GROUP">>
 }) {
-  if (!editingTransaction?.recurringGroupId) {
+  const isSubscription = Boolean(editingTransaction?.subscriptionId)
+  if (!editingTransaction?.recurringGroupId && !isSubscription) {
     return null
   }
 
@@ -471,8 +553,14 @@ function EditScopeField({
           setEditingScope(event.target.value as "SINGLE" | "GROUP")
         }
       >
-        <option value="SINGLE">Somente esta transação</option>
-        <option value="GROUP">Todas do grupo recorrente</option>
+        <option value="SINGLE">
+          {isSubscription ? "Somente a cobrança deste mês" : "Somente esta transação"}
+        </option>
+        <option value="GROUP">
+          {isSubscription
+            ? "Esta e as próximas cobranças da assinatura"
+            : "Todas do grupo recorrente"}
+        </option>
       </Select>
     </div>
   )
@@ -508,7 +596,11 @@ function ActionButtons({
             ? updatePending
               ? "Salvando..."
               : "Salvar"
-            : form.isRecurring
+            : repeatModeOf(form) === "SUBSCRIPTION"
+              ? createRecurringPending
+                ? "Criando..."
+                : "Criar Assinatura"
+              : form.isRecurring
               ? createRecurringPending
                 ? "Criando..."
                 : "Criar Recorrência"
@@ -517,6 +609,26 @@ function ActionButtons({
                 : "Enviar"}
         {editingTransaction ? <Save size={16} /> : <SendHorizonal size={16} />}
       </Button>
+      {!editingTransaction ? (
+        <Button
+          type="submit"
+          form={formId}
+          variant="outline"
+          className="h-11"
+          name="intent"
+          value={CONTINUE_INTENT}
+          disabled={
+            createPending ||
+            createRecurringPending ||
+            updatePending ||
+            submitPending
+          }
+          title="Salvar e manter o formulário aberto para outra transação"
+        >
+          <span className="sm:hidden">Salvar e nova</span>
+          <span className="hidden sm:inline">Salvar e adicionar outra</span>
+        </Button>
+      ) : null}
       {showCancel ? (
         <Button
           type="button"
@@ -536,6 +648,7 @@ function TransactionCreateFormLayout({
   setForm,
   categoryOptions,
   responsibleOptions,
+  cardOptions,
 }: SharedLayoutProps) {
   const secondRowClassName =
     form.type === "EXPENSE"
@@ -558,13 +671,13 @@ function TransactionCreateFormLayout({
         <DueDateField form={form} setForm={setForm} />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <BillingDocumentField form={form} setForm={setForm} />
-      </div>
+      {repeatModeOf(form) === "SUBSCRIPTION" ? null : (
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <BillingDocumentField form={form} setForm={setForm} />
+        </div>
+      )}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <RecurrenceField form={form} setForm={setForm} />
-      </div>
+      <RecurrenceField form={form} setForm={setForm} cardOptions={cardOptions} />
     </>
   )
 }
@@ -574,6 +687,7 @@ function TransactionEditFormLayout({
   setForm,
   categoryOptions,
   responsibleOptions,
+  cardOptions,
   editingTransaction,
   editingScope,
   setEditingScope,
@@ -617,6 +731,9 @@ function TransactionEditFormLayout({
           editingScope={editingScope}
           setEditingScope={setEditingScope}
         />
+        {editingTransaction.subscriptionId && editingScope === "GROUP" ? (
+          <SubscriptionCardField form={form} setForm={setForm} cardOptions={cardOptions} />
+        ) : null}
       </div>
     </>
   )
@@ -633,6 +750,7 @@ export function TransactionComposer({
   setEditingScope,
   categoryOptions,
   responsibleOptions,
+  cardOptions,
   formError,
   mutationError,
   createPending,
@@ -641,18 +759,37 @@ export function TransactionComposer({
   submitPending,
   onSubmit,
   onCancel,
+  focusSignal,
 }: TransactionComposerProps) {
   const isEditing = Boolean(editingTransaction)
   const formId = "transaction-composer-form"
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const descriptionRef = useRef<HTMLInputElement | null>(null)
+
+  // Esc fecha (o Combobox aberto consome o Esc antes, fechando só a lista).
+  useEscapeKey(isOpen, onCancel)
+
+  // Foco na descrição ao abrir uma nova transação e depois de "Salvar e adicionar outra". Só no
+  // desktop: no celular, focar abriria o teclado por cima do formulário.
+  useEffect(() => {
+    if (!isOpen || isEditing) return
+    if (!window.matchMedia("(min-width: 640px)").matches) return
+    descriptionRef.current?.focus()
+  }, [isOpen, isEditing, focusSignal])
 
   if (!isOpen) {
     return null
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="flex min-h-full items-start justify-center py-4">
-        <Card className="grid max-h-[90dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+    // Celular: folha que sobe do rodapé (sobra mais tela com o teclado aberto). Desktop: modal.
+    <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/55 sm:items-start sm:p-4 sm:py-8 sm:backdrop-blur-sm">
+        <Card
+          role="dialog"
+          aria-modal="true"
+          aria-label={isEditing ? "Editar transação" : "Nova transação"}
+          className="grid max-h-[92dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-b-none border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)] sm:max-h-[90dvh] sm:rounded-b-[1.5rem]"
+        >
           <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
             <div>
               <p className="app-eyebrow">
@@ -667,6 +804,7 @@ export function TransactionComposer({
               variant="outline"
               size="icon"
               onClick={onCancel}
+              aria-label="Fechar"
             >
               <X size={16} />
             </Button>
@@ -674,11 +812,29 @@ export function TransactionComposer({
 
           <div className="overflow-y-auto px-4 py-4 sm:px-5">
             <form
+              ref={formRef}
               id={formId}
               className="space-y-4"
-              onSubmit={onSubmit}
+              onSubmit={(event) => {
+                const submitter = (event.nativeEvent as SubmitEvent).submitter
+                const keepOpen =
+                  submitter instanceof HTMLButtonElement &&
+                  submitter.value === CONTINUE_INTENT
+                return onSubmit(event, { keepOpen })
+              }}
+              onKeyDown={(event) => {
+                // Ctrl/Cmd + Enter salva de qualquer campo.
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault()
+                  formRef.current?.requestSubmit()
+                }
+              }}
             >
-              <TransactionCommonRow form={form} setForm={setForm} />
+              <TransactionCommonRow
+                form={form}
+                setForm={setForm}
+                descriptionRef={descriptionRef}
+              />
 
               {isEditing && editingTransaction ? (
                 <TransactionEditFormLayout
@@ -686,6 +842,7 @@ export function TransactionComposer({
                   setForm={setForm}
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
+                  cardOptions={cardOptions}
                   editingTransaction={editingTransaction}
                   editingScope={editingScope}
                   setEditingScope={setEditingScope}
@@ -696,12 +853,13 @@ export function TransactionComposer({
                   setForm={setForm}
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
+                  cardOptions={cardOptions}
                 />
               )}
             </form>
           </div>
 
-          <div className="border-t border-border/70 px-4 py-4 sm:px-5">
+          <div className="border-t border-border/70 px-4 pt-4 pb-[max(env(safe-area-inset-bottom),1rem)] sm:px-5 sm:pb-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
               <FormError message={formError || mutationError} />
               <ActionButtons
@@ -718,7 +876,6 @@ export function TransactionComposer({
             </div>
           </div>
         </Card>
-      </div>
     </div>,
     document.body
   )

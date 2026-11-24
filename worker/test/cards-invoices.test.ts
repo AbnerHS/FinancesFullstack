@@ -153,6 +153,49 @@ describe("faturas", () => {
     expect(moved).toMatchObject({ referenceDate: "2026-02-28", order: 2 })
   })
 
+  it("vencimento e pagamento: PATCH parcial, dono do cartão e regras de consistência", async () => {
+    const owner = await createUser()
+    const plan = await createPlan(owner)
+    const card = await createCard(owner)
+    const invoice = await json(
+      as(owner).post("/credit-card-invoices", {
+        planId: plan.id,
+        creditCardId: card.id,
+        referenceMonth: "2026-04",
+        amount: 300,
+        dueDate: "2026-04-10",
+      }),
+      201,
+    )
+    expect(invoice).toMatchObject({
+      dueDate: "2026-04-10",
+      paymentStatus: "PENDING",
+      paymentDate: null,
+      creditCardOwnerId: owner.id,
+    })
+
+    const paid = await json(
+      as(owner).patch(`/credit-card-invoices/${invoice.id}`, { paymentStatus: "PAID", paymentDate: "2026-04-08" }),
+    )
+    expect(paid).toMatchObject({ amount: 300, dueDate: "2026-04-10", paymentStatus: "PAID", paymentDate: "2026-04-08" })
+
+    // PUT antigo (sem os campos novos) não apaga vencimento nem pagamento.
+    const kept = await json(
+      as(owner).put(`/credit-card-invoices/${invoice.id}`, { creditCardId: card.id, referenceMonth: "2026-04", amount: 310 }),
+    )
+    expect(kept).toMatchObject({ amount: 310, dueDate: "2026-04-10", paymentStatus: "PAID" })
+
+    // Tirar o vencimento não desfaz o pagamento; fatura sem vencimento também pode ser paga.
+    const cleared = await json(as(owner).patch(`/credit-card-invoices/${invoice.id}`, { dueDate: null }))
+    expect(cleared).toMatchObject({ dueDate: null, paymentStatus: "PAID", paymentDate: "2026-04-08" })
+    const pending = await json(as(owner).patch(`/credit-card-invoices/${invoice.id}`, { paymentStatus: "PENDING" }))
+    expect(pending).toMatchObject({ paymentStatus: "PENDING", paymentDate: null })
+    const paidNoDue = await json(
+      as(owner).patch(`/credit-card-invoices/${invoice.id}`, { paymentStatus: "PAID", paymentDate: "2026-04-09" }),
+    )
+    expect(paidNoDue).toMatchObject({ dueDate: null, paymentStatus: "PAID", paymentDate: "2026-04-09" })
+  })
+
   it("excluir a fatura desvincula as transações", async () => {
     const owner = await createUser()
     const plan = await createPlan(owner)
@@ -161,12 +204,36 @@ describe("faturas", () => {
       as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: "2026-03", amount: 100 }),
       201,
     )
-    const linked = await json(as(owner).post("/transactions", tx(plan.id, "2026-03-05", { creditCardInvoiceId: invoice.id })), 201)
+    const linked = await json(as(owner).post("/transactions", tx(plan.id, "2026-03-05", { creditCardInvoiceId: invoice.id, isClearedByInvoice: true })), 201)
+    expect(linked.isClearedByInvoice).toBe(true)
 
     expect((await as(owner).delete(`/credit-card-invoices/${invoice.id}`)).status).toBe(204)
     expect(await json(as(owner).get(`/transactions/${linked.id}`))).toMatchObject({
       creditCardInvoiceId: null,
+      isClearedByInvoice: false,
       referenceDate: "2026-03-05",
     })
+  })
+
+  it("lista as transações vinculadas à fatura", async () => {
+    const owner = await createUser()
+    const plan = await createPlan(owner)
+    const card = await createCard(owner, owner)
+    const invoice = await json(
+      as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: "2026-05", amount: 90 }),
+      201,
+    )
+    const base = { planId: plan.id, type: "EXPENSE", referenceDate: "2026-05-03" }
+    const linked = await json(
+      as(owner).post("/transactions", { ...base, description: "Mercado", amount: 60, creditCardInvoiceId: invoice.id, isClearedByInvoice: true }),
+      201,
+    )
+    await json(as(owner).post("/transactions", { ...base, description: "Fora", amount: 10 }), 201)
+
+    const list = await json(as(owner).get(`/credit-card-invoices/${invoice.id}/transactions`))
+    expect(list._embedded.transactions.map((t: any) => t.id)).toEqual([linked.id])
+
+    const stranger = await createUser()
+    expect((await as(stranger).get(`/credit-card-invoices/${invoice.id}/transactions`)).status).not.toBe(200)
   })
 })

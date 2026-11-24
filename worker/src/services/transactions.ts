@@ -40,7 +40,8 @@ export type TransactionInput = {
 type Ctx = { env: Env; db: Database; user: User }
 
 // Campos graváveis (sem id, planId, createdAt, displayOrder).
-type Draft = Omit<Transaction, "id" | "planId" | "createdAt" | "displayOrder">
+// O vínculo com assinatura é da geração (services/subscriptions.ts), não da edição da transação.
+type Draft = Omit<Transaction, "id" | "planId" | "createdAt" | "displayOrder" | "subscriptionId" | "subscriptionMonth">
 
 const EMPTY_DOCUMENT = {
   billingDocumentType: null,
@@ -76,6 +77,7 @@ export function transactionModel({ transaction: t, category }: Row) {
       responsibleUserId: t.responsibleUserId,
       order: t.displayOrder,
       recurringGroupId: t.recurringGroupId,
+      subscriptionId: t.subscriptionId,
       creditCardInvoiceId: t.creditCardInvoiceId,
       isClearedByInvoice: t.clearedByInvoice,
       dueDate: t.dueDate,
@@ -162,11 +164,19 @@ export async function listByPlan(
   return rows.map(transactionModel)
 }
 
+/** Transações vinculadas a uma fatura (o acesso à fatura é verificado por quem chama). */
+export async function listByInvoice(db: Database, invoiceId: string) {
+  const rows = await selectWithCategory(db)
+    .where(eq(transactions.creditCardInvoiceId, invoiceId))
+    .orderBy(asc(transactions.referenceDate), asc(transactions.createdAt))
+  return rows.map(transactionModel)
+}
+
 // ---------------------------------------------------------------------------------------------
 // Escrita
 
 /** Próxima posição no fim do (plano, mês). Subquery para ser calculada no próprio INSERT/UPDATE. */
-function nextOrder(planId: string, referenceDate: string) {
+export function nextOrder(planId: string, referenceDate: string) {
   const { from, to } = monthBounds(toYearMonth(referenceDate))
   return sql`(select coalesce(max(${transactions.displayOrder}), 0) + 1 from ${transactions}
               where ${transactions.planId} = ${planId}
@@ -191,7 +201,7 @@ function defaults(): Draft {
   }
 }
 
-const draftOf = ({ id, planId, createdAt, displayOrder, ...draft }: Transaction): Draft => draft
+const draftOf = ({ id, planId, createdAt, displayOrder, subscriptionId, subscriptionMonth, ...draft }: Transaction): Draft => draft
 
 async function findInvoice(db: Database, id: string): Promise<CreditCardInvoice> {
   const invoice = await db.query.creditCardInvoices.findFirst({ where: eq(creditCardInvoices.id, id) })
@@ -275,8 +285,18 @@ function applyLinkDocument(
   }
   assertCanAttachDocument(hadExistingDocument, draft.dueDate)
   const url = document.url?.trim()
-  if (!url) throw badRequest("Informe um link válido para o documento.")
+  if (!url || !isHttpUrl(url)) throw badRequest("Informe um link válido (http ou https) para o documento.")
   Object.assign(draft, EMPTY_DOCUMENT, { billingDocumentType: "LINK", billingDocumentUrl: url })
+}
+
+/** Só http(s): o link é aberto pelo app, e `javascript:`/`data:` rodariam código na origem dele. */
+function isHttpUrl(value: string) {
+  try {
+    const { protocol } = new URL(value)
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
 }
 
 export function assertCanAttachDocument(hadExistingDocument: boolean, dueDate: string | null) {

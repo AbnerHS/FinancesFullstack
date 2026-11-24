@@ -8,6 +8,7 @@ import type {
 } from "@dnd-kit/core"
 
 import { financeKeys, transactionService } from "@/features/finance/services.ts"
+import { getTransactionDueAlert } from "@/features/finance/utils.ts"
 import type {
   Period,
   ResponsibleOption,
@@ -324,4 +325,48 @@ export function useTransactionReorder({
       reorderMutation.mutate(nextTransactions)
     },
   }
+}
+
+export type TransactionQuickFilter = "ALL" | "PENDING" | "OVERDUE" | "EXPENSE" | "REVENUE"
+
+export const TRANSACTION_QUICK_FILTERS: Array<{ value: TransactionQuickFilter; label: string }> = [
+  { value: "ALL", label: "Todas" },
+  { value: "PENDING", label: "Pendentes" },
+  { value: "OVERDUE", label: "Atrasadas" },
+  { value: "EXPENSE", label: "Saídas" },
+  { value: "REVENUE", label: "Entradas" },
+]
+
+/** Minúsculas e sem acento, para a busca achar "agua" em "Água". */
+export function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+}
+
+export function matchesQuickFilter(transaction: Transaction, filter: TransactionQuickFilter) {
+  switch (filter) {
+    case "PENDING":
+      return (
+        transaction.type === "EXPENSE" &&
+        Boolean(transaction.dueDate) &&
+        transaction.paymentStatus !== "PAID"
+      )
+    case "OVERDUE":
+      return getTransactionDueAlert(transaction) === "overdue"
+    case "EXPENSE":
+    case "REVENUE":
+      return transaction.type === filter
+    default:
+      return true
+  }
+}
+
+export function matchesSearch(transaction: Transaction, normalizedQuery: string) {
+  if (!normalizedQuery) return true
+  return normalizeSearchText(
+    `${transaction.description ?? ""} ${transaction.category?.name ?? ""}`
+  ).includes(normalizedQuery)
 }

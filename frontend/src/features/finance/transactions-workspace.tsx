@@ -20,6 +20,8 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import {
   AlertTriangle,
+  CalendarSync,
+  CalendarX2,
   CheckCircle2,
   Clock3,
   CreditCard as CreditCardIcon,
@@ -28,10 +30,12 @@ import {
   ExternalLink,
   GripVertical,
   Link,
+  Paperclip,
   Pencil,
   Plus,
   Repeat2,
   Save,
+  Search,
   SendHorizonal,
   Trash2,
   X,
@@ -40,26 +44,42 @@ import { createPortal } from "react-dom"
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
+import { buttonVariants } from "@/components/ui/button-variants"
 import { Card } from "@/components/ui/card.tsx"
 import {
   ConfirmationDialog,
   type ConfirmationDialogState,
 } from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
+import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
+  useInvoicePayment,
   usePeriodInvoiceManager,
+  useSubscriptionMutations,
+  useSubscriptions,
+  useTransactionPayment,
   useTransactionLinking,
   useTransactionMutations,
 } from "@/features/finance/hooks.ts"
+import {
+  resolveActiveMonthId,
+  useDashboardStore,
+} from "@/features/finance/dashboard-store.ts"
 import { TransactionComposer } from "@/features/finance/transaction-composer.tsx"
+import { PaymentDateMenu, PaymentDayChips } from "@/features/finance/payment-date-menu.tsx"
 import { financeKeys, transactionService } from "@/features/finance/services.ts"
 import {
   buildTransactionGroups,
+  matchesQuickFilter,
+  matchesSearch,
+  normalizeSearchText,
+  TRANSACTION_QUICK_FILTERS,
   useTransactionReorder,
+  type TransactionQuickFilter,
 } from "@/features/finance/transaction-workspace-utils.ts"
 import type {
   CreditCard,
@@ -72,14 +92,18 @@ import type {
   TransactionFormValues,
 } from "@/features/finance/types.ts"
 import {
+  canTogglePayment,
+  invoiceAsBill,
   formatCurrency,
   formatDateOnly,
   formatDateTime,
+  formatMonthLabel,
   getTransactionDueAlert,
   defaultReferenceDate,
   parseCurrencyInput,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
+import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
 type TransactionWorkspaceProps = {
   panel: {
@@ -106,6 +130,8 @@ const emptyForm = (): TransactionFormValues => ({
   categoryName: "",
   isRecurring: false,
   occurrences: 2,
+  isSubscription: false,
+  subscriptionCardId: "",
   recurringGroupId: null,
   hasDueDate: false,
   dueDate: "",
@@ -122,6 +148,13 @@ type TransactionActions = {
   onLink: (transaction: Transaction) => void
   onEdit: (transaction: Transaction) => void
   onDelete: (transaction: Transaction) => void
+  /** Sem data: alterna (pendente ↔ pago hoje). Com data: marca como pago nessa data. */
+  onTogglePaid: (transaction: Transaction, paymentDate?: string) => void
+  onOpenDocument: (transaction: Transaction) => void
+  /** Cobrança de assinatura: "ACTIVE" (pode encerrar), "ENDED" (pode reativar); senão null. */
+  subscriptionStatus: (transaction: Transaction) => "ACTIVE" | "ENDED" | null
+  onEndSubscription: (transaction: Transaction) => void
+  onResumeSubscription: (transaction: Transaction) => void
 }
 
 type TransactionRowProps = TransactionActions & {
@@ -132,6 +165,65 @@ type TransactionRowProps = TransactionActions & {
 }
 
 const shortDate = (value: string) => formatDateOnly(value).slice(0, 5)
+
+/** Mesmo corte do `sm:` do Tailwind, a partir do qual a linha mostra os botões de ação. */
+const isDesktopViewport = () => window.matchMedia("(min-width: 640px)").matches
+
+function isHttpUrl(value: string) {
+  try {
+    const { protocol } = new URL(value)
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
+/** Documento que dá para abrir: arquivo enviado ou link http(s). */
+function hasOpenableDocument(transaction: Transaction) {
+  const doc = transaction.billingDocument
+  if (!doc) return false
+  return doc.type === "FILE" || Boolean(doc.url && isHttpUrl(doc.url))
+}
+
+function billingDocumentLabel(transaction: Transaction) {
+  return transaction.paymentStatus === "PAID" ? "comprovante" : "boleto"
+}
+
+/**
+ * Abre o boleto/comprovante numa nova aba. A aba é aberta já no clique (antes do download), senão o
+ * Safari/iOS bloqueia como pop-up; o arquivo entra nela quando chegar.
+ */
+async function openBillingDocument(transaction: Transaction) {
+  const doc = transaction.billingDocument
+  if (!doc) return
+
+  if (doc.type === "LINK") {
+    if (!doc.url || !isHttpUrl(doc.url)) {
+      throw new Error("O link do documento é inválido.")
+    }
+    window.open(doc.url, "_blank", "noopener,noreferrer")
+    return
+  }
+
+  const tab = window.open("", "_blank")
+  if (tab) {
+    tab.opener = null
+    tab.document.title = "Abrindo documento..."
+  }
+  try {
+    const blob = await transactionService.downloadBillingDocument(transaction.id)
+    const objectUrl = window.URL.createObjectURL(blob)
+    if (tab) {
+      tab.location.href = objectUrl
+    } else {
+      window.location.assign(objectUrl)
+    }
+    window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+  } catch (error) {
+    tab?.close()
+    throw error
+  }
+}
 
 /** Situação de pagamento de uma despesa, para a coluna de vencimento (ou a 2ª linha no mobile). */
 function getPaymentBadge(transaction: Transaction) {
@@ -202,9 +294,11 @@ function SortableTransactionRow({
   isDragOver,
   reorderPending,
   onShowActions,
+  onOpenDetails,
   onLink,
   onEdit,
   onDelete,
+  onTogglePaid,
 }: TransactionRowProps) {
   const {
     attributes,
@@ -223,6 +317,8 @@ function SortableTransactionRow({
   const categoryLabel = transaction.category?.name || "Sem categoria"
   const isExpense = transaction.type === "EXPENSE"
   const linkLabel = transaction.isClearedByInvoice ? "Vínculo com fatura" : "Vincular a uma fatura"
+  const canPay = canTogglePayment(transaction)
+  const isPaid = canPay && transaction.paymentStatus === "PAID"
 
   return (
     <tr
@@ -233,7 +329,9 @@ function SortableTransactionRow({
       }}
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("button")) return
-        onShowActions(transaction)
+        // No desktop a linha já tem os botões de ação; o clique abre os detalhes. No celular, as ações.
+        if (isDesktopViewport()) onOpenDetails(transaction)
+        else onShowActions(transaction)
       }}
       className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 ${
         isDragging
@@ -258,10 +356,19 @@ function SortableTransactionRow({
           <span className="truncate text-sm font-medium text-foreground">
             {transaction.description}
           </span>
-          {transaction.recurringGroupId ? (
+          {transaction.subscriptionId ? (
+            <CalendarSync size={12} className="shrink-0 text-primary" aria-label="Assinatura">
+              <title>Assinatura</title>
+            </CalendarSync>
+          ) : transaction.recurringGroupId ? (
             <Repeat2 size={12} className="shrink-0 text-primary" aria-label="Recorrente">
               <title>Recorrente</title>
             </Repeat2>
+          ) : null}
+          {transaction.billingDocument ? (
+            <Paperclip size={12} className="shrink-0 text-muted-foreground" aria-label="Com documento anexado">
+              <title>{transaction.billingDocument.type === "LINK" ? "Link do documento" : "Documento anexado"}</title>
+            </Paperclip>
           ) : null}
           {isExpense && transaction.isClearedByInvoice ? (
             <Link size={12} className="shrink-0 text-emerald-500 sm:hidden" aria-label="Vinculada a fatura" />
@@ -291,6 +398,44 @@ function SortableTransactionRow({
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
         <div className="flex items-center justify-end">
+          {canPay && !isPaid ? (
+            <PaymentDateMenu
+              className={buttonVariants({
+                variant: "ghost",
+                size: "icon",
+                className: "size-8 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400",
+              })}
+              aria-label="Marcar como pago"
+              title="Marcar como pago (escolha a data)"
+              onSelect={(paymentDate) => onTogglePaid(transaction, paymentDate)}
+            >
+              <CheckCircle2 size={14} />
+            </PaymentDateMenu>
+          ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`size-8 ${
+              isPaid
+                ? "text-emerald-500 dark:text-emerald-400"
+                : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+            }`}
+            onClick={() => onTogglePaid(transaction)}
+            disabled={!canPay}
+            aria-label={isPaid ? "Marcar como pendente" : "Marcar como pago"}
+            aria-pressed={canPay ? isPaid : undefined}
+            title={
+              canPay
+                ? isPaid
+                  ? "Marcar como pendente"
+                  : "Marcar como pago hoje"
+                : "Sem vencimento: não há pagamento a registrar"
+            }
+          >
+            <CheckCircle2 size={14} />
+          </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -349,6 +494,7 @@ function ActionSheet({
   amountTone,
   actions,
   onClose,
+  children,
 }: {
   open: boolean
   title: string
@@ -357,6 +503,7 @@ function ActionSheet({
   amountTone: "positive" | "negative"
   actions: SheetAction[]
   onClose: () => void
+  children?: ReactNode
 }) {
   useEffect(() => {
     if (!open) return
@@ -403,6 +550,7 @@ function ActionSheet({
             {amount}
           </span>
         </div>
+        {children}
         <div className="px-2 pt-2">
           {actions.map((action) => (
             <button
@@ -434,6 +582,11 @@ function TransactionActionSheet({
   onLink,
   onEdit,
   onDelete,
+  onTogglePaid,
+  onOpenDocument,
+  subscriptionStatus,
+  onEndSubscription,
+  onResumeSubscription,
 }: TransactionActions & {
   transaction: Transaction | null
   onClose: () => void
@@ -444,6 +597,18 @@ function TransactionActionSheet({
 
   const isExpense = transaction.type === "EXPENSE"
   const actions: SheetAction[] = [
+    ...(canTogglePayment(transaction) && transaction.paymentStatus === "PAID"
+      ? [{ label: "Marcar como pendente", icon: Clock3, onClick: () => onTogglePaid(transaction) }]
+      : []),
+    ...(hasOpenableDocument(transaction)
+      ? [
+          {
+            label: `Abrir ${billingDocumentLabel(transaction)}`,
+            icon: Paperclip,
+            onClick: () => onOpenDocument(transaction),
+          },
+        ]
+      : []),
     { label: "Ver detalhes", icon: Eye, onClick: () => onOpenDetails(transaction) },
     { label: "Editar", icon: Pencil, onClick: () => onEdit(transaction) },
     ...(isExpense
@@ -455,6 +620,11 @@ function TransactionActionSheet({
           },
         ]
       : []),
+    ...(subscriptionStatus(transaction) === "ACTIVE"
+      ? [{ label: "Encerrar assinatura", icon: CalendarX2, onClick: () => onEndSubscription(transaction) }]
+      : subscriptionStatus(transaction) === "ENDED"
+        ? [{ label: "Reativar assinatura", icon: CalendarSync, onClick: () => onResumeSubscription(transaction) }]
+        : []),
     { label: "Excluir", icon: Trash2, onClick: () => onDelete(transaction), destructive: true },
   ]
 
@@ -472,7 +642,16 @@ function TransactionActionSheet({
       amountTone={isExpense ? "negative" : "positive"}
       actions={actions}
       onClose={onClose}
-    />
+    >
+      {canTogglePayment(transaction) && transaction.paymentStatus !== "PAID" ? (
+        <PaymentDayChips
+          onSelect={(paymentDate) => {
+            onClose()
+            onTogglePaid(transaction, paymentDate)
+          }}
+        />
+      ) : null}
+    </ActionSheet>
   )
 }
 
@@ -483,10 +662,14 @@ function InvoiceRow({
   isEditing,
   editingAmount,
   onEditingAmountChange,
+  editingDueDate,
+  onEditingDueDateChange,
   savePending,
   onSave,
   onCancel,
   onEdit,
+  onDelete,
+  onTogglePaid,
   onShowActions,
 }: {
   label: string
@@ -494,24 +677,37 @@ function InvoiceRow({
   isEditing: boolean
   editingAmount: string
   onEditingAmountChange: (amount: string) => void
+  editingDueDate: string
+  onEditingDueDateChange: (dueDate: string) => void
   savePending: boolean
   onSave: () => void
   onCancel: () => void
   onEdit: () => void
+  onDelete: () => void
+  onTogglePaid: (paymentDate?: string) => void
   onShowActions: () => void
 }) {
   if (isEditing) {
     return (
       <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
         <td colSpan={3} className="max-w-0 px-3 py-2 sm:px-4">
-          <div data-carousel-no-drag className="flex items-center gap-2">
-            <span className="mr-auto flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+          <div data-carousel-no-drag className="flex flex-wrap items-center gap-2">
+            <span className="flex w-full min-w-0 items-center gap-2 text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
               <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
               <span className="truncate">{label}</span>
             </span>
-            <div className="w-28 shrink-0 sm:w-44">
+            <div className="w-32 shrink-0 sm:w-40">
               <CurrencyInput value={editingAmount} onValueChange={onEditingAmountChange} />
             </div>
+            <label className="min-w-0 flex-1 sm:w-40 sm:flex-none">
+              <span className="sr-only">Vencimento da fatura</span>
+              <Input
+                type="date"
+                value={editingDueDate}
+                onChange={(event) => onEditingDueDateChange(event.target.value)}
+                title="Vencimento (opcional)"
+              />
+            </label>
             <Button
               type="button"
               className="h-11 shrink-0 max-sm:w-11 max-sm:px-0"
@@ -537,25 +733,66 @@ function InvoiceRow({
     )
   }
 
+  const bill = invoiceAsBill(invoice, label)
+  // Fatura pode ser paga com ou sem vencimento (o vencimento só a coloca em "Contas a pagar").
+  const isPaid = invoice.paymentStatus === "PAID"
+  const overdue = getTransactionDueAlert(bill) === "overdue"
+
   return (
     <tr
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("button")) return
         onShowActions()
       }}
-      className="cursor-pointer border-b border-border/60 transition-colors last:border-b-0 hover:bg-secondary/60 active:bg-secondary"
+      className={`cursor-pointer border-b border-border/60 transition-colors last:border-b-0 ${
+        overdue
+          ? "bg-amber-500/[0.07] hover:bg-amber-500/[0.12] active:bg-amber-500/[0.16]"
+          : "hover:bg-secondary/60 active:bg-secondary"
+      }`}
     >
-      <td className="w-full max-w-0 py-2.5 pr-2 pl-3 align-middle sm:pl-4">
+      <td className="w-full max-w-0 py-2 pr-2 pl-3 align-middle sm:pl-4">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
           <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
           <span className="truncate">{label}</span>
         </span>
+        {invoice.dueDate || isPaid ? (
+          <span className="mt-0.5 block pl-[22px] text-[11px] leading-4">
+            <PaymentBadge transaction={bill} />
+          </span>
+        ) : null}
       </td>
-      <td className="w-px py-2.5 pr-3 text-right align-middle text-sm font-semibold whitespace-nowrap text-rose-600 tabular-nums sm:pr-3 dark:text-rose-400">
+      <td className="w-px py-2 pr-3 text-right align-middle text-sm font-semibold whitespace-nowrap text-rose-600 tabular-nums sm:pr-3 dark:text-rose-400">
         {formatCurrency(invoice.amount)}
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
         <div className="flex w-[6.5rem] justify-end">
+          {!isPaid ? (
+            <PaymentDateMenu
+              className={buttonVariants({
+                variant: "ghost",
+                size: "icon",
+                className: "size-8 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400",
+              })}
+              aria-label={`Marcar fatura ${label} como paga`}
+              title="Marcar como paga (escolha a data)"
+              onSelect={(paymentDate) => onTogglePaid(paymentDate)}
+            >
+              <CheckCircle2 size={14} />
+            </PaymentDateMenu>
+          ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-emerald-500 dark:text-emerald-400"
+            onClick={() => onTogglePaid()}
+            aria-pressed
+            aria-label={`Marcar fatura ${label} como pendente`}
+            title="Marcar como pendente"
+          >
+            <CheckCircle2 size={14} />
+          </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -563,9 +800,20 @@ function InvoiceRow({
             className="size-8 text-muted-foreground"
             onClick={onEdit}
             aria-label={`Editar fatura ${label}`}
-            title="Editar fatura"
+            title="Editar valor e vencimento"
           >
             <Pencil size={14} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+            onClick={onDelete}
+            aria-label={`Excluir fatura ${label}`}
+            title="Excluir fatura"
+          >
+            <Trash2 size={14} />
           </Button>
         </div>
       </td>
@@ -587,6 +835,7 @@ function TransactionDetailsModal({
   const [previewPending, setPreviewPending] = useState(false)
   const [downloadPending, setDownloadPending] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
+  useEscapeKey(Boolean(transaction), onClose)
 
   if (!transaction) {
     return null
@@ -668,21 +917,14 @@ function TransactionDetailsModal({
   }
 
   const handlePreviewBillingDocument = async () => {
-    if (!billingDocument || billingDocument.type !== "FILE") {
-      return
-    }
-
     setPreviewPending(true)
     setDownloadError(null)
 
     try {
-      const blob = await transactionService.downloadBillingDocument(transaction.id)
-      const objectUrl = window.URL.createObjectURL(blob)
-      window.open(objectUrl, "_blank", "noopener,noreferrer")
-      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+      await openBillingDocument(transaction)
     } catch (error) {
       setDownloadError(
-        getErrorMessage(error, "Nao foi possivel visualizar o documento.")
+        getErrorMessage(error, "Não foi possível abrir o documento.")
       )
     } finally {
       setPreviewPending(false)
@@ -690,8 +932,17 @@ function TransactionDetailsModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+    <div
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalhes de ${transaction.description}`}
+        onClick={(event) => event.stopPropagation()}
+        className="grid max-h-[90vh] w-full max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]"
+      >
         <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
           <div>
             <p className="app-eyebrow">Detalhes da transação</p>
@@ -702,7 +953,7 @@ function TransactionDetailsModal({
               {formatCurrency(transaction.amount)}
             </p>
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Fechar">
             <X size={16} />
           </Button>
         </div>
@@ -743,17 +994,11 @@ function TransactionDetailsModal({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap gap-2">
-            {billingDocument?.type === "LINK" && billingDocument.url ? (
+            {billingDocument?.type === "LINK" && hasOpenableDocument(transaction) ? (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  window.open(
-                    billingDocument.url!,
-                    "_blank",
-                    "noopener,noreferrer"
-                  )
-                }
+                onClick={handlePreviewBillingDocument}
               >
                 Abrir documento
                 <ExternalLink size={16} />
@@ -899,6 +1144,19 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     deleteTransaction,
   } = useTransactionMutations(panel.period)
   const transactionLinking = useTransactionLinking(panel.period)
+  const transactionPayment = useTransactionPayment(panel.period.planId)
+  const subscriptionMutations = useSubscriptionMutations(panel.period.planId)
+  const subscriptionsQuery = useSubscriptions(panel.period.planId)
+  const subscriptionById = useMemo(
+    () => new Map((subscriptionsQuery.data ?? []).map((item) => [item.id, item])),
+    [subscriptionsQuery.data]
+  )
+  useEscapeKey(
+    Boolean(transactionLinking.paymentModalEntry),
+    transactionLinking.closePaymentModal
+  )
+  const [documentError, setDocumentError] = useState<string | null>(null)
+  const [focusSignal, setFocusSignal] = useState(0)
   const invoiceManager = usePeriodInvoiceManager({
     creditCards: shared.creditCards,
     invoices: panel.invoices,
@@ -929,6 +1187,40 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       buildTransactionGroups(reorder.transactions, shared.responsibleOptions),
     [reorder.transactions, shared.responsibleOptions]
   )
+
+  // Busca e filtro rápido. Com filtro ativo a ordenação por arrastar fica desligada: reordenar
+  // uma lista parcial embaralharia a posição das linhas escondidas.
+  const [searchQuery, setSearchQuery] = useState("")
+  const [quickFilter, setQuickFilter] = useState<TransactionQuickFilter>("ALL")
+  const normalizedQuery = normalizeSearchText(searchQuery)
+  const isFiltering = normalizedQuery !== "" || quickFilter !== "ALL"
+  const quickFilterCounts = useMemo(() => {
+    const counts = {} as Record<TransactionQuickFilter, number>
+    for (const { value } of TRANSACTION_QUICK_FILTERS) {
+      counts[value] = reorder.transactions.filter(
+        (transaction) =>
+          matchesSearch(transaction, normalizedQuery) &&
+          matchesQuickFilter(transaction, value)
+      ).length
+    }
+    return counts
+  }, [normalizedQuery, reorder.transactions])
+  const visibleGroups = useMemo(
+    () =>
+      isFiltering
+        ? groupedTransactions
+            .map((group) => ({
+              ...group,
+              transactions: group.transactions.filter(
+                (transaction) =>
+                  matchesSearch(transaction, normalizedQuery) &&
+                  matchesQuickFilter(transaction, quickFilter)
+              ),
+            }))
+            .filter((group) => group.transactions.length > 0)
+        : groupedTransactions,
+    [groupedTransactions, isFiltering, normalizedQuery, quickFilter]
+  )
   const categoryOptions = useMemo(
     () =>
       shared.transactionCategories.map((category) => ({
@@ -936,6 +1228,10 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         value: category.id,
       })),
     [shared.transactionCategories]
+  )
+  const cardOptions = useMemo(
+    () => shared.creditCards.map((card) => ({ label: card.name || "Cartão", value: card.id })),
+    [shared.creditCards]
   )
 
   const mutationError = useMemo(() => {
@@ -963,8 +1259,15 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         "Não foi possível remover a transação."
       )
     }
+    if (transactionPayment.error) {
+      return getErrorMessage(
+        transactionPayment.error,
+        "Não foi possível atualizar o pagamento."
+      )
+    }
     return null
   }, [
+    transactionPayment.error,
     createRecurringTransaction.error,
     createTransaction.error,
     deleteTransaction.error,
@@ -978,6 +1281,24 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     setSubmitPending(false)
     setForm(emptyForm())
   }
+
+  // Pedido de nova transação vindo de fora (atalho N, botão + do celular): só o mês ativo atende.
+  // Também confere na montagem, para o pedido feito antes de o painel carregar.
+  const periodId = panel.period.id
+  useEffect(() => {
+    const handle = (state: ReturnType<typeof useDashboardStore.getState>) => {
+      if (!state.composerRequested) return
+      if (resolveActiveMonthId(state.selectedMonthId) !== periodId) return
+      state.consumeComposerRequest()
+      setEditingTransaction(null)
+      setEditingScope("SINGLE")
+      setFormError(null)
+      setForm(emptyForm())
+      setIsComposerOpen(true)
+    }
+    handle(useDashboardStore.getState())
+    return useDashboardStore.subscribe(handle)
+  }, [periodId])
 
   const refreshTransactionViews = async () => {
     await Promise.all([
@@ -1013,6 +1334,11 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       categoryName: transaction.category?.name || "",
       isRecurring: false,
       occurrences: 2,
+      isSubscription: false,
+      subscriptionCardId:
+        (transaction.subscriptionId &&
+          subscriptionById.get(transaction.subscriptionId)?.creditCardId) ||
+        "",
       recurringGroupId: transaction.recurringGroupId || null,
       hasDueDate: Boolean(
         transaction.dueDate ||
@@ -1149,6 +1475,24 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         payload: updatePayload,
       })
 
+      // Cobrança de assinatura com "esta e as próximas": a assinatura muda e, com ela, as cobranças
+      // pendentes a partir do mês atual.
+      if (editingScope === "GROUP" && editingTransaction.subscriptionId && form.type === "EXPENSE") {
+        const billingDate = payload.dueDate || editingTransaction.referenceDate
+        await subscriptionMutations.update.mutateAsync({
+          id: editingTransaction.subscriptionId,
+          payload: {
+            name: payload.description,
+            amount: payload.amount,
+            category: payload.category,
+            responsibleUserId: payload.responsibleUserId,
+            billingDay: Number(billingDate.slice(8, 10)),
+            chargeMode: payload.dueDate && !form.subscriptionCardId ? "BILL" : "AUTO",
+            creditCardId: form.subscriptionCardId || null,
+          },
+        })
+      }
+
       if (fileToUpload) {
         uploadTargetId = editingTransaction.id
         uploadTargetScope =
@@ -1156,6 +1500,21 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             ? "GROUP"
             : "SINGLE"
       }
+    } else if (form.isSubscription && form.type === "EXPENSE") {
+      // Assinatura: a cobrança deste mês e as próximas são geradas pelo servidor.
+      const billingDate = payload.dueDate || newTransactionPlacement.referenceDate
+      await subscriptionMutations.create.mutateAsync({
+        name: payload.description,
+        amount: payload.amount,
+        category: payload.category,
+        responsibleUserId: payload.responsibleUserId,
+        billingDay: Number(billingDate.slice(8, 10)),
+        // No cartão não há vencimento: a cobrança entra na fatura.
+        chargeMode: payload.dueDate && !form.subscriptionCardId ? "BILL" : "AUTO",
+        creditCardId: form.subscriptionCardId || null,
+        startMonth: panel.period.id,
+        endMonth: null,
+      })
     } else if (form.isRecurring) {
       if (!Number.isFinite(form.occurrences) || form.occurrences < 2) {
         throw new Error("Informe pelo menos 2 meses para a recorrência.")
@@ -1217,16 +1576,118 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             }),
         }
         : {}),
+      ...(entry.subscriptionId && subscriptionStatus(entry) === "ACTIVE"
+        ? {
+          confirmLabel: "Pular este mês",
+          description: `"${entry.description}" é uma assinatura. Você pode remover só a cobrança deste mês (as próximas continuam) ou encerrar a assinatura a partir daqui.`,
+          title: "Excluir cobrança da assinatura?",
+          secondaryConfirmLabel: "Encerrar assinatura",
+          onSecondaryConfirm: () => endSubscription(entry, { deleteCharge: true }),
+        }
+        : {}),
     })
+
+  /** Mês (AAAA-MM) da cobrança: a assinatura termina nele. */
+  const chargeMonthOf = (entry: Transaction) => (entry.referenceDate ?? "").slice(0, 7)
+
+  function subscriptionStatus(entry: Transaction) {
+    if (!entry.subscriptionId) return null
+    const subscription = subscriptionById.get(entry.subscriptionId)
+    if (!subscription) return null
+    return subscription.endMonth && subscription.endMonth <= chargeMonthOf(entry)
+      ? ("ENDED" as const)
+      : ("ACTIVE" as const)
+  }
+
+  function endSubscription(entry: Transaction, options: { deleteCharge?: boolean } = {}) {
+    if (!entry.subscriptionId) return
+    setDocumentError(null)
+    const subscriptionId = entry.subscriptionId
+    const end = () =>
+      subscriptionMutations.update.mutate(
+        { id: subscriptionId, payload: { endMonth: chargeMonthOf(entry) } },
+        {
+          onError: (error) =>
+            setDocumentError(getErrorMessage(error, "Não foi possível encerrar a assinatura.")),
+        }
+      )
+    if (options.deleteCharge) deleteTransaction.mutate(entry.id, { onSuccess: end })
+    else end()
+  }
+
+  const confirmEndSubscription = (entry: Transaction) =>
+    setConfirmationDialog({
+      eyebrow: "Assinatura",
+      title: "Encerrar assinatura?",
+      description: `"${entry.description}" para de gerar cobranças depois de ${formatMonthLabel(Number(chargeMonthOf(entry).slice(5, 7))).toLowerCase()}/${chargeMonthOf(entry).slice(0, 4)}. A cobrança deste mês e o histórico continuam.`,
+      confirmLabel: "Encerrar",
+      onConfirm: () => endSubscription(entry),
+    })
+
+  const invoicePayment = useInvoicePayment(panel.period.planId)
+  const toggleInvoicePaid = (invoice: Invoice, paymentDate?: string) =>
+    invoicePayment.mutate({
+      invoice,
+      paid: paymentDate ? true : invoice.paymentStatus !== "PAID",
+      paymentDate,
+    })
+
+  const confirmDeleteInvoice = (invoice: Invoice) => {
+    const linkedCount = linkedTransactionsOf(invoice).length
+    setConfirmationDialog({
+      confirmLabel: "Excluir Fatura",
+      title: "Excluir fatura?",
+      description:
+        `A fatura de ${invoiceLabel(invoice)} em ${panel.label} será removida.` +
+        (linkedCount > 0
+          ? ` ${linkedCount === 1 ? "A transação vinculada será desvinculada e volta" : `As ${linkedCount} transações vinculadas serão desvinculadas e voltam`} a contar nos totais do mês.`
+          : ""),
+      onConfirm: () => invoiceManager.deleteInvoice.mutate(invoice),
+    })
+  }
 
   const transactionActions: TransactionActions = {
     onOpenDetails: setDetailsTransaction,
     onLink: transactionLinking.openPaymentModal,
     onEdit: startEditing,
     onDelete: confirmDelete,
+    onTogglePaid: (transaction, paymentDate) =>
+      transactionPayment.mutate({
+        transaction,
+        paid: paymentDate ? true : transaction.paymentStatus !== "PAID",
+        paymentDate,
+      }),
+    subscriptionStatus,
+    onEndSubscription: confirmEndSubscription,
+    onResumeSubscription: (transaction) => {
+      if (!transaction.subscriptionId) return
+      setDocumentError(null)
+      subscriptionMutations.update.mutate(
+        { id: transaction.subscriptionId, payload: { endMonth: null } },
+        {
+          onError: (error) =>
+            setDocumentError(getErrorMessage(error, "Não foi possível reativar a assinatura.")),
+        }
+      )
+    },
+    onOpenDocument: (transaction) => {
+      setDocumentError(null)
+      openBillingDocument(transaction).catch((error) =>
+        setDocumentError(
+          getErrorMessage(error, "Não foi possível abrir o documento.")
+        )
+      )
+    },
   }
   const closeActions = useCallback(() => setActionsTransaction(null), [])
   const closeInvoiceActions = useCallback(() => setActionsInvoice(null), [])
+  const linkedTransactionsOf = (invoice: Invoice) =>
+    panel.transactions.filter(
+      (transaction) => transaction.creditCardInvoiceId === invoice.id
+    )
+  const actionsInvoiceLinked = actionsInvoice
+    ? linkedTransactionsOf(actionsInvoice)
+    : []
 
   const invoiceLabel = (invoice: Invoice) =>
     invoice.creditCardName ||
@@ -1237,11 +1698,23 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     0
   )
 
-  const submit = async () => {
+  const submit = async ({ keepOpen }: { keepOpen: boolean }) => {
     setFormError(null)
     setSubmitPending(true)
     try {
       await saveTransactionWithBillingDocument()
+      if (keepOpen) {
+        // Lançamento em sequência: mantém tipo e responsável, limpa o resto e volta o foco.
+        setEditingTransaction(null)
+        setEditingScope("SINGLE")
+        setForm((current) => ({
+          ...emptyForm(),
+          type: current.type,
+          responsibleUserId: current.responsibleUserId,
+        }))
+        setFocusSignal((value) => value + 1)
+        return
+      }
       resetComposer()
       setIsComposerOpen(false)
       return
@@ -1295,7 +1768,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               data-carousel-no-drag
               className="border-b border-border/70 bg-secondary/40 p-3 sm:p-4"
             >
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
                 <div>
                   <Label>Cartão</Label>
                   <Select
@@ -1328,6 +1801,20 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                       invoiceManager.setCreateForm((current) => ({
                         ...current,
                         amount,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`invoice-due-${panel.period.id}`}>Vencimento (opcional)</Label>
+                  <Input
+                    id={`invoice-due-${panel.period.id}`}
+                    type="date"
+                    value={invoiceManager.createForm.dueDate}
+                    onChange={(event) =>
+                      invoiceManager.setCreateForm((current) => ({
+                        ...current,
+                        dueDate: event.target.value,
                       }))
                     }
                   />
@@ -1386,10 +1873,14 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         isEditing={isEditing}
                         editingAmount={invoiceManager.editingAmount}
                         onEditingAmountChange={invoiceManager.setEditingAmount}
+                        editingDueDate={invoiceManager.editingDueDate}
+                        onEditingDueDateChange={invoiceManager.setEditingDueDate}
                         savePending={invoiceManager.updateInvoice.isPending}
                         onSave={() => invoiceManager.updateInvoice.mutate()}
                         onCancel={invoiceManager.cancelEdit}
                         onEdit={() => invoiceManager.startEdit(invoice)}
+                        onDelete={() => confirmDeleteInvoice(invoice)}
+                        onTogglePaid={(paymentDate) => toggleInvoicePaid(invoice, paymentDate)}
                         onShowActions={() => setActionsInvoice(invoice)}
                       />
                     )
@@ -1403,22 +1894,95 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               <FormError message={invoiceManager.updateErrorMessage} />
             </div>
           ) : null}
+          {invoiceManager.deleteErrorMessage || invoicePayment.error ? (
+            <div className="px-3 pb-2 sm:px-4">
+              <FormError
+                message={
+                  invoiceManager.deleteErrorMessage ||
+                  getErrorMessage(invoicePayment.error, "Não foi possível atualizar o pagamento da fatura.")
+                }
+              />
+            </div>
+          ) : null}
         </Card>
         <ActionSheet
           open={Boolean(actionsInvoice)}
           title={actionsInvoice ? invoiceLabel(actionsInvoice) : ""}
-          subtitle={<span>Fatura de cartão · {panel.label}</span>}
+          subtitle={
+            <>
+              <span>Fatura de cartão · {panel.label}</span>
+              {actionsInvoice?.dueDate || actionsInvoice?.paymentStatus === "PAID" ? (
+                <PaymentBadge transaction={invoiceAsBill(actionsInvoice, invoiceLabel(actionsInvoice))} />
+              ) : null}
+              {actionsInvoiceLinked.length > 0 ? (
+                <span>
+                  · {actionsInvoiceLinked.length}{" "}
+                  {actionsInvoiceLinked.length === 1
+                    ? "transação vinculada"
+                    : "transações vinculadas"}
+                </span>
+              ) : null}
+            </>
+          }
           amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
           amountTone="negative"
           actions={[
+            ...(actionsInvoice?.paymentStatus === "PAID"
+              ? [
+                  {
+                    label: "Marcar como pendente",
+                    icon: Clock3,
+                    onClick: () => actionsInvoice && toggleInvoicePaid(actionsInvoice),
+                  },
+                ]
+              : []),
             {
-              label: "Editar valor",
+              label: actionsInvoice?.dueDate ? "Editar valor e vencimento" : "Editar valor e definir vencimento",
               icon: Pencil,
               onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
             },
+            {
+              label: "Excluir fatura",
+              icon: Trash2,
+              destructive: true,
+              onClick: () => actionsInvoice && confirmDeleteInvoice(actionsInvoice),
+            },
           ]}
           onClose={closeInvoiceActions}
-        />
+        >
+          {actionsInvoice && actionsInvoice.paymentStatus !== "PAID" ? (
+            <PaymentDayChips
+              label="Marcar como paga"
+              onSelect={(paymentDate) => {
+                const invoice = actionsInvoice
+                closeInvoiceActions()
+                toggleInvoicePaid(invoice, paymentDate)
+              }}
+            />
+          ) : null}
+          {actionsInvoiceLinked.length > 0 ? (
+            <div className="border-b border-border/70 px-4 py-2">
+              <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                Transações vinculadas
+              </p>
+              <ul className="mt-1 max-h-40 divide-y divide-border/50 overflow-y-auto">
+                {actionsInvoiceLinked.map((transaction) => (
+                  <li
+                    key={transaction.id}
+                    className="flex items-center justify-between gap-3 py-1.5 text-sm"
+                  >
+                    <span className="min-w-0 truncate text-foreground">
+                      {transaction.description}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      {formatCurrency(transaction.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </ActionSheet>
 
         <div>
           <TransactionComposer
@@ -1432,16 +1996,18 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             setEditingScope={setEditingScope}
             categoryOptions={categoryOptions}
             responsibleOptions={shared.responsibleOptions}
+            cardOptions={cardOptions}
             formError={formError}
             mutationError={mutationError}
             createPending={createTransaction.isPending}
             createRecurringPending={createRecurringTransaction.isPending}
             updatePending={updateTransaction.isPending}
             submitPending={submitPending}
-            onSubmit={async (event) => {
+            focusSignal={focusSignal}
+            onSubmit={async (event, options) => {
               event.preventDefault()
               try {
-                await submit()
+                await submit(options)
               } catch (error) {
                 setFormError(
                   error instanceof Error
@@ -1460,12 +2026,70 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         <Card className="gap-0 overflow-hidden border-border bg-card p-0">
           <div className="flex items-baseline justify-between gap-3 border-b border-border/70 px-3 py-2.5 sm:px-4">
             <h4 className="app-eyebrow">Transações</h4>
-            {groupedTransactions.length > 0 ? (
+            {documentError ? (
+              <p role="alert" className="truncate text-[11px] text-rose-600 dark:text-rose-400">
+                {documentError}
+              </p>
+            ) : groupedTransactions.length > 0 ? (
               <p className="truncate text-[11px] text-muted-foreground sm:hidden">
                 Toque na linha para ações
               </p>
             ) : null}
           </div>
+          {groupedTransactions.length > 0 ? (
+            <div
+              data-carousel-no-drag
+              className="flex flex-col gap-2 border-b border-border/70 px-3 py-2 sm:flex-row sm:items-center sm:px-4"
+            >
+              <label className="relative block sm:w-56 sm:shrink-0">
+                <span className="sr-only">Buscar transação</span>
+                <Search
+                  size={14}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && searchQuery) {
+                      event.preventDefault()
+                      setSearchQuery("")
+                    }
+                  }}
+                  placeholder="Buscar descrição ou categoria"
+                  className="h-9 w-full rounded-lg border border-border bg-card/90 pr-3 pl-8 text-base outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 sm:text-sm"
+                />
+              </label>
+              <div
+                role="group"
+                aria-label="Filtro rápido"
+                className="-mx-3 flex min-w-0 gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:flex-1 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+              >
+                {TRANSACTION_QUICK_FILTERS.map(({ value, label }) => {
+                  const selected = quickFilter === value
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setQuickFilter(selected && value !== "ALL" ? "ALL" : value)}
+                      className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition ${
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                      <span className={`tabular-nums ${selected ? "opacity-85" : "opacity-70"}`}>
+                        {quickFilterCounts[value]}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
           {panel.transactionsLoading ? (
             <p className="px-4 py-3 text-sm text-muted-foreground">
               Carregando transações...
@@ -1474,6 +2098,21 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             <p className="px-4 py-3 text-sm text-muted-foreground">
               Nenhuma transação cadastrada.
             </p>
+          ) : visibleGroups.length === 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted-foreground">
+              <span>Nenhuma transação com esse filtro.</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery("")
+                  setQuickFilter("ALL")
+                }}
+              >
+                Limpar filtros
+              </Button>
+            </div>
           ) : (
             <DndContext
               sensors={sensors}
@@ -1498,7 +2137,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                     </th>
                   </tr>
                 </thead>
-                {groupedTransactions.map((group) => {
+                {visibleGroups.map((group) => {
                   const groupBalance = group.transactions.reduce(
                     (total, transaction) =>
                       total +
@@ -1548,7 +2187,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                               reorder.overId === transaction.id &&
                               reorder.activeId !== transaction.id
                             }
-                            reorderPending={reorder.reorderPending}
+                            reorderPending={reorder.reorderPending || isFiltering}
                             onShowActions={setActionsTransaction}
                             {...transactionActions}
                           />
@@ -1578,8 +2217,17 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         />
         {/* Portal: dentro do painel do mês, o fixed ficaria preso à coluna em vez da tela. */}
         {transactionLinking.paymentModalEntry ? createPortal(
-          <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-            <div className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]">
+          <div
+            className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            onClick={transactionLinking.closePaymentModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Vincular transação a uma fatura"
+              onClick={(event) => event.stopPropagation()}
+              className="grid max-h-[90vh] w-full max-w-md grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)]"
+            >
               <div className="border-b border-border/70 px-4 py-4 sm:px-5">
                 <p className="app-eyebrow">Fatura</p>
                 <h3 className="mt-2 text-xl font-semibold text-foreground">
