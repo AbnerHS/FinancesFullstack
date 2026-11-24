@@ -152,18 +152,14 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
 
 /**
  * Vencimento e pagamento. Campo ausente mantém o valor atual (o PUT antigo, sem esses campos, não
- * apaga nada). Sem vencimento não há pagamento a registrar, como nas despesas; a data de
- * pagamento só vale para fatura paga.
+ * apaga nada). A fatura pode ser paga com ou sem vencimento; a data de pagamento só vale para
+ * fatura paga.
  */
 function paymentFields(input: Partial<InvoiceInput>, current: CreditCardInvoice | null) {
   const has = (key: keyof InvoiceInput) => Object.prototype.hasOwnProperty.call(input, key)
   const dueDate = has("dueDate") ? (input.dueDate ?? null) : (current?.dueDate ?? null)
-  let paymentStatus = has("paymentStatus") ? (input.paymentStatus ?? "PENDING") : (current?.paymentStatus ?? "PENDING")
+  const paymentStatus = has("paymentStatus") ? (input.paymentStatus ?? "PENDING") : (current?.paymentStatus ?? "PENDING")
   let paymentDate = has("paymentDate") ? (input.paymentDate ?? null) : (current?.paymentDate ?? null)
-  if (!dueDate) {
-    paymentStatus = "PENDING"
-    paymentDate = null
-  }
   if (paymentStatus !== "PAID") paymentDate = null
   return { dueDate, paymentStatus, paymentDate }
 }

@@ -734,8 +734,8 @@ function InvoiceRow({
   }
 
   const bill = invoiceAsBill(invoice, label)
-  const canPay = Boolean(invoice.dueDate)
-  const isPaid = canPay && invoice.paymentStatus === "PAID"
+  // Fatura pode ser paga com ou sem vencimento (o vencimento só a coloca em "Contas a pagar").
+  const isPaid = invoice.paymentStatus === "PAID"
   const overdue = getTransactionDueAlert(bill) === "overdue"
 
   return (
@@ -755,7 +755,7 @@ function InvoiceRow({
           <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
           <span className="truncate">{label}</span>
         </span>
-        {canPay ? (
+        {invoice.dueDate || isPaid ? (
           <span className="mt-0.5 block pl-[22px] text-[11px] leading-4">
             <PaymentBadge transaction={bill} />
           </span>
@@ -766,7 +766,7 @@ function InvoiceRow({
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
         <div className="flex w-[6.5rem] justify-end">
-          {canPay && !isPaid ? (
+          {!isPaid ? (
             <PaymentDateMenu
               className={buttonVariants({
                 variant: "ghost",
@@ -784,22 +784,11 @@ function InvoiceRow({
             type="button"
             variant="ghost"
             size="icon"
-            className={`size-8 ${
-              isPaid
-                ? "text-emerald-500 dark:text-emerald-400"
-                : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
-            }`}
+            className="size-8 text-emerald-500 dark:text-emerald-400"
             onClick={() => onTogglePaid()}
-            disabled={!canPay}
-            aria-pressed={canPay ? isPaid : undefined}
-            aria-label={isPaid ? `Marcar fatura ${label} como pendente` : `Marcar fatura ${label} como paga`}
-            title={
-              canPay
-                ? isPaid
-                  ? "Marcar como pendente"
-                  : "Marcar como paga hoje"
-                : "Defina o vencimento (editar) para registrar o pagamento"
-            }
+            aria-pressed
+            aria-label={`Marcar fatura ${label} como pendente`}
+            title="Marcar como pendente"
           >
             <CheckCircle2 size={14} />
           </Button>
@@ -1922,7 +1911,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           subtitle={
             <>
               <span>Fatura de cartão · {panel.label}</span>
-              {actionsInvoice?.dueDate ? (
+              {actionsInvoice?.dueDate || actionsInvoice?.paymentStatus === "PAID" ? (
                 <PaymentBadge transaction={invoiceAsBill(actionsInvoice, invoiceLabel(actionsInvoice))} />
               ) : null}
               {actionsInvoiceLinked.length > 0 ? (
@@ -1938,7 +1927,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
           amountTone="negative"
           actions={[
-            ...(actionsInvoice?.dueDate && actionsInvoice.paymentStatus === "PAID"
+            ...(actionsInvoice?.paymentStatus === "PAID"
               ? [
                   {
                     label: "Marcar como pendente",
@@ -1961,7 +1950,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           ]}
           onClose={closeInvoiceActions}
         >
-          {actionsInvoice?.dueDate && actionsInvoice.paymentStatus !== "PAID" ? (
+          {actionsInvoice && actionsInvoice.paymentStatus !== "PAID" ? (
             <PaymentDayChips
               label="Marcar como paga"
               onSelect={(paymentDate) => {

@@ -1462,7 +1462,7 @@ export function useTransactionPayment(planId: string | null | undefined) {
   })
 }
 
-/** Baixa da fatura (paga na data escolhida, hoje por padrão / volta a pendente). Só faturas com vencimento. */
+/** Baixa da fatura (paga na data escolhida, hoje por padrão / volta a pendente), com ou sem vencimento. */
 export function useInvoicePayment(planId: string | null | undefined) {
   const queryClient = useQueryClient()
 

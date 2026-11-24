@@ -185,9 +185,15 @@ describe("faturas", () => {
     )
     expect(kept).toMatchObject({ amount: 310, dueDate: "2026-04-10", paymentStatus: "PAID" })
 
-    // Sem vencimento não há pagamento.
+    // Tirar o vencimento não desfaz o pagamento; fatura sem vencimento também pode ser paga.
     const cleared = await json(as(owner).patch(`/credit-card-invoices/${invoice.id}`, { dueDate: null }))
-    expect(cleared).toMatchObject({ dueDate: null, paymentStatus: "PENDING", paymentDate: null })
+    expect(cleared).toMatchObject({ dueDate: null, paymentStatus: "PAID", paymentDate: "2026-04-08" })
+    const pending = await json(as(owner).patch(`/credit-card-invoices/${invoice.id}`, { paymentStatus: "PENDING" }))
+    expect(pending).toMatchObject({ paymentStatus: "PENDING", paymentDate: null })
+    const paidNoDue = await json(
+      as(owner).patch(`/credit-card-invoices/${invoice.id}`, { paymentStatus: "PAID", paymentDate: "2026-04-09" }),
+    )
+    expect(paidNoDue).toMatchObject({ dueDate: null, paymentStatus: "PAID", paymentDate: "2026-04-09" })
   })
 
   it("excluir a fatura desvincula as transações", async () => {
