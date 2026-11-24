@@ -1487,7 +1487,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             category: payload.category,
             responsibleUserId: payload.responsibleUserId,
             billingDay: Number(billingDate.slice(8, 10)),
-            chargeMode: payload.dueDate && !form.subscriptionCardId ? "BILL" : "AUTO",
+            chargeMode: payload.dueDate ? "BILL" : "AUTO",
             creditCardId: form.subscriptionCardId || null,
           },
         })
@@ -1509,8 +1509,8 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         category: payload.category,
         responsibleUserId: payload.responsibleUserId,
         billingDay: Number(billingDate.slice(8, 10)),
-        // No cartão não há vencimento: a cobrança entra na fatura.
-        chargeMode: payload.dueDate && !form.subscriptionCardId ? "BILL" : "AUTO",
+        // Com cartão, a cobrança entra na fatura do mês no dia do vencimento.
+        chargeMode: payload.dueDate ? "BILL" : "AUTO",
         creditCardId: form.subscriptionCardId || null,
         startMonth: panel.period.id,
         endMonth: null,

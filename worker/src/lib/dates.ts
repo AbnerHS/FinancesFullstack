@@ -74,6 +74,16 @@ export function dayOfMonth(yearMonth: string, day: number) {
   return `${yearMonth}-${pad(Math.min(day, daysInMonth(y, m)))}`
 }
 
+/** Data de hoje no fuso do app (America/Sao_Paulo), AAAA-MM-DD. */
+export function currentDate(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now)
+}
+
 /** Mês atual no fuso do app (America/Sao_Paulo), AAAA-MM. */
 export function currentYearMonth(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit" })

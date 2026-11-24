@@ -138,47 +138,49 @@ describe("assinaturas", () => {
     expect((await as(owner).get(`/subscriptions/${subscription.id}`)).status).toBe(404)
   })
 
-  it("no cartão: sem vencimento, cada cobrança entra na fatura do mês (já existente ou criada depois)", async () => {
+  it("no cartão: vence no dia definido e só entra na fatura do mês no dia do vencimento", async () => {
     const owner = await createUser()
     const plan = await createPlan(owner)
     const card = await json(as(owner).post("/credit-cards", { name: "Nubank", userId: owner.id }), 201)
-    const invoiceNow = await json(
-      as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: month(0), amount: 300 }),
-      201,
-    )
+    const invoiceOf = (m: string) =>
+      json(as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: m, amount: 300 }), 201)
+    const [previous, next] = [await invoiceOf(month(-1)), await invoiceOf(month(1))]
     const subscription = await json(
       as(owner).post(`/plans/${plan.id}/subscriptions`, {
         name: "Spotify",
         amount: 21.9,
         billingDay: 8,
-        chargeMode: "AUTO",
+        chargeMode: "BILL",
         creditCardId: card.id,
-        startMonth: month(0),
+        startMonth: month(-1),
       }),
       201,
     )
     expect(subscription).toMatchObject({ creditCardId: card.id })
 
-    let charges = chargesOf(await monthData(owner, plan.id, month(0), month(1)), subscription.id)
-    expect(charges.map((t) => [t.referenceDate.slice(0, 7), t.dueDate, t.creditCardInvoiceId, t.isClearedByInvoice])).toEqual([
-      [month(0), null, invoiceNow.id, true],
-      [month(1), null, null, false],
+    let charges = chargesOf(await monthData(owner, plan.id, month(-1), month(2)), subscription.id)
+    // Vencimento é o dia definido; o mês passado já venceu e entrou na fatura; os futuros não.
+    expect(charges.map((t) => [t.referenceDate.slice(0, 7), t.dueDate, t.creditCardInvoiceId])).toEqual([
+      [month(-1), `${month(-1)}-08`, previous.id],
+      [month(0), `${month(0)}-08`, null],
+      [month(1), `${month(1)}-08`, null],
+      [month(2), `${month(2)}-08`, null],
     ])
+    expect(charges[0].isClearedByInvoice).toBe(true)
+    // Sem fatura do mês atual, a cobrança atual fica sem fatura; a futura, que tem fatura, espera vencer.
+    expect(charges[2]).toMatchObject({ isClearedByInvoice: false })
 
-    // A fatura do mês seguinte, criada depois, recebe a cobrança que já existia.
-    const invoiceNext = await json(
-      as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: month(1), amount: 100 }),
-      201,
-    )
-    charges = chargesOf(await monthData(owner, plan.id, month(1), month(1)), subscription.id)
-    expect(charges[0]).toMatchObject({ creditCardInvoiceId: invoiceNext.id, isClearedByInvoice: true })
+    // Fatura criada depois só recebe cobranças já vencidas.
+    await invoiceOf(month(2))
+    charges = chargesOf(await monthData(owner, plan.id, month(1), month(2)), subscription.id)
+    expect(charges.map((t) => t.creditCardInvoiceId)).toEqual([null, null])
+    expect(next.id).not.toBe(charges[0].creditCardInvoiceId)
 
-    // Tirar o cartão: as cobranças em aberto saem da fatura e voltam a contar como despesa.
+    // Tirar o cartão: as cobranças em aberto (do mês atual em diante) não entram mais em fatura.
     await json(as(owner).patch(`/subscriptions/${subscription.id}`, { creditCardId: null }))
-    charges = chargesOf(await monthData(owner, plan.id, month(0), month(1)), subscription.id)
-    expect(charges.every((t) => t.creditCardInvoiceId === null && t.isClearedByInvoice === false)).toBe(true)
+    charges = chargesOf(await monthData(owner, plan.id, month(0), month(2)), subscription.id)
+    expect(charges.every((t) => t.creditCardInvoiceId === null)).toBe(true)
 
-    // Cartão de quem não participa do plano é recusado.
     const stranger = await createUser()
     const strangerCard = await json(as(stranger).post("/credit-cards", { name: "Outro", userId: stranger.id }), 201)
     expect(
