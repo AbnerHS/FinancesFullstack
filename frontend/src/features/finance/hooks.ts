@@ -1418,26 +1418,29 @@ export function useTransactionMutations(period: Period) {
   }
 }
 
+/** `paymentDate` (AAAA-MM-DD) só vale ao marcar como pago; sem ela, hoje. */
+type PaymentVariables = { paid: boolean; paymentDate?: string }
+
 /**
- * Baixa rápida: marca a despesa como paga hoje (ou volta para pendente). Atualiza o cache na hora
+ * Baixa rápida: marca a despesa como paga (hoje ou na data escolhida) ou volta para pendente. Atualiza o cache na hora
  * para o toque parecer instantâneo e revalida as telas depois.
  */
 export function useTransactionPayment(planId: string | null | undefined) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ transaction, paid }: { transaction: Transaction; paid: boolean }) =>
+    mutationFn: ({ transaction, paid, paymentDate }: PaymentVariables & { transaction: Transaction }) =>
       transactionService.updatePartial(transaction.id, {
         paymentStatus: paid ? "PAID" : "PENDING",
-        paymentDate: paid ? todayIso() : null,
+        paymentDate: paid ? (paymentDate ?? todayIso()) : null,
       }),
-    onMutate: async ({ transaction, paid }) => {
+    onMutate: async ({ transaction, paid, paymentDate }) => {
       await queryClient.cancelQueries({
         queryKey: financeKeys.periodTransactionsRoot,
       })
       const patch = {
         paymentStatus: paid ? ("PAID" as const) : ("PENDING" as const),
-        paymentDate: paid ? todayIso() : null,
+        paymentDate: paid ? (paymentDate ?? todayIso()) : null,
       }
       const snapshot = queryClient.getQueriesData<Transaction[]>({
         queryKey: financeKeys.periodTransactionsRoot,
@@ -1460,17 +1463,17 @@ export function useTransactionPayment(planId: string | null | undefined) {
   })
 }
 
-/** Baixa da fatura (paga hoje / volta a pendente). Só faturas com vencimento. */
+/** Baixa da fatura (paga na data escolhida, hoje por padrão / volta a pendente). Só faturas com vencimento. */
 export function useInvoicePayment(planId: string | null | undefined) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ invoice, paid }: { invoice: Invoice; paid: boolean }) =>
+    mutationFn: ({ invoice, paid, paymentDate }: PaymentVariables & { invoice: Invoice }) =>
       invoiceService.patch(invoice.id, {
         paymentStatus: paid ? "PAID" : "PENDING",
-        paymentDate: paid ? todayIso() : null,
+        paymentDate: paid ? (paymentDate ?? todayIso()) : null,
       }),
-    onMutate: async ({ invoice, paid }) => {
+    onMutate: async ({ invoice, paid, paymentDate }) => {
       await queryClient.cancelQueries({ queryKey: financeKeys.periodInvoicesRoot })
       const snapshot = queryClient.getQueriesData<Invoice[]>({
         queryKey: financeKeys.periodInvoicesRoot,
@@ -1484,7 +1487,7 @@ export function useInvoicePayment(planId: string | null | undefined) {
                   ? {
                       ...item,
                       paymentStatus: paid ? "PAID" : "PENDING",
-                      paymentDate: paid ? todayIso() : null,
+                      paymentDate: paid ? (paymentDate ?? todayIso()) : null,
                     }
                   : item
               )

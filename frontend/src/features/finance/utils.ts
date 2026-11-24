@@ -337,6 +337,26 @@ export function addDaysIso(date: string, days: number) {
   return todayIso(new Date(year, month - 1, day + days))
 }
 
+/**
+ * Datas para registrar um pagamento: hoje e os 6 dias anteriores, do mais recente ao mais antigo.
+ * Rótulos: "Hoje", "Ontem" e depois o dia da semana ("Sex., 20/11").
+ */
+export function recentPaymentDays(count = 7, today = todayIso()) {
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "short" })
+  return Array.from({ length: count }, (_, index) => {
+    const date = addDaysIso(today, -index)
+    const [year, month, day] = date.split("-").map(Number)
+    const short = `${pad(day)}/${pad(month)}`
+    const label =
+      index === 0
+        ? "Hoje"
+        : index === 1
+          ? "Ontem"
+          : weekday.format(new Date(year, month - 1, day)).replace(/^\w/, (c) => c.toUpperCase())
+    return { date, label, short }
+  })
+}
+
 /** Segunda e domingo da semana de `date` (AAAA-MM-DD). */
 export function weekBounds(date: string) {
   const [year, month, day] = date.split("-").map(Number)

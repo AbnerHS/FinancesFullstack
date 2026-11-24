@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 
 import { getCategoryColor } from "@/features/finance/category-colors.ts"
+import { PaymentDateMenu } from "@/features/finance/payment-date-menu.tsx"
 import {
   useInvoicePayment,
   useMonthSummaryData,
@@ -435,10 +436,10 @@ function BillsCard({
   const total = bills.paidCount + bills.pendingCount
   const payment = useTransactionPayment(period.planId)
   const invoicePayment = useInvoicePayment(period.planId)
-  const payBill = (bill: BillTransaction) =>
+  const payBill = (bill: BillTransaction, paymentDate: string) =>
     bill.invoiceBill
-      ? invoicePayment.mutate({ invoice: bill.invoiceBill, paid: true })
-      : payment.mutate({ transaction: bill, paid: true })
+      ? invoicePayment.mutate({ invoice: bill.invoiceBill, paid: true, paymentDate })
+      : payment.mutate({ transaction: bill, paid: true, paymentDate })
   const isPaying = (bill: BillTransaction) =>
     bill.invoiceBill
       ? invoicePayment.isPending &&
@@ -613,17 +614,16 @@ function BillsCard({
                     <p className="text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
                       {formatCurrency(transaction.amount)}
                     </p>
-                    <button
-                      type="button"
+                    <PaymentDateMenu
                       data-carousel-no-drag
-                      className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-600 active:bg-emerald-500/15 disabled:opacity-50 dark:hover:text-emerald-400"
-                      onClick={() => payBill(transaction)}
+                      className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-600 active:bg-emerald-500/15 disabled:opacity-50 data-[popup-open]:bg-emerald-500/10 data-[popup-open]:text-emerald-600 dark:hover:text-emerald-400"
+                      onSelect={(paymentDate) => payBill(transaction, paymentDate)}
                       disabled={isPaying(transaction)}
                       aria-label={`Marcar ${transaction.description} como pago`}
-                      title="Marcar como pago hoje"
+                      title="Marcar como pago (escolha a data)"
                     >
                       <CheckCircle2 size={16} />
-                    </button>
+                    </PaymentDateMenu>
                   </div>
                 </li>
               ))}

@@ -44,6 +44,7 @@ import { createPortal } from "react-dom"
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
+import { buttonVariants } from "@/components/ui/button-variants"
 import { Card } from "@/components/ui/card.tsx"
 import {
   ConfirmationDialog,
@@ -68,6 +69,7 @@ import {
   useDashboardStore,
 } from "@/features/finance/dashboard-store.ts"
 import { TransactionComposer } from "@/features/finance/transaction-composer.tsx"
+import { PaymentDateMenu, PaymentDayChips } from "@/features/finance/payment-date-menu.tsx"
 import { financeKeys, transactionService } from "@/features/finance/services.ts"
 import {
   buildTransactionGroups,
@@ -142,7 +144,8 @@ type TransactionActions = {
   onLink: (transaction: Transaction) => void
   onEdit: (transaction: Transaction) => void
   onDelete: (transaction: Transaction) => void
-  onTogglePaid: (transaction: Transaction) => void
+  /** Sem data: alterna (pendente ↔ pago hoje). Com data: marca como pago nessa data. */
+  onTogglePaid: (transaction: Transaction, paymentDate?: string) => void
   onOpenDocument: (transaction: Transaction) => void
   onSubscription: (transaction: Transaction) => void
 }
@@ -388,6 +391,20 @@ function SortableTransactionRow({
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
         <div className="flex items-center justify-end">
+          {canPay && !isPaid ? (
+            <PaymentDateMenu
+              className={buttonVariants({
+                variant: "ghost",
+                size: "icon",
+                className: "size-8 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400",
+              })}
+              aria-label="Marcar como pago"
+              title="Marcar como pago (escolha a data)"
+              onSelect={(paymentDate) => onTogglePaid(transaction, paymentDate)}
+            >
+              <CheckCircle2 size={14} />
+            </PaymentDateMenu>
+          ) : (
           <Button
             type="button"
             variant="ghost"
@@ -411,6 +428,7 @@ function SortableTransactionRow({
           >
             <CheckCircle2 size={14} />
           </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -570,12 +588,8 @@ function TransactionActionSheet({
 
   const isExpense = transaction.type === "EXPENSE"
   const actions: SheetAction[] = [
-    ...(canTogglePayment(transaction)
-      ? [
-          transaction.paymentStatus === "PAID"
-            ? { label: "Marcar como pendente", icon: Clock3, onClick: () => onTogglePaid(transaction) }
-            : { label: "Marcar como pago hoje", icon: CheckCircle2, onClick: () => onTogglePaid(transaction) },
-        ]
+    ...(canTogglePayment(transaction) && transaction.paymentStatus === "PAID"
+      ? [{ label: "Marcar como pendente", icon: Clock3, onClick: () => onTogglePaid(transaction) }]
       : []),
     ...(hasOpenableDocument(transaction)
       ? [
@@ -619,7 +633,16 @@ function TransactionActionSheet({
       amountTone={isExpense ? "negative" : "positive"}
       actions={actions}
       onClose={onClose}
-    />
+    >
+      {canTogglePayment(transaction) && transaction.paymentStatus !== "PAID" ? (
+        <PaymentDayChips
+          onSelect={(paymentDate) => {
+            onClose()
+            onTogglePaid(transaction, paymentDate)
+          }}
+        />
+      ) : null}
+    </ActionSheet>
   )
 }
 
@@ -652,7 +675,7 @@ function InvoiceRow({
   onCancel: () => void
   onEdit: () => void
   onDelete: () => void
-  onTogglePaid: () => void
+  onTogglePaid: (paymentDate?: string) => void
   onShowActions: () => void
 }) {
   if (isEditing) {
@@ -734,6 +757,20 @@ function InvoiceRow({
       </td>
       <td className="hidden w-px py-1 pr-1 align-middle sm:table-cell">
         <div className="flex w-[6.5rem] justify-end">
+          {canPay && !isPaid ? (
+            <PaymentDateMenu
+              className={buttonVariants({
+                variant: "ghost",
+                size: "icon",
+                className: "size-8 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400",
+              })}
+              aria-label={`Marcar fatura ${label} como paga`}
+              title="Marcar como paga (escolha a data)"
+              onSelect={(paymentDate) => onTogglePaid(paymentDate)}
+            >
+              <CheckCircle2 size={14} />
+            </PaymentDateMenu>
+          ) : (
           <Button
             type="button"
             variant="ghost"
@@ -743,7 +780,7 @@ function InvoiceRow({
                 ? "text-emerald-500 dark:text-emerald-400"
                 : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
             }`}
-            onClick={onTogglePaid}
+            onClick={() => onTogglePaid()}
             disabled={!canPay}
             aria-pressed={canPay ? isPaid : undefined}
             aria-label={isPaid ? `Marcar fatura ${label} como pendente` : `Marcar fatura ${label} como paga`}
@@ -757,6 +794,7 @@ function InvoiceRow({
           >
             <CheckCircle2 size={14} />
           </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -1497,8 +1535,12 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     })
 
   const invoicePayment = useInvoicePayment(panel.period.planId)
-  const toggleInvoicePaid = (invoice: Invoice) =>
-    invoicePayment.mutate({ invoice, paid: invoice.paymentStatus !== "PAID" })
+  const toggleInvoicePaid = (invoice: Invoice, paymentDate?: string) =>
+    invoicePayment.mutate({
+      invoice,
+      paid: paymentDate ? true : invoice.paymentStatus !== "PAID",
+      paymentDate,
+    })
 
   const confirmDeleteInvoice = (invoice: Invoice) => {
     const linkedCount = linkedTransactionsOf(invoice).length
@@ -1519,10 +1561,11 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
     onLink: transactionLinking.openPaymentModal,
     onEdit: startEditing,
     onDelete: confirmDelete,
-    onTogglePaid: (transaction) =>
+    onTogglePaid: (transaction, paymentDate) =>
       transactionPayment.mutate({
         transaction,
-        paid: transaction.paymentStatus !== "PAID",
+        paid: paymentDate ? true : transaction.paymentStatus !== "PAID",
+        paymentDate,
       }),
     // Cobrança de assinatura: abre a tela de assinaturas. Recorrência: vira assinatura e abre a tela.
     onSubscription: (transaction) => {
@@ -1748,7 +1791,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         onCancel={invoiceManager.cancelEdit}
                         onEdit={() => invoiceManager.startEdit(invoice)}
                         onDelete={() => confirmDeleteInvoice(invoice)}
-                        onTogglePaid={() => toggleInvoicePaid(invoice)}
+                        onTogglePaid={(paymentDate) => toggleInvoicePaid(invoice, paymentDate)}
                         onShowActions={() => setActionsInvoice(invoice)}
                       />
                     )
@@ -1795,19 +1838,13 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
           amountTone="negative"
           actions={[
-            ...(actionsInvoice?.dueDate
+            ...(actionsInvoice?.dueDate && actionsInvoice.paymentStatus === "PAID"
               ? [
-                  actionsInvoice.paymentStatus === "PAID"
-                    ? {
-                        label: "Marcar como pendente",
-                        icon: Clock3,
-                        onClick: () => actionsInvoice && toggleInvoicePaid(actionsInvoice),
-                      }
-                    : {
-                        label: "Marcar como paga hoje",
-                        icon: CheckCircle2,
-                        onClick: () => actionsInvoice && toggleInvoicePaid(actionsInvoice),
-                      },
+                  {
+                    label: "Marcar como pendente",
+                    icon: Clock3,
+                    onClick: () => actionsInvoice && toggleInvoicePaid(actionsInvoice),
+                  },
                 ]
               : []),
             {
@@ -1824,6 +1861,16 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           ]}
           onClose={closeInvoiceActions}
         >
+          {actionsInvoice?.dueDate && actionsInvoice.paymentStatus !== "PAID" ? (
+            <PaymentDayChips
+              label="Marcar como paga"
+              onSelect={(paymentDate) => {
+                const invoice = actionsInvoice
+                closeInvoiceActions()
+                toggleInvoicePaid(invoice, paymentDate)
+              }}
+            />
+          ) : null}
           {actionsInvoiceLinked.length > 0 ? (
             <div className="border-b border-border/70 px-4 py-2">
               <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
