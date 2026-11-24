@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Save, SendHorizonal, X } from "lucide-react"
+import { Minus, Plus, Save, SendHorizonal, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label.tsx"
 import { Select } from "@/components/ui/select.tsx"
 import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
-import { todayIso } from "@/features/finance/utils.ts"
+import { formatMonthLabel, todayIso } from "@/features/finance/utils.ts"
+import { cn } from "@/lib/utils"
 import { useEscapeKey } from "@/lib/use-escape-key.ts"
 import type {
   ResponsibleOption,
@@ -22,6 +23,8 @@ import type {
 type TransactionComposerProps = {
   isOpen: boolean
   periodLabel: string
+  /** Mês do painel (AAAA-MM): início da repetição. */
+  periodId: string
   form: TransactionFormValues
   setForm: React.Dispatch<React.SetStateAction<TransactionFormValues>>
   editingTransaction: Transaction | null
@@ -53,6 +56,7 @@ type SharedLayoutProps = {
   categoryOptions: Array<{ label: string; value: string }>
   responsibleOptions: ResponsibleOption[]
   cardOptions: Array<{ label: string; value: string }>
+  periodId: string
 }
 
 type ActionsRowProps = {
@@ -458,11 +462,99 @@ function SubscriptionCardField({
   )
 }
 
+const MIN_MONTHS = 2
+const MAX_MONTHS = 120
+const MONTH_PRESETS = [2, 3, 6, 10, 12, 24]
+
+const clampMonths = (value: number) => Math.min(MAX_MONTHS, Math.max(MIN_MONTHS, Math.round(value)))
+
+/** "nov/2026" a partir de AAAA-MM somado a `offset` meses. */
+function shortMonth(yearMonth: string, offset: number) {
+  const [year, month] = yearMonth.split("-").map(Number)
+  const date = new Date(year, month - 1 + offset, 1)
+  return `${formatMonthLabel(date.getMonth() + 1).slice(0, 3).toLowerCase()}/${date.getFullYear()}`
+}
+
+/** Quantidade de meses da repetição: − e +, atalhos comuns e o período resultante. */
+function MonthsStepper({
+  value,
+  startMonth,
+  onChange,
+}: {
+  value: number
+  startMonth: string
+  onChange: (months: number) => void
+}) {
+  const months = clampMonths(value)
+
+  return (
+    <div className="flex flex-col gap-2 sm:col-span-2">
+      <Label id="transaction-occurrences-label">Quantos meses</Label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div
+          role="group"
+          aria-labelledby="transaction-occurrences-label"
+          className="flex h-11 items-center rounded-xl border border-border bg-card/90"
+        >
+          <button
+            type="button"
+            className="flex h-full w-11 items-center justify-center rounded-l-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
+            onClick={() => onChange(clampMonths(months - 1))}
+            disabled={months <= MIN_MONTHS}
+            aria-label="Um mês a menos"
+          >
+            <Minus size={16} />
+          </button>
+          <span
+            className="min-w-[4.5rem] text-center text-sm font-semibold text-foreground tabular-nums"
+            aria-live="polite"
+          >
+            {months} meses
+          </span>
+          <button
+            type="button"
+            className="flex h-full w-11 items-center justify-center rounded-r-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
+            onClick={() => onChange(clampMonths(months + 1))}
+            disabled={months >= MAX_MONTHS}
+            aria-label="Um mês a mais"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5" aria-label="Atalhos de meses">
+          {MONTH_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onChange(preset)}
+              aria-pressed={months === preset}
+              className={cn(
+                "h-9 min-w-9 rounded-full border px-3 text-sm font-medium tabular-nums transition",
+                months === preset
+                  ? "border-primary/40 bg-primary/12 text-primary"
+                  : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
+              )}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      </div>
+      {startMonth ? (
+        <p className="text-xs text-muted-foreground">
+          De {shortMonth(startMonth, 0)} a {shortMonth(startMonth, months - 1)}.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function RecurrenceField({
   form,
   setForm,
   cardOptions,
-}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
+  periodId,
+}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions" | "periodId">) {
   const mode = repeatModeOf(form)
   const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
 
@@ -494,23 +586,11 @@ function RecurrenceField({
         </Select>
       </div>
       {mode === "RECURRING" ? (
-        <div className={fieldClassName}>
-          <Label htmlFor="transaction-occurrences">Meses</Label>
-          <Input
-            id="transaction-occurrences"
-            className="sm:w-24"
-            type="number"
-            min={2}
-            max={120}
-            value={form.occurrences}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                occurrences: Number(event.target.value) || 2,
-              }))
-            }
-          />
-        </div>
+        <MonthsStepper
+          value={form.occurrences}
+          startMonth={periodId}
+          onChange={(occurrences) => setForm((current) => ({ ...current, occurrences }))}
+        />
       ) : null}
       {mode === "SUBSCRIPTION" ? (
         <>
@@ -649,6 +729,7 @@ function TransactionCreateFormLayout({
   categoryOptions,
   responsibleOptions,
   cardOptions,
+  periodId,
 }: SharedLayoutProps) {
   const secondRowClassName =
     form.type === "EXPENSE"
@@ -677,7 +758,12 @@ function TransactionCreateFormLayout({
         </div>
       )}
 
-      <RecurrenceField form={form} setForm={setForm} cardOptions={cardOptions} />
+      <RecurrenceField
+        form={form}
+        setForm={setForm}
+        cardOptions={cardOptions}
+        periodId={periodId}
+      />
     </>
   )
 }
@@ -742,6 +828,7 @@ function TransactionEditFormLayout({
 export function TransactionComposer({
   isOpen,
   periodLabel,
+  periodId,
   form,
   setForm,
   editingTransaction,
@@ -843,6 +930,7 @@ export function TransactionComposer({
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
                   cardOptions={cardOptions}
+                  periodId={periodId}
                   editingTransaction={editingTransaction}
                   editingScope={editingScope}
                   setEditingScope={setEditingScope}
@@ -854,6 +942,7 @@ export function TransactionComposer({
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
                   cardOptions={cardOptions}
+                  periodId={periodId}
                 />
               )}
             </form>

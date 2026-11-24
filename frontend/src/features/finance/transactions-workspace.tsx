@@ -1988,6 +1988,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           <TransactionComposer
             isOpen={isComposerOpen}
             periodLabel={panel.label}
+            periodId={panel.period.id}
             form={form}
             setForm={setForm}
             editingTransaction={editingTransaction}
