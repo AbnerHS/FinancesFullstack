@@ -131,6 +131,7 @@ const emptyForm = (): TransactionFormValues => ({
   isRecurring: false,
   occurrences: 2,
   isSubscription: false,
+  subscriptionCardId: "",
   recurringGroupId: null,
   hasDueDate: false,
   dueDate: "",
@@ -1239,6 +1240,10 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       })),
     [shared.transactionCategories]
   )
+  const cardOptions = useMemo(
+    () => shared.creditCards.map((card) => ({ label: card.name || "Cartão", value: card.id })),
+    [shared.creditCards]
+  )
 
   const mutationError = useMemo(() => {
     if (createTransaction.error) {
@@ -1341,6 +1346,10 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       isRecurring: false,
       occurrences: 2,
       isSubscription: false,
+      subscriptionCardId:
+        (transaction.subscriptionId &&
+          subscriptionById.get(transaction.subscriptionId)?.creditCardId) ||
+        "",
       recurringGroupId: transaction.recurringGroupId || null,
       hasDueDate: Boolean(
         transaction.dueDate ||
@@ -1489,7 +1498,8 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             category: payload.category,
             responsibleUserId: payload.responsibleUserId,
             billingDay: Number(billingDate.slice(8, 10)),
-            chargeMode: payload.dueDate ? "BILL" : "AUTO",
+            chargeMode: payload.dueDate && !form.subscriptionCardId ? "BILL" : "AUTO",
+            creditCardId: form.subscriptionCardId || null,
           },
         })
       }
@@ -1510,7 +1520,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         category: payload.category,
         responsibleUserId: payload.responsibleUserId,
         billingDay: Number(billingDate.slice(8, 10)),
-        chargeMode: payload.dueDate ? "BILL" : "AUTO",
+        // No cartão não há vencimento: a cobrança entra na fatura.
+        chargeMode: payload.dueDate && !form.subscriptionCardId ? "BILL" : "AUTO",
+        creditCardId: form.subscriptionCardId || null,
         startMonth: panel.period.id,
         endMonth: null,
       })
@@ -1995,6 +2007,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             setEditingScope={setEditingScope}
             categoryOptions={categoryOptions}
             responsibleOptions={shared.responsibleOptions}
+            cardOptions={cardOptions}
             formError={formError}
             mutationError={mutationError}
             createPending={createTransaction.isPending}

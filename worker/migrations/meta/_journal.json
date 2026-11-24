@@ -29,6 +29,13 @@
       "when": 1795203121329,
       "tag": "0003_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1795550994767,
+      "tag": "0004_subscription_card",
+      "breakpoints": true
     }
   ]
 }

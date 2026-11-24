@@ -1,6 +1,13 @@
-import { and, between, eq, max, ne, or, isNull, sql } from "drizzle-orm"
+import { and, between, eq, inArray, max, ne, or, isNull, sql } from "drizzle-orm"
 import type { Database } from "../db/client.ts"
-import { type CreditCardInvoice, creditCardInvoices, creditCards, transactions, type User } from "../db/schema.ts"
+import {
+  type CreditCardInvoice,
+  creditCardInvoices,
+  creditCards,
+  subscriptions,
+  transactions,
+  type User,
+} from "../db/schema.ts"
 import { daysInMonth, monthBounds } from "../lib/dates.ts"
 import { ApiError, badRequest, notFound } from "../lib/errors.ts"
 import { isUniqueViolation } from "../lib/db-errors.ts"
@@ -85,13 +92,37 @@ export async function listByPlan(
   return rows.map((r) => invoiceModel(r.invoice, r.creditCardName, r.creditCardOwnerId))
 }
 
-async function assertCardInPlan(db: Database, planId: string, creditCardId: string) {
+export async function assertCardInPlan(db: Database, planId: string, creditCardId: string) {
   const plan = await getPlanOrThrow(db, planId)
   const card = await db.query.creditCards.findFirst({ where: eq(creditCards.id, creditCardId) })
   if (!card) throw notFound("Cartão não encontrado")
   if (!(await participantIds(db, plan)).includes(card.userId)) {
     throw badRequest("O cartão precisa pertencer a um participante do plano.")
   }
+}
+
+/**
+ * Cobranças de assinaturas deste cartão no mês da fatura que ainda não têm fatura passam a fazer
+ * parte dela (geradas antes de a fatura existir).
+ */
+function attachSubscriptionCharges(db: Database, invoice: CreditCardInvoice) {
+  return db
+    .update(transactions)
+    .set({ creditCardInvoiceId: invoice.id, clearedByInvoice: true })
+    .where(
+      and(
+        eq(transactions.planId, invoice.planId),
+        eq(transactions.subscriptionMonth, invoice.referenceMonth),
+        isNull(transactions.creditCardInvoiceId),
+        inArray(
+          transactions.subscriptionId,
+          db
+            .select({ id: subscriptions.id })
+            .from(subscriptions)
+            .where(eq(subscriptions.creditCardId, invoice.creditCardId)),
+        ),
+      ),
+    )
 }
 
 const duplicate = () => new ApiError(409, "Conflito", "Já existe uma fatura deste cartão neste mês para o plano.")
@@ -111,6 +142,7 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
         ...paymentFields(input, null),
       })
       .returning()
+    await attachSubscriptionCharges(db, invoice!)
     return invoice!
   } catch (error) {
     if (isUniqueViolation(error)) throw duplicate()

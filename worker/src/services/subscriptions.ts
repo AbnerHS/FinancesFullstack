@@ -1,7 +1,8 @@
-import { and, asc, eq, gt, gte, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
 import type { BatchItem } from "drizzle-orm/batch"
 import type { Database } from "../db/client.ts"
 import {
+  creditCardInvoices,
   type Subscription,
   subscriptions,
   transactionCategories,
@@ -19,6 +20,7 @@ import { withLinks } from "../lib/hal.ts"
 import { fromCents, toCents } from "../lib/money.ts"
 import { isParticipant, requirePlanAccess } from "./access.ts"
 import * as categories from "./categories.ts"
+import { assertCardInPlan } from "./invoices.ts"
 import { nextOrder } from "./transactions.ts"
 
 // Assinaturas: contas mensais sem fim fixo. Em vez de criar N ocorrências de uma vez (como a
@@ -36,6 +38,7 @@ export type SubscriptionInput = {
   responsibleUserId?: string | null
   billingDay?: number
   chargeMode?: "BILL" | "AUTO"
+  creditCardId?: string | null
   startMonth?: string
   endMonth?: string | null
 }
@@ -51,6 +54,7 @@ export function subscriptionModel(subscription: Subscription, categoryName: stri
       responsibleUserId: subscription.responsibleUserId,
       billingDay: subscription.billingDay,
       chargeMode: subscription.chargeMode,
+      creditCardId: subscription.creditCardId,
       startMonth: subscription.startMonth,
       endMonth: subscription.endMonth,
       active: !subscription.endMonth || subscription.endMonth >= currentYearMonth(),
@@ -106,18 +110,47 @@ function assertMonths(startMonth: string, endMonth: string | null) {
   }
 }
 
-/** Valores da cobrança de um mês (descrição, valor, datas) a partir da assinatura. */
-function chargeValues(subscription: Subscription, month: string) {
+/** Faturas do plano por cartão e mês ("cartão|AAAA-MM" → id), para ligar as cobranças. */
+type InvoiceLookup = Map<string, string>
+
+async function invoiceLookup(db: Database, planId: string, cardIds: Array<string | null>): Promise<InvoiceLookup> {
+  const ids = [...new Set(cardIds.filter((id): id is string => Boolean(id)))]
+  if (ids.length === 0) return new Map()
+  const rows = await db
+    .select({ id: creditCardInvoices.id, card: creditCardInvoices.creditCardId, month: creditCardInvoices.referenceMonth })
+    .from(creditCardInvoices)
+    .where(and(eq(creditCardInvoices.planId, planId), inArray(creditCardInvoices.creditCardId, ids)))
+  return new Map(rows.map((row) => [`${row.card}|${row.month}`, row.id]))
+}
+
+/**
+ * Valores da cobrança de um mês a partir da assinatura. Com cartão, não há vencimento: a cobrança
+ * entra na fatura do cartão naquele mês (se ela já existe; senão, quando for criada). `invoices`
+ * só é passado quando a fatura deve ser (re)definida: sem ele, o vínculo atual fica como está.
+ */
+function chargeValues(subscription: Subscription, month: string, invoices?: InvoiceLookup) {
   const date = dayOfMonth(month, subscription.billingDay)
-  return {
+  const values = {
     description: subscription.name,
     amountCents: subscription.amountCents,
     categoryId: subscription.categoryId,
     responsibleUserId: subscription.responsibleUserId,
     referenceDate: date,
-    dueDate: subscription.chargeMode === "BILL" ? date : null,
+    dueDate: subscription.chargeMode === "BILL" && !subscription.creditCardId ? date : null,
   }
+  if (!invoices) return values
+  const invoiceId = subscription.creditCardId
+    ? (invoices.get(`${subscription.creditCardId}|${month}`) ?? null)
+    : null
+  return { ...values, creditCardInvoiceId: invoiceId, clearedByInvoice: Boolean(invoiceId) }
 }
+
+/** Cobrança ainda editável: não está numa fatura já paga (fatura paga é história). */
+const notInPaidInvoice = () =>
+  or(
+    isNull(transactions.creditCardInvoiceId),
+    sql`${transactions.creditCardInvoiceId} not in (select id from credit_card_invoices where payment_status = 'PAID')`,
+  )
 
 /**
  * Gera as cobranças que faltam das assinaturas do plano até `throughMonth` (limitado ao horizonte).
@@ -141,6 +174,7 @@ export async function ensureGenerated(db: Database, planId: string, throughMonth
     )
   if (pending.length === 0) return
 
+  const invoices = await invoiceLookup(db, planId, pending.map((subscription) => subscription.creditCardId))
   const createdAt = new Date().toISOString()
   const statements = pending.flatMap((subscription) => {
     const from = subscription.generatedThrough
@@ -150,7 +184,7 @@ export async function ensureGenerated(db: Database, planId: string, throughMonth
     const months = from <= last ? monthRange(from < subscription.startMonth ? subscription.startMonth : from, last) : []
     return [
       ...months.map((month) => {
-        const values = chargeValues(subscription, month)
+        const values = chargeValues(subscription, month, invoices)
         return db
           .insert(transactions)
           .values({
@@ -174,6 +208,7 @@ export async function ensureGenerated(db: Database, planId: string, throughMonth
 export async function create(db: Database, user: User, planId: string, input: Required<Pick<SubscriptionInput, "name" | "amount" | "billingDay" | "chargeMode" | "startMonth">> & SubscriptionInput) {
   await requirePlanAccess(db, planId, user)
   assertMonths(input.startMonth, input.endMonth ?? null)
+  if (input.creditCardId) await assertCardInPlan(db, planId, input.creditCardId)
   const [subscription] = await db
     .insert(subscriptions)
     .values({
@@ -185,6 +220,7 @@ export async function create(db: Database, user: User, planId: string, input: Re
       responsibleUserId: await resolveResponsible(db, planId, input.responsibleUserId),
       billingDay: input.billingDay,
       chargeMode: input.chargeMode,
+      creditCardId: input.creditCardId ?? null,
       startMonth: input.startMonth,
       endMonth: input.endMonth ?? null,
       generatedThrough: null,
@@ -211,6 +247,10 @@ export async function update(db: Database, user: User, id: string, input: Subscr
   if (has("responsibleUserId")) next.responsibleUserId = await resolveResponsible(db, current.planId, input.responsibleUserId)
   if (has("billingDay")) next.billingDay = input.billingDay!
   if (has("chargeMode")) next.chargeMode = input.chargeMode!
+  if (has("creditCardId")) {
+    next.creditCardId = input.creditCardId ?? null
+    if (next.creditCardId) await assertCardInPlan(db, current.planId, next.creditCardId)
+  }
   if (has("startMonth")) next.startMonth = input.startMonth!
   if (has("endMonth")) next.endMonth = input.endMonth ?? null
   assertMonths(next.startMonth, next.endMonth)
@@ -245,7 +285,7 @@ export async function update(db: Database, user: User, id: string, input: Subscr
         and(
           eq(transactions.subscriptionId, id),
           eq(transactions.paymentStatus, "PENDING"),
-          isNull(transactions.creditCardInvoiceId),
+          notInPaidInvoice(),
           outOfRange,
         ),
       ),
@@ -259,13 +299,18 @@ export async function update(db: Database, user: User, id: string, input: Subscr
       and(
         eq(transactions.subscriptionId, id),
         eq(transactions.paymentStatus, "PENDING"),
-        isNull(transactions.creditCardInvoiceId),
+        notInPaidInvoice(),
         isNotNull(transactions.subscriptionMonth),
         gte(transactions.subscriptionMonth, thisMonth),
       ),
     )
+  // Cartão novo (ou trocado/removido): as cobranças em aberto mudam de fatura também.
+  const invoices =
+    next.creditCardId !== current.creditCardId ? await invoiceLookup(db, current.planId, [next.creditCardId]) : undefined
   for (const charge of open) {
-    batch.push(db.update(transactions).set(chargeValues(next, charge.month!)).where(eq(transactions.id, charge.id)))
+    batch.push(
+      db.update(transactions).set(chargeValues(next, charge.month!, invoices)).where(eq(transactions.id, charge.id)),
+    )
   }
   await db.batch(batch as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]])
   await ensureGenerated(db, current.planId, thisMonth)
@@ -282,7 +327,7 @@ export async function remove(db: Database, user: User, id: string) {
         and(
           eq(transactions.subscriptionId, id),
           eq(transactions.paymentStatus, "PENDING"),
-          isNull(transactions.creditCardInvoiceId),
+          notInPaidInvoice(),
           gte(transactions.subscriptionMonth, currentYearMonth()),
         ),
       ),

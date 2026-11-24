@@ -16,6 +16,7 @@ export const subscriptionFields = {
   responsibleUserId: id().nullable().optional(),
   billingDay: z.coerce.number().int().min(1, "Dia de cobrança entre 1 e 31").max(31, "Dia de cobrança entre 1 e 31"),
   chargeMode: z.enum(subscriptionChargeModes, "Informe como a assinatura é cobrada"),
+  creditCardId: id().nullable().optional(),
   startMonth: yearMonth,
   endMonth: yearMonth.nullable().optional(),
 }

@@ -130,6 +130,8 @@ export type Subscription = EntityModel<{
   billingDay: number
   /** BILL: gera vencimento ("Contas a pagar"). AUTO: débito automático/cartão. */
   chargeMode: SubscriptionChargeMode
+  /** Cartão: cada cobrança entra na fatura do cartão no mesmo mês. */
+  creditCardId?: string | null
   startMonth: string
   endMonth?: string | null
   active: boolean
@@ -143,6 +145,7 @@ export type SubscriptionPayload = {
   responsibleUserId: string | null
   billingDay: number
   chargeMode: SubscriptionChargeMode
+  creditCardId?: string | null
   startMonth: string
   endMonth: string | null
 }
@@ -168,6 +171,8 @@ export type TransactionFormValues = {
   occurrences: number
   /** Despesa mensal sem fim: vira assinatura (cobrança gerada a cada mês). */
   isSubscription: boolean
+  /** Cartão da assinatura ("" = sem cartão). */
+  subscriptionCardId: string
   recurringGroupId?: string | null
   hasDueDate: boolean
   dueDate: string

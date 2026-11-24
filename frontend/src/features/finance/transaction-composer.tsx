@@ -30,6 +30,8 @@ type TransactionComposerProps = {
   setEditingScope: React.Dispatch<React.SetStateAction<"SINGLE" | "GROUP">>
   categoryOptions: Array<{ label: string; value: string }>
   responsibleOptions: ResponsibleOption[]
+  /** Cartões do plano, para a assinatura cobrada no cartão. */
+  cardOptions: Array<{ label: string; value: string }>
   formError: string | null
   mutationError: string | null
   createPending: boolean
@@ -50,6 +52,7 @@ type SharedLayoutProps = {
   setForm: React.Dispatch<React.SetStateAction<TransactionFormValues>>
   categoryOptions: Array<{ label: string; value: string }>
   responsibleOptions: ResponsibleOption[]
+  cardOptions: Array<{ label: string; value: string }>
 }
 
 type ActionsRowProps = {
@@ -428,11 +431,40 @@ const repeatModeOf = (form: TransactionFormValues): RepeatMode =>
  * Repetição: só este mês, N meses (cria todas as ocorrências agora) ou assinatura (despesa mensal
  * sem fim; a cobrança de cada mês é gerada quando o mês chega).
  */
+/** Cartão da assinatura: com cartão, cada cobrança entra na fatura do cartão naquele mês. */
+function SubscriptionCardField({
+  form,
+  setForm,
+  cardOptions,
+}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
+  return (
+    <div className={fieldClassName}>
+      <Label htmlFor="subscription-card">Cobrada no cartão</Label>
+      <Select
+        id="subscription-card"
+        value={form.subscriptionCardId}
+        onChange={(event) =>
+          setForm((current) => ({ ...current, subscriptionCardId: event.target.value }))
+        }
+      >
+        <option value="">Não (conta ou débito)</option>
+        {cardOptions.map((card) => (
+          <option key={card.value} value={card.value}>
+            {card.label}
+          </option>
+        ))}
+      </Select>
+    </div>
+  )
+}
+
 function RecurrenceField({
   form,
   setForm,
-}: Pick<SharedLayoutProps, "form" | "setForm">) {
+  cardOptions,
+}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
   const mode = repeatModeOf(form)
+  const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
 
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -481,13 +513,18 @@ function RecurrenceField({
         </div>
       ) : null}
       {mode === "SUBSCRIPTION" ? (
-        <p className="text-xs text-muted-foreground sm:col-span-2">
-          A cobrança aparece todo mês no mesmo dia
-          {form.hasDueDate && form.dueDate ? " do vencimento" : ""}, até você encerrar a assinatura.
-          {form.hasDueDate && form.dueDate
-            ? " Cada mês entra em Contas a pagar."
-            : " Sem vencimento, conta como débito automático."}
-        </p>
+        <>
+          <SubscriptionCardField form={form} setForm={setForm} cardOptions={cardOptions} />
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            A cobrança aparece todo mês no mesmo dia
+            {form.hasDueDate && form.dueDate ? " da data informada" : ""}, até você encerrar a assinatura.
+            {cardName
+              ? ` Cada mês entra na fatura do ${cardName} daquele mês (se a fatura ainda não existir, entra quando ela for criada).`
+              : form.hasDueDate && form.dueDate
+                ? " Cada mês entra em Contas a pagar."
+                : " Sem vencimento, conta como débito automático."}
+          </p>
+        </>
       ) : null}
     </div>
   )
@@ -611,6 +648,7 @@ function TransactionCreateFormLayout({
   setForm,
   categoryOptions,
   responsibleOptions,
+  cardOptions,
 }: SharedLayoutProps) {
   const secondRowClassName =
     form.type === "EXPENSE"
@@ -639,7 +677,7 @@ function TransactionCreateFormLayout({
         </div>
       )}
 
-      <RecurrenceField form={form} setForm={setForm} />
+      <RecurrenceField form={form} setForm={setForm} cardOptions={cardOptions} />
     </>
   )
 }
@@ -649,6 +687,7 @@ function TransactionEditFormLayout({
   setForm,
   categoryOptions,
   responsibleOptions,
+  cardOptions,
   editingTransaction,
   editingScope,
   setEditingScope,
@@ -692,6 +731,9 @@ function TransactionEditFormLayout({
           editingScope={editingScope}
           setEditingScope={setEditingScope}
         />
+        {editingTransaction.subscriptionId && editingScope === "GROUP" ? (
+          <SubscriptionCardField form={form} setForm={setForm} cardOptions={cardOptions} />
+        ) : null}
       </div>
     </>
   )
@@ -708,6 +750,7 @@ export function TransactionComposer({
   setEditingScope,
   categoryOptions,
   responsibleOptions,
+  cardOptions,
   formError,
   mutationError,
   createPending,
@@ -799,6 +842,7 @@ export function TransactionComposer({
                   setForm={setForm}
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
+                  cardOptions={cardOptions}
                   editingTransaction={editingTransaction}
                   editingScope={editingScope}
                   setEditingScope={setEditingScope}
@@ -809,6 +853,7 @@ export function TransactionComposer({
                   setForm={setForm}
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
+                  cardOptions={cardOptions}
                 />
               )}
             </form>

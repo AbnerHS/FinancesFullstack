@@ -138,6 +138,54 @@ describe("assinaturas", () => {
     expect((await as(owner).get(`/subscriptions/${subscription.id}`)).status).toBe(404)
   })
 
+  it("no cartão: sem vencimento, cada cobrança entra na fatura do mês (já existente ou criada depois)", async () => {
+    const owner = await createUser()
+    const plan = await createPlan(owner)
+    const card = await json(as(owner).post("/credit-cards", { name: "Nubank", userId: owner.id }), 201)
+    const invoiceNow = await json(
+      as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: month(0), amount: 300 }),
+      201,
+    )
+    const subscription = await json(
+      as(owner).post(`/plans/${plan.id}/subscriptions`, {
+        name: "Spotify",
+        amount: 21.9,
+        billingDay: 8,
+        chargeMode: "AUTO",
+        creditCardId: card.id,
+        startMonth: month(0),
+      }),
+      201,
+    )
+    expect(subscription).toMatchObject({ creditCardId: card.id })
+
+    let charges = chargesOf(await monthData(owner, plan.id, month(0), month(1)), subscription.id)
+    expect(charges.map((t) => [t.referenceDate.slice(0, 7), t.dueDate, t.creditCardInvoiceId, t.isClearedByInvoice])).toEqual([
+      [month(0), null, invoiceNow.id, true],
+      [month(1), null, null, false],
+    ])
+
+    // A fatura do mês seguinte, criada depois, recebe a cobrança que já existia.
+    const invoiceNext = await json(
+      as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: month(1), amount: 100 }),
+      201,
+    )
+    charges = chargesOf(await monthData(owner, plan.id, month(1), month(1)), subscription.id)
+    expect(charges[0]).toMatchObject({ creditCardInvoiceId: invoiceNext.id, isClearedByInvoice: true })
+
+    // Tirar o cartão: as cobranças em aberto saem da fatura e voltam a contar como despesa.
+    await json(as(owner).patch(`/subscriptions/${subscription.id}`, { creditCardId: null }))
+    charges = chargesOf(await monthData(owner, plan.id, month(0), month(1)), subscription.id)
+    expect(charges.every((t) => t.creditCardInvoiceId === null && t.isClearedByInvoice === false)).toBe(true)
+
+    // Cartão de quem não participa do plano é recusado.
+    const stranger = await createUser()
+    const strangerCard = await json(as(stranger).post("/credit-cards", { name: "Outro", userId: stranger.id }), 201)
+    expect(
+      (await as(owner).patch(`/subscriptions/${subscription.id}`, { creditCardId: strangerCard.id })).status,
+    ).toBe(400)
+  })
+
   it("valida responsável, acesso ao plano e datas", async () => {
     const { owner, plan, subscription } = await setup()
     const stranger = await createUser()

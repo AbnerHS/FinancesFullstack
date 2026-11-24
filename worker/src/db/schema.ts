@@ -140,6 +140,8 @@ export const subscriptions = sqliteTable(
     billingDay: integer("billing_day").notNull(),
     // BILL: gera vencimento (entra em "Contas a pagar"). AUTO: débito automático/cartão, sem vencimento.
     chargeMode: text("charge_mode", { enum: subscriptionChargeModes }).notNull(),
+    // Cartão: cada cobrança entra na fatura do cartão no mesmo mês (quando a fatura existe).
+    creditCardId: text("credit_card_id").references(() => creditCards.id, { onDelete: "set null" }),
     startMonth: text("start_month").notNull(), // 'YYYY-MM'
     endMonth: text("end_month"), // último mês cobrado; null = ativa
     generatedThrough: text("generated_through"), // último mês já gerado
