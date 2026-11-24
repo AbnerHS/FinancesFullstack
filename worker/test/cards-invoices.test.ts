@@ -214,4 +214,26 @@ describe("faturas", () => {
       referenceDate: "2026-03-05",
     })
   })
+
+  it("lista as transações vinculadas à fatura", async () => {
+    const owner = await createUser()
+    const plan = await createPlan(owner)
+    const card = await createCard(owner, owner)
+    const invoice = await json(
+      as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth: "2026-05", amount: 90 }),
+      201,
+    )
+    const base = { planId: plan.id, type: "EXPENSE", referenceDate: "2026-05-03" }
+    const linked = await json(
+      as(owner).post("/transactions", { ...base, description: "Mercado", amount: 60, creditCardInvoiceId: invoice.id, isClearedByInvoice: true }),
+      201,
+    )
+    await json(as(owner).post("/transactions", { ...base, description: "Fora", amount: 10 }), 201)
+
+    const list = await json(as(owner).get(`/credit-card-invoices/${invoice.id}/transactions`))
+    expect(list._embedded.transactions.map((t: any) => t.id)).toEqual([linked.id])
+
+    const stranger = await createUser()
+    expect((await as(stranger).get(`/credit-card-invoices/${invoice.id}/transactions`)).status).not.toBe(200)
+  })
 })

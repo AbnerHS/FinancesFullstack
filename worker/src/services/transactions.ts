@@ -164,6 +164,14 @@ export async function listByPlan(
   return rows.map(transactionModel)
 }
 
+/** Transações vinculadas a uma fatura (o acesso à fatura é verificado por quem chama). */
+export async function listByInvoice(db: Database, invoiceId: string) {
+  const rows = await selectWithCategory(db)
+    .where(eq(transactions.creditCardInvoiceId, invoiceId))
+    .orderBy(asc(transactions.referenceDate), asc(transactions.createdAt))
+  return rows.map(transactionModel)
+}
+
 // ---------------------------------------------------------------------------------------------
 // Escrita
 

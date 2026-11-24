@@ -784,13 +784,23 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
   }
 }
 
-/** Faturas já lançadas de um cartão (nos planos de que o usuário participa). */
-export function useCardInvoices(cardId: string | null) {
+/** Faturas do plano ativo, de todos os meses. */
+export function usePlanInvoices(planId: string | null | undefined) {
   return useQuery({
-    queryKey: financeKeys.cardInvoices(cardId),
-    queryFn: () => creditCardService.getInvoices(cardId!),
-    enabled: Boolean(cardId),
-    staleTime: 1000 * 60 * 5,
+    queryKey: financeKeys.planInvoices(planId),
+    queryFn: () => invoiceService.listByPlan(planId!),
+    enabled: Boolean(planId),
+    staleTime: 1000 * 60,
+  })
+}
+
+/** Contas vinculadas a uma fatura (carregadas ao abrir a fatura). */
+export function useInvoiceTransactions(invoiceId: string | null) {
+  return useQuery({
+    queryKey: financeKeys.invoiceTransactions(invoiceId),
+    queryFn: () => invoiceService.transactions(invoiceId!),
+    enabled: Boolean(invoiceId),
+    staleTime: 1000 * 60,
   })
 }
 
@@ -798,16 +808,20 @@ export function useInvoiceManager({
   creditCards,
   periods,
   selectedPeriodIds,
+  initialCardId = "",
 }: {
   creditCards: CreditCard[]
   periods: Period[]
   selectedPeriodIds: string[]
+  /** Cartão já escolhido ao abrir (ex.: "+" de um cartão). */
+  initialCardId?: string
 }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
-    creditCardId: "",
+    creditCardId: initialCardId,
     periodId: "",
     amount: "",
+    dueDate: "",
   })
 
   const resolvedForm = useMemo(() => {
@@ -848,13 +862,16 @@ export function useInvoiceManager({
         creditCardId: resolvedForm.creditCardId,
         referenceMonth: period.id,
         amount: amountNumber,
+        dueDate: resolvedForm.dueDate || null,
       })
     },
     onSuccess: async () => {
-      setForm((current) => ({ ...current, amount: "" }))
-      await queryClient.invalidateQueries({
-        queryKey: financeKeys.periodInvoicesRoot,
-      })
+      setForm((current) => ({ ...current, amount: "", dueDate: "" }))
+      // A fatura nova pode receber cobranças de assinaturas do cartão: as transações mudam também.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoicesRoot }),
+        queryClient.invalidateQueries({ queryKey: financeKeys.periodTransactionsRoot }),
+      ])
     },
   })
 

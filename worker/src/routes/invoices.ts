@@ -3,7 +3,9 @@ import { z } from "zod"
 import { paymentStatuses } from "../db/schema.ts"
 import { id, isoDate, yearMonth } from "../lib/query.ts"
 import { validate } from "../lib/validation.ts"
+import { collection } from "../lib/hal.ts"
 import * as invoices from "../services/invoices.ts"
+import * as transactions from "../services/transactions.ts"
 import type { AppEnv } from "../types.ts"
 
 const invoiceSchema = z.object({
@@ -26,6 +28,11 @@ export const invoiceRoutes = new Hono<AppEnv>()
   .get("/:id", async (c) => {
     const invoice = await invoices.getAccessibleInvoice(c.var.db, c.var.user, c.req.param("id"))
     return c.json(await invoices.findModel(c.var.db, invoice.id))
+  })
+  .get("/:id/transactions", async (c) => {
+    const invoice = await invoices.getAccessibleInvoice(c.var.db, c.var.user, c.req.param("id"))
+    const list = await transactions.listByInvoice(c.var.db, invoice.id)
+    return c.json(collection("transactions", list, `/api/credit-card-invoices/${invoice.id}/transactions`))
   })
   .put("/:id", validate("json", invoiceSchema), async (c) => {
     await invoices.update(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))

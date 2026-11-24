@@ -32,8 +32,11 @@ export const financeKeys = {
   planCards: (planId?: string | null) =>
     ["credit-cards", "plan", planId] as const,
   // Sob a raiz das faturas: criar/editar/excluir fatura já invalida ["period-invoices"].
-  cardInvoices: (cardId?: string | null) =>
-    ["period-invoices", "card", cardId] as const,
+  planInvoices: (planId?: string | null) =>
+    ["period-invoices", "plan", planId] as const,
+  // Sob a raiz das transações: vincular/desvincular/excluir já invalida ["period-transactions"].
+  invoiceTransactions: (invoiceId?: string | null) =>
+    ["period-transactions", "invoice", invoiceId] as const,
   categories: ["transaction-categories"] as const,
   subscriptions: (planId?: string | null) => ["subscriptions", planId] as const,
   // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
@@ -259,15 +262,22 @@ export const creditCardService = {
   async delete(id: string) {
     await http.delete(`/credit-cards/${id}`)
   },
-  async getInvoices(cardId: string) {
-    const { data } = await http.get<
-      EmbeddedCollection<Invoice, "invoices">
-    >(`/credit-cards/${cardId}/invoices`)
-    return embedded(data, "invoices")
-  },
 }
 
 export const invoiceService = {
+  /** Todas as faturas do plano (todos os meses). */
+  async listByPlan(planId: string) {
+    const { data } = await http.get<EmbeddedCollection<Invoice, "invoices">>(
+      `/plans/${planId}/invoices`
+    )
+    return embedded(data, "invoices")
+  },
+  async transactions(invoiceId: string) {
+    const { data } = await http.get<
+      EmbeddedCollection<Transaction, "transactions">
+    >(`/credit-card-invoices/${invoiceId}/transactions`)
+    return embedded(data, "transactions")
+  },
   async create(payload: {
     planId: string
     creditCardId: string

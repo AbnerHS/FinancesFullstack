@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   Check,
-  ChevronDown,
   Pencil,
   Plus,
   Share2,
@@ -21,21 +20,14 @@ import {
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
-import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import {
-  useCardInvoices,
   useCategoryManager,
-  useCreditCardManager,
-  useInvoiceManager,
   usePlanCollaborationManager,
   useOpenMonthInDashboard,
   usePlanDeleteManager,
   usePlanManager,
 } from "@/features/finance/hooks.ts"
 import type {
-  CreditCard,
-  Period,
   Plan,
   PlanMonthSummary,
   PlanParticipant,
@@ -44,9 +36,7 @@ import type {
 import {
   formatCurrency,
   formatMonthLabel,
-  formatMonthYear,
 } from "@/features/finance/utils.ts"
-import { getErrorMessage } from "@/lib/errors.ts"
 import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
 export function PlanManager({
@@ -287,320 +277,6 @@ export function PlanManager({
         state={confirmationDialog}
       />
     </section>
-  )
-}
-
-function CardInvoiceHistory({ cardId }: { cardId: string }) {
-  const { data: invoices = [], isLoading, error } = useCardInvoices(cardId)
-  // Mais recentes primeiro.
-  const recent = useMemo(() => [...invoices].reverse(), [invoices])
-  const total = invoices.reduce(
-    (sum, invoice) => sum + Number(invoice.amount || 0),
-    0
-  )
-
-  if (isLoading) {
-    return (
-      <p className="px-3 py-2 text-xs text-muted-foreground">
-        Carregando faturas...
-      </p>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="px-3 py-2">
-        <FormError
-          message={getErrorMessage(error, "Não foi possível carregar as faturas.")}
-        />
-      </div>
-    )
-  }
-
-  if (recent.length === 0) {
-    return (
-      <p className="px-3 py-2 text-xs text-muted-foreground">
-        Nenhuma fatura lançada neste cartão.
-      </p>
-    )
-  }
-
-  return (
-    <div className="px-3 pb-2">
-      <ul className="max-h-60 divide-y divide-border/60 overflow-y-auto">
-        {recent.map((invoice) => (
-          <li
-            key={invoice.id}
-            className="flex items-center justify-between gap-3 py-1.5 text-sm"
-          >
-            <span className="text-foreground">
-              {formatMonthLabel(Number(invoice.referenceMonth.slice(5, 7)))}/
-              {invoice.referenceMonth.slice(0, 4)}
-            </span>
-            <span className="font-medium text-rose-600 tabular-nums dark:text-rose-400">
-              {formatCurrency(invoice.amount)}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-1 flex items-center justify-between border-t border-border/70 pt-2 text-xs text-muted-foreground">
-        <span>
-          {invoices.length} {invoices.length === 1 ? "fatura" : "faturas"}
-        </span>
-        <span className="font-semibold text-foreground tabular-nums">
-          Total {formatCurrency(total)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-export function CreditCardsManager({
-  creditCards,
-  userId,
-}: {
-  creditCards: CreditCard[]
-  userId: string | null
-}) {
-  const {
-    form,
-    setForm,
-    isEditing,
-    editingCard,
-    saveMutation,
-    deleteMutation,
-    errorMessage,
-    startCreate,
-    startEdit,
-    cancelEdit,
-  } = useCreditCardManager({ userId })
-  const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
-  const [confirmationDialog, setConfirmationDialog] =
-    useState<ConfirmationDialogState | null>(null)
-
-  return (
-    <Card className="border-border bg-secondary/60 p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="app-eyebrow">Cartões de Crédito</h3>
-        {!isEditing ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={startCreate}
-          >
-            <Plus size={16} />
-            Novo Cartão
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="mb-4 space-y-2">
-        {creditCards.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum cartão cadastrado.
-          </p>
-        ) : null}
-        {creditCards.map((card) => {
-          const isExpanded = expandedCardId === card.id
-          return (
-            <div
-              key={card.id}
-              className="rounded-[1rem] border border-border bg-card/90"
-            >
-              <div className="flex items-center gap-1 py-1 pr-1 pl-3">
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left text-sm font-medium text-foreground"
-                  aria-expanded={isExpanded}
-                  onClick={() =>
-                    setExpandedCardId(isExpanded ? null : card.id)
-                  }
-                  title={isExpanded ? "Ocultar faturas" : "Ver faturas"}
-                >
-                  <ChevronDown
-                    size={16}
-                    className={`shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                  />
-                  <span className="truncate">{card.name}</span>
-                </button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 text-muted-foreground"
-                  onClick={() => startEdit(card)}
-                  aria-label={`Editar cartão ${card.name}`}
-                  title="Editar"
-                >
-                  <Pencil size={15} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 text-rose-600 hover:text-rose-700 dark:text-rose-400"
-                  disabled={deleteMutation.isPending}
-                  onClick={() =>
-                    setConfirmationDialog({
-                      confirmLabel: "Excluir Cartão",
-                      title: "Excluir cartão?",
-                      description: `O cartão "${card.name}" será removido. Cartões com faturas lançadas não podem ser excluídos: exclua as faturas antes.`,
-                      onConfirm: () => deleteMutation.mutate(card),
-                    })
-                  }
-                  aria-label={`Excluir cartão ${card.name}`}
-                  title="Excluir"
-                >
-                  <Trash2 size={15} />
-                </Button>
-              </div>
-              {isExpanded ? (
-                <div className="border-t border-border/70 pt-2">
-                  <CardInvoiceHistory cardId={card.id} />
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
-
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          saveMutation.mutate()
-        }}
-      >
-        <div className="space-y-2">
-          <Label>{isEditing ? "Editar Cartão" : "Novo Cartão"}</Label>
-          <Input
-            value={form.name}
-            onChange={(event) => setForm({ name: event.target.value })}
-            placeholder="Ex.: Nubank"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="submit"
-            className="h-11 flex-1"
-            disabled={saveMutation.isPending}
-          >
-            {!isEditing ? <Plus size={16} /> : null}
-            {saveMutation.isPending
-              ? "Salvando..."
-              : isEditing
-                ? "Salvar edição"
-                : "Criar Cartão"}
-          </Button>
-          {isEditing ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11"
-              onClick={cancelEdit}
-            >
-              Cancelar
-            </Button>
-          ) : null}
-        </div>
-        {editingCard?.name ? (
-          <p className="text-xs text-muted-foreground">
-            Editando: {editingCard.name}
-          </p>
-        ) : null}
-        <FormError message={errorMessage} />
-      </form>
-      <ConfirmationDialog
-        onClose={() => setConfirmationDialog(null)}
-        state={confirmationDialog}
-      />
-    </Card>
-  )
-}
-
-export function InvoiceManager({
-  creditCards,
-  periods,
-  selectedPeriodIds,
-}: {
-  creditCards: CreditCard[]
-  periods: Period[]
-  selectedPeriodIds: string[]
-}) {
-  const { form, setForm, createInvoice, errorMessage } = useInvoiceManager({
-    creditCards,
-    periods,
-    selectedPeriodIds,
-  })
-
-  return (
-    <Card className="border-border bg-secondary/60 p-5">
-      <h3 className="app-eyebrow">Criar Fatura</h3>
-      <form
-        className="mt-4 space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          createInvoice.mutate()
-        }}
-      >
-        <Select
-          value={form.creditCardId}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              creditCardId: event.target.value,
-            }))
-          }
-        >
-          {creditCards.length === 0 ? (
-            <option value="">Sem cartões</option>
-          ) : null}
-          {creditCards.length > 0 ? (
-            <option value="">Selecione o cartão</option>
-          ) : null}
-          {creditCards.map((card) => (
-            <option key={card.id} value={card.id}>
-              {card.name}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={form.periodId}
-          onChange={(event) =>
-            setForm((current) => ({ ...current, periodId: event.target.value }))
-          }
-        >
-          {periods.length === 0 ? <option value="">Sem meses</option> : null}
-          {periods.length > 0 ? (
-            <option value="">Selecione o mês</option>
-          ) : null}
-          {periods.map((period) => (
-            <option key={period.id} value={period.id}>
-              {formatMonthYear(period)}
-            </option>
-          ))}
-        </Select>
-
-        <CurrencyInput
-          value={form.amount}
-          onValueChange={(nextValue) =>
-            setForm((current) => ({ ...current, amount: nextValue }))
-          }
-        />
-
-        <Button
-          type="submit"
-          className="h-11 w-full"
-          disabled={createInvoice.isPending}
-        >
-          <Plus size={16} />
-          {createInvoice.isPending ? "Criando..." : "Criar Fatura"}
-        </Button>
-        <FormError message={errorMessage} />
-      </form>
-    </Card>
   )
 }
 
