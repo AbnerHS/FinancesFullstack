@@ -1,6 +1,7 @@
 import { PiggyBank } from "lucide-react"
 import type { ReactNode } from "react"
 
+import { InstallAppButton } from "@/components/install-app-button.tsx"
 import { ThemeToggle } from "@/components/theme-toggle.tsx"
 
 type AuthShellProps = {
@@ -45,7 +46,8 @@ export function AuthShell({
 
       <section className="flex items-center justify-center p-6 lg:p-10">
         <div className="w-full max-w-lg space-y-6">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-3">
+            <InstallAppButton variant="compact" />
             <ThemeToggle />
           </div>
           <div className="space-y-2">
