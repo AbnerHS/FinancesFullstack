@@ -16,12 +16,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { useQueryClient } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { CSS } from "@dnd-kit/utilities"
 import {
   AlertTriangle,
   CalendarSync,
+  CalendarX2,
   CheckCircle2,
   Clock3,
   CreditCard as CreditCardIcon,
@@ -60,6 +60,7 @@ import {
   useInvoicePayment,
   usePeriodInvoiceManager,
   useSubscriptionMutations,
+  useSubscriptions,
   useTransactionPayment,
   useTransactionLinking,
   useTransactionMutations,
@@ -96,6 +97,7 @@ import {
   formatCurrency,
   formatDateOnly,
   formatDateTime,
+  formatMonthLabel,
   getTransactionDueAlert,
   defaultReferenceDate,
   parseCurrencyInput,
@@ -128,6 +130,7 @@ const emptyForm = (): TransactionFormValues => ({
   categoryName: "",
   isRecurring: false,
   occurrences: 2,
+  isSubscription: false,
   recurringGroupId: null,
   hasDueDate: false,
   dueDate: "",
@@ -147,7 +150,10 @@ type TransactionActions = {
   /** Sem data: alterna (pendente ↔ pago hoje). Com data: marca como pago nessa data. */
   onTogglePaid: (transaction: Transaction, paymentDate?: string) => void
   onOpenDocument: (transaction: Transaction) => void
-  onSubscription: (transaction: Transaction) => void
+  /** Cobrança de assinatura: "ACTIVE" (pode encerrar), "ENDED" (pode reativar); senão null. */
+  subscriptionStatus: (transaction: Transaction) => "ACTIVE" | "ENDED" | null
+  onEndSubscription: (transaction: Transaction) => void
+  onResumeSubscription: (transaction: Transaction) => void
 }
 
 type TransactionRowProps = TransactionActions & {
@@ -577,7 +583,9 @@ function TransactionActionSheet({
   onDelete,
   onTogglePaid,
   onOpenDocument,
-  onSubscription,
+  subscriptionStatus,
+  onEndSubscription,
+  onResumeSubscription,
 }: TransactionActions & {
   transaction: Transaction | null
   onClose: () => void
@@ -611,10 +619,10 @@ function TransactionActionSheet({
           },
         ]
       : []),
-    ...(transaction.subscriptionId
-      ? [{ label: "Ver assinatura", icon: CalendarSync, onClick: () => onSubscription(transaction) }]
-      : isExpense && transaction.recurringGroupId
-        ? [{ label: "Transformar em assinatura", icon: CalendarSync, onClick: () => onSubscription(transaction) }]
+    ...(subscriptionStatus(transaction) === "ACTIVE"
+      ? [{ label: "Encerrar assinatura", icon: CalendarX2, onClick: () => onEndSubscription(transaction) }]
+      : subscriptionStatus(transaction) === "ENDED"
+        ? [{ label: "Reativar assinatura", icon: CalendarSync, onClick: () => onResumeSubscription(transaction) }]
         : []),
     { label: "Excluir", icon: Trash2, onClick: () => onDelete(transaction), destructive: true },
   ]
@@ -1148,7 +1156,11 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   const transactionLinking = useTransactionLinking(panel.period)
   const transactionPayment = useTransactionPayment(panel.period.planId)
   const subscriptionMutations = useSubscriptionMutations(panel.period.planId)
-  const navigate = useNavigate()
+  const subscriptionsQuery = useSubscriptions(panel.period.planId)
+  const subscriptionById = useMemo(
+    () => new Map((subscriptionsQuery.data ?? []).map((item) => [item.id, item])),
+    [subscriptionsQuery.data]
+  )
   useEscapeKey(
     Boolean(transactionLinking.paymentModalEntry),
     transactionLinking.closePaymentModal
@@ -1328,6 +1340,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
       categoryName: transaction.category?.name || "",
       isRecurring: false,
       occurrences: 2,
+      isSubscription: false,
       recurringGroupId: transaction.recurringGroupId || null,
       hasDueDate: Boolean(
         transaction.dueDate ||
@@ -1464,6 +1477,23 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         payload: updatePayload,
       })
 
+      // Cobrança de assinatura com "esta e as próximas": a assinatura muda e, com ela, as cobranças
+      // pendentes a partir do mês atual.
+      if (editingScope === "GROUP" && editingTransaction.subscriptionId && form.type === "EXPENSE") {
+        const billingDate = payload.dueDate || editingTransaction.referenceDate
+        await subscriptionMutations.update.mutateAsync({
+          id: editingTransaction.subscriptionId,
+          payload: {
+            name: payload.description,
+            amount: payload.amount,
+            category: payload.category,
+            responsibleUserId: payload.responsibleUserId,
+            billingDay: Number(billingDate.slice(8, 10)),
+            chargeMode: payload.dueDate ? "BILL" : "AUTO",
+          },
+        })
+      }
+
       if (fileToUpload) {
         uploadTargetId = editingTransaction.id
         uploadTargetScope =
@@ -1471,6 +1501,19 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             ? "GROUP"
             : "SINGLE"
       }
+    } else if (form.isSubscription && form.type === "EXPENSE") {
+      // Assinatura: a cobrança deste mês e as próximas são geradas pelo servidor.
+      const billingDate = payload.dueDate || newTransactionPlacement.referenceDate
+      await subscriptionMutations.create.mutateAsync({
+        name: payload.description,
+        amount: payload.amount,
+        category: payload.category,
+        responsibleUserId: payload.responsibleUserId,
+        billingDay: Number(billingDate.slice(8, 10)),
+        chargeMode: payload.dueDate ? "BILL" : "AUTO",
+        startMonth: panel.period.id,
+        endMonth: null,
+      })
     } else if (form.isRecurring) {
       if (!Number.isFinite(form.occurrences) || form.occurrences < 2) {
         throw new Error("Informe pelo menos 2 meses para a recorrência.")
@@ -1532,6 +1575,52 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
             }),
         }
         : {}),
+      ...(entry.subscriptionId && subscriptionStatus(entry) === "ACTIVE"
+        ? {
+          confirmLabel: "Pular este mês",
+          description: `"${entry.description}" é uma assinatura. Você pode remover só a cobrança deste mês (as próximas continuam) ou encerrar a assinatura a partir daqui.`,
+          title: "Excluir cobrança da assinatura?",
+          secondaryConfirmLabel: "Encerrar assinatura",
+          onSecondaryConfirm: () => endSubscription(entry, { deleteCharge: true }),
+        }
+        : {}),
+    })
+
+  /** Mês (AAAA-MM) da cobrança: a assinatura termina nele. */
+  const chargeMonthOf = (entry: Transaction) => (entry.referenceDate ?? "").slice(0, 7)
+
+  function subscriptionStatus(entry: Transaction) {
+    if (!entry.subscriptionId) return null
+    const subscription = subscriptionById.get(entry.subscriptionId)
+    if (!subscription) return null
+    return subscription.endMonth && subscription.endMonth <= chargeMonthOf(entry)
+      ? ("ENDED" as const)
+      : ("ACTIVE" as const)
+  }
+
+  function endSubscription(entry: Transaction, options: { deleteCharge?: boolean } = {}) {
+    if (!entry.subscriptionId) return
+    setDocumentError(null)
+    const subscriptionId = entry.subscriptionId
+    const end = () =>
+      subscriptionMutations.update.mutate(
+        { id: subscriptionId, payload: { endMonth: chargeMonthOf(entry) } },
+        {
+          onError: (error) =>
+            setDocumentError(getErrorMessage(error, "Não foi possível encerrar a assinatura.")),
+        }
+      )
+    if (options.deleteCharge) deleteTransaction.mutate(entry.id, { onSuccess: end })
+    else end()
+  }
+
+  const confirmEndSubscription = (entry: Transaction) =>
+    setConfirmationDialog({
+      eyebrow: "Assinatura",
+      title: "Encerrar assinatura?",
+      description: `"${entry.description}" para de gerar cobranças depois de ${formatMonthLabel(Number(chargeMonthOf(entry).slice(5, 7))).toLowerCase()}/${chargeMonthOf(entry).slice(0, 4)}. A cobrança deste mês e o histórico continuam.`,
+      confirmLabel: "Encerrar",
+      onConfirm: () => endSubscription(entry),
     })
 
   const invoicePayment = useInvoicePayment(panel.period.planId)
@@ -1567,19 +1656,18 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         paid: paymentDate ? true : transaction.paymentStatus !== "PAID",
         paymentDate,
       }),
-    // Cobrança de assinatura: abre a tela de assinaturas. Recorrência: vira assinatura e abre a tela.
-    onSubscription: (transaction) => {
-      if (transaction.subscriptionId) {
-        void navigate({ to: "/assinaturas" })
-        return
-      }
-      if (!transaction.recurringGroupId) return
+    subscriptionStatus,
+    onEndSubscription: confirmEndSubscription,
+    onResumeSubscription: (transaction) => {
+      if (!transaction.subscriptionId) return
       setDocumentError(null)
-      subscriptionMutations.fromRecurring.mutate(transaction.recurringGroupId, {
-        onSuccess: () => void navigate({ to: "/assinaturas" }),
-        onError: (error) =>
-          setDocumentError(getErrorMessage(error, "Não foi possível criar a assinatura.")),
-      })
+      subscriptionMutations.update.mutate(
+        { id: transaction.subscriptionId, payload: { endMonth: null } },
+        {
+          onError: (error) =>
+            setDocumentError(getErrorMessage(error, "Não foi possível reativar a assinatura.")),
+        }
+      )
     },
     onOpenDocument: (transaction) => {
       setDocumentError(null)

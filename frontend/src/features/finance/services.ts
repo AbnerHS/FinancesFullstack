@@ -12,7 +12,6 @@ import type {
   PlanInvitation,
   PlanInviteLink,
   PlanParticipant,
-  RecurringGroupSummary,
   Subscription,
   SubscriptionPayload,
   Transaction,
@@ -37,8 +36,6 @@ export const financeKeys = {
     ["period-invoices", "card", cardId] as const,
   categories: ["transaction-categories"] as const,
   subscriptions: (planId?: string | null) => ["subscriptions", planId] as const,
-  recurringGroups: (planId?: string | null) =>
-    ["subscriptions", planId, "recurring-groups"] as const,
   // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
   periodTransactionsRoot: ["period-transactions"] as const,
   periodTransactions: (period?: Pick<Period, "planId" | "id"> | null) =>
@@ -331,22 +328,6 @@ export const subscriptionService = {
   },
   async update(id: string, payload: Partial<SubscriptionPayload>) {
     const { data } = await http.patch<Subscription>(`/subscriptions/${id}`, payload)
-    return data
-  },
-  async delete(id: string) {
-    await http.delete(`/subscriptions/${id}`)
-  },
-  async recurringGroups(planId: string) {
-    const { data } = await http.get<{ recurringGroups: RecurringGroupSummary[] }>(
-      `/plans/${planId}/recurring-groups`
-    )
-    return data.recurringGroups
-  },
-  async fromRecurring(planId: string, recurringGroupId: string) {
-    const { data } = await http.post<Subscription>(
-      `/plans/${planId}/subscriptions/from-recurring`,
-      { recurringGroupId }
-    )
     return data
   },
 }

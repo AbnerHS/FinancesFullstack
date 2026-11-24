@@ -17,7 +17,6 @@ import { InvitePage } from "@/pages/invite-page.tsx"
 import { PartnerPage } from "@/pages/partner-page.tsx"
 import { PlansPage } from "@/pages/plans-page.tsx"
 import { ProfilePage } from "@/pages/profile-page.tsx"
-import { SubscriptionsPage } from "@/pages/subscriptions-page.tsx"
 
 const rootRoute = createRootRoute({
   component: Outlet,
@@ -91,12 +90,6 @@ const cardsRoute = createRoute({
   component: CardsPage,
 })
 
-const subscriptionsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/assinaturas",
-  component: SubscriptionsPage,
-})
-
 const partnerRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/partner",
@@ -113,7 +106,6 @@ const routeTree = rootRoute.addChildren([
     profileRoute,
     plansRoute,
     cardsRoute,
-    subscriptionsRoute,
     partnerRoute,
   ]),
 ])

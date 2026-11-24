@@ -13,7 +13,6 @@ import {
   currentYearMonth,
   dayOfMonth,
   monthRange,
-  toYearMonth,
 } from "../lib/dates.ts"
 import { badRequest, notFound } from "../lib/errors.ts"
 import { withLinks } from "../lib/hal.ts"
@@ -291,100 +290,3 @@ export async function remove(db: Database, user: User, id: string) {
     db.delete(subscriptions).where(eq(subscriptions.id, id)),
   ])
 }
-
-/** Recorrências (despesas) do plano que ainda não viraram assinatura, para oferecer a conversão. */
-export async function recurringGroups(db: Database, user: User, planId: string) {
-  await requirePlanAccess(db, planId, user)
-  const rows = await db
-    .select({
-      recurringGroupId: transactions.recurringGroupId,
-      description: transactions.description,
-      amountCents: transactions.amountCents,
-      referenceDate: transactions.referenceDate,
-    })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.planId, planId),
-        eq(transactions.type, "EXPENSE"),
-        isNotNull(transactions.recurringGroupId),
-        isNull(transactions.subscriptionId),
-      ),
-    )
-    .orderBy(asc(transactions.referenceDate))
-
-  // Em ordem de data: a última linha de cada grupo é a ocorrência mais recente (nome e valor atuais).
-  const groups = new Map<
-    string,
-    { recurringGroupId: string; description: string; amount: number; occurrences: number; firstMonth: string; lastMonth: string }
-  >()
-  for (const row of rows) {
-    const month = toYearMonth(row.referenceDate)
-    const current = groups.get(row.recurringGroupId!)
-    groups.set(row.recurringGroupId!, {
-      recurringGroupId: row.recurringGroupId!,
-      description: row.description?.trim() || "Sem descrição",
-      amount: fromCents(row.amountCents),
-      occurrences: (current?.occurrences ?? 0) + 1,
-      firstMonth: current?.firstMonth ?? month,
-      lastMonth: month,
-    })
-  }
-  return [...groups.values()].sort((a, b) => a.description.localeCompare(b.description, "pt-BR"))
-}
-
-/**
- * Transforma uma recorrência em assinatura: os dados vêm da ocorrência mais recente e as
- * ocorrências existentes passam a ser cobranças dela. A assinatura continua depois da última
- * ocorrência, sem fim fixo.
- */
-export async function fromRecurring(db: Database, user: User, planId: string, recurringGroupId: string) {
-  await requirePlanAccess(db, planId, user)
-  const group = await db
-    .select()
-    .from(transactions)
-    .where(and(eq(transactions.planId, planId), eq(transactions.recurringGroupId, recurringGroupId)))
-    .orderBy(asc(transactions.referenceDate))
-  if (group.length === 0) throw notFound("Recorrência não encontrada neste plano.")
-  if (group.some((transaction) => transaction.type !== "EXPENSE")) {
-    throw badRequest("Só recorrências de despesa podem virar assinatura.")
-  }
-  if (group.some((transaction) => transaction.subscriptionId)) {
-    throw badRequest("Esta recorrência já virou assinatura.")
-  }
-
-  const latest = group[group.length - 1]!
-  const billingDate = latest.dueDate ?? latest.referenceDate
-  const subscriptionId = crypto.randomUUID()
-  const seenMonths = new Set<string>()
-
-  await db.batch([
-    db.insert(subscriptions).values({
-      id: subscriptionId,
-      planId,
-      name: latest.description?.trim() || "Assinatura",
-      amountCents: latest.amountCents,
-      categoryId: latest.categoryId,
-      responsibleUserId: latest.responsibleUserId,
-      billingDay: Number(billingDate.slice(8, 10)),
-      chargeMode: latest.dueDate ? "BILL" : "AUTO",
-      startMonth: toYearMonth(group[0]!.referenceDate),
-      endMonth: null,
-      generatedThrough: toYearMonth(latest.referenceDate),
-      createdAt: new Date().toISOString(),
-    }),
-    ...group.map((transaction) => {
-      const month = toYearMonth(transaction.referenceDate)
-      // Duas ocorrências no mesmo mês: só a primeira vira a cobrança daquele mês.
-      const subscriptionMonth = seenMonths.has(month) ? null : month
-      seenMonths.add(month)
-      return db
-        .update(transactions)
-        .set({ subscriptionId, subscriptionMonth, recurringGroupId: null })
-        .where(eq(transactions.id, transaction.id))
-    }),
-  ])
-  await ensureGenerated(db, planId, currentYearMonth())
-  return findModel(db, subscriptionId)
-}
-

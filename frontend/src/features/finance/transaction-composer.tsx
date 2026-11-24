@@ -415,51 +415,80 @@ function BillingDocumentField({
   )
 }
 
+type RepeatMode = "NONE" | "RECURRING" | "SUBSCRIPTION"
+
+const repeatModeOf = (form: TransactionFormValues): RepeatMode =>
+  form.isSubscription && form.type === "EXPENSE"
+    ? "SUBSCRIPTION"
+    : form.isRecurring
+      ? "RECURRING"
+      : "NONE"
+
+/**
+ * Repetição: só este mês, N meses (cria todas as ocorrências agora) ou assinatura (despesa mensal
+ * sem fim; a cobrança de cada mês é gerada quando o mês chega).
+ */
 function RecurrenceField({
   form,
   setForm,
 }: Pick<SharedLayoutProps, "form" | "setForm">) {
+  const mode = repeatModeOf(form)
+
   return (
-    <div className="flex items-end">
-      <div className="w-full rounded-xl border border-border bg-card/90 px-3">
-        <div className="flex flex-wrap items-center gap-x-3 xl:flex-nowrap">
-          <Label className="text-[11px] tracking-widest">Recorrente</Label>
-          <div className="flex min-h-11 items-center">
-            <Switch
-              checked={form.isRecurring}
-              onClick={() =>
-                setForm((current) => ({
-                  ...current,
-                  isRecurring: !current.isRecurring,
-                  occurrences:
-                    !current.isRecurring && current.occurrences < 2
-                      ? 2
-                      : current.occurrences,
-                }))
-              }
-            />
-          </div>
-          {form.isRecurring ? (
-            <div className="flex flex-row items-center gap-2 py-2 xl:py-0">
-              <Label className="text-[10px] tracking-widest">Meses</Label>
-              <Input
-                className="h-8 w-20 xl:w-full"
-                type="number"
-                min={2}
-                max={120}
-                disabled={!form.isRecurring}
-                value={form.occurrences}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    occurrences: Number(event.target.value) || 2,
-                  }))
-                }
-              />
-            </div>
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <div className={fieldClassName}>
+        <Label htmlFor="transaction-repeat">Repetição</Label>
+        <Select
+          id="transaction-repeat"
+          value={mode}
+          onChange={(event) => {
+            const next = event.target.value as RepeatMode
+            setForm((current) => ({
+              ...current,
+              isRecurring: next === "RECURRING",
+              isSubscription: next === "SUBSCRIPTION",
+              occurrences:
+                next === "RECURRING" && current.occurrences < 2
+                  ? 2
+                  : current.occurrences,
+            }))
+          }}
+        >
+          <option value="NONE">Não repete</option>
+          <option value="RECURRING">Repetir por alguns meses</option>
+          {form.type === "EXPENSE" ? (
+            <option value="SUBSCRIPTION">Assinatura (todo mês, sem data para acabar)</option>
           ) : null}
-        </div>
+        </Select>
       </div>
+      {mode === "RECURRING" ? (
+        <div className={fieldClassName}>
+          <Label htmlFor="transaction-occurrences">Meses</Label>
+          <Input
+            id="transaction-occurrences"
+            className="sm:w-24"
+            type="number"
+            min={2}
+            max={120}
+            value={form.occurrences}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                occurrences: Number(event.target.value) || 2,
+              }))
+            }
+          />
+        </div>
+      ) : null}
+      {mode === "SUBSCRIPTION" ? (
+        <p className="text-xs text-muted-foreground sm:col-span-2">
+          A cobrança aparece todo mês no mesmo dia
+          {form.hasDueDate && form.dueDate ? " do vencimento" : ""}, até você encerrar a assinatura.
+          {form.hasDueDate && form.dueDate
+            ? " Cada mês entra em Contas a pagar."
+            : " Sem vencimento, conta como débito automático."}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -473,7 +502,8 @@ function EditScopeField({
   editingScope: "SINGLE" | "GROUP"
   setEditingScope: React.Dispatch<React.SetStateAction<"SINGLE" | "GROUP">>
 }) {
-  if (!editingTransaction?.recurringGroupId) {
+  const isSubscription = Boolean(editingTransaction?.subscriptionId)
+  if (!editingTransaction?.recurringGroupId && !isSubscription) {
     return null
   }
 
@@ -486,8 +516,14 @@ function EditScopeField({
           setEditingScope(event.target.value as "SINGLE" | "GROUP")
         }
       >
-        <option value="SINGLE">Somente esta transação</option>
-        <option value="GROUP">Todas do grupo recorrente</option>
+        <option value="SINGLE">
+          {isSubscription ? "Somente a cobrança deste mês" : "Somente esta transação"}
+        </option>
+        <option value="GROUP">
+          {isSubscription
+            ? "Esta e as próximas cobranças da assinatura"
+            : "Todas do grupo recorrente"}
+        </option>
       </Select>
     </div>
   )
@@ -523,7 +559,11 @@ function ActionButtons({
             ? updatePending
               ? "Salvando..."
               : "Salvar"
-            : form.isRecurring
+            : repeatModeOf(form) === "SUBSCRIPTION"
+              ? createRecurringPending
+                ? "Criando..."
+                : "Criar Assinatura"
+              : form.isRecurring
               ? createRecurringPending
                 ? "Criando..."
                 : "Criar Recorrência"
@@ -593,13 +633,13 @@ function TransactionCreateFormLayout({
         <DueDateField form={form} setForm={setForm} />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <BillingDocumentField form={form} setForm={setForm} />
-      </div>
+      {repeatModeOf(form) === "SUBSCRIPTION" ? null : (
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <BillingDocumentField form={form} setForm={setForm} />
+        </div>
+      )}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <RecurrenceField form={form} setForm={setForm} />
-      </div>
+      <RecurrenceField form={form} setForm={setForm} />
     </>
   )
 }
@@ -653,13 +693,6 @@ function TransactionEditFormLayout({
           setEditingScope={setEditingScope}
         />
       </div>
-
-      {editingTransaction.subscriptionId ? (
-        <p className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-          Cobrança de assinatura: as mudanças aqui valem só para este mês. Para mudar o valor dos próximos
-          meses, edite a assinatura na tela Assinaturas.
-        </p>
-      ) : null}
     </>
   )
 }

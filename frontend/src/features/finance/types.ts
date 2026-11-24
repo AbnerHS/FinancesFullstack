@@ -136,15 +136,6 @@ export type Subscription = EntityModel<{
   createdAt: string
 }>
 
-export type RecurringGroupSummary = {
-  recurringGroupId: string
-  description: string
-  amount: number
-  occurrences: number
-  firstMonth: string
-  lastMonth: string
-}
-
 export type SubscriptionPayload = {
   name: string
   amount: number
@@ -175,6 +166,8 @@ export type TransactionFormValues = {
   categoryName: string
   isRecurring: boolean
   occurrences: number
+  /** Despesa mensal sem fim: vira assinatura (cobrança gerada a cada mês). */
+  isSubscription: boolean
   recurringGroupId?: string | null
   hasDueDate: boolean
   dueDate: string

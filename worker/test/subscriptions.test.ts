@@ -138,66 +138,6 @@ describe("assinaturas", () => {
     expect((await as(owner).get(`/subscriptions/${subscription.id}`)).status).toBe(404)
   })
 
-  it("transforma uma recorrência em assinatura e continua depois da última ocorrência", async () => {
-    const owner = await createUser()
-    const plan = await createPlan(owner)
-    const recurring = await json<any[]>(
-      as(owner).post("/transactions/recurring", {
-        transaction: {
-          planId: plan.id,
-          description: "Academia",
-          amount: 70,
-          type: "EXPENSE",
-          referenceDate: `${month(-1)}-04`,
-          dueDate: `${month(-1)}-04`,
-        },
-        occurrences: 2,
-      }),
-    )
-    const groupId = recurring[0].recurringGroupId
-    // Outro grupo, com nome e valor diferentes: cada grupo mostra os seus.
-    const other = await json<any[]>(
-      as(owner).post("/transactions/recurring", {
-        transaction: { planId: plan.id, description: "Celular", amount: 55, type: "EXPENSE", referenceDate: `${month(0)}-10` },
-        occurrences: 3,
-      }),
-    )
-
-    const groups = await json(as(owner).get(`/plans/${plan.id}/recurring-groups`))
-    expect(groups.recurringGroups).toEqual([
-      expect.objectContaining({ recurringGroupId: groupId, description: "Academia", amount: 70, occurrences: 2 }),
-      expect.objectContaining({ recurringGroupId: other[0].recurringGroupId, description: "Celular", amount: 55, occurrences: 3 }),
-    ])
-
-    const subscription = await json(
-      as(owner).post(`/plans/${plan.id}/subscriptions/from-recurring`, { recurringGroupId: groupId }),
-      201,
-    )
-    expect(subscription).toMatchObject({
-      name: "Academia",
-      amount: 70,
-      billingDay: 4,
-      chargeMode: "BILL",
-      startMonth: month(-1),
-      endMonth: null,
-    })
-
-    const months = await monthData(owner, plan.id, month(-1), month(2))
-    const charges = chargesOf(months, subscription.id)
-    expect(charges.map((t) => t.referenceDate)).toEqual([
-      `${month(-1)}-04`,
-      `${month(0)}-04`,
-      `${month(1)}-04`,
-      `${month(2)}-04`,
-    ])
-    // As ocorrências antigas foram aproveitadas (mesmos ids) e saíram do grupo.
-    expect(charges.slice(0, 2).map((t) => t.id).sort()).toEqual(recurring.map((t) => t.id).sort())
-    expect(charges.every((t) => t.recurringGroupId === null)).toBe(true)
-    expect((await json(as(owner).get(`/plans/${plan.id}/recurring-groups`))).recurringGroups).toEqual([
-      expect.objectContaining({ description: "Celular" }),
-    ])
-  })
-
   it("valida responsável, acesso ao plano e datas", async () => {
     const { owner, plan, subscription } = await setup()
     const stranger = await createUser()

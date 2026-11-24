@@ -184,23 +184,6 @@ export const planRoutes = new Hono<AppEnv>()
     c.header("Location", `/api/subscriptions/${created.id}`)
     return c.json(created, 201)
   })
-  .get("/:id/recurring-groups", async (c) =>
-    c.json({ recurringGroups: await subscriptions.recurringGroups(c.var.db, c.var.user, c.req.param("id")) }),
-  )
-  .post(
-    "/:id/subscriptions/from-recurring",
-    validate("json", z.object({ recurringGroupId: z.string().min(1, "Informe a recorrência") })),
-    async (c) => {
-      const created = await subscriptions.fromRecurring(
-        c.var.db,
-        c.var.user,
-        c.req.param("id"),
-        c.req.valid("json").recurringGroupId,
-      )
-      c.header("Location", `/api/subscriptions/${created.id}`)
-      return c.json(created, 201)
-    },
-  )
   .get("/:id/summary", async (c) =>
     c.json(await transactions.summary(c.var.db, c.var.user, c.req.param("id"), parseDateRange(c.req.query()))),
   )
