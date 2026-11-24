@@ -72,3 +72,5 @@ application*.yml.example
 # application*.yml
 
 data/
+# Script de login local (só desenvolvimento, nunca vai para produção)
+worker/scripts/dev-local-login.ts
