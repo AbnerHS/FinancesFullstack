@@ -519,7 +519,7 @@ function RecurrenceField({
             A cobrança aparece todo mês no mesmo dia
             {form.hasDueDate && form.dueDate ? " da data informada" : ""}, até você encerrar a assinatura.
             {cardName
-              ? ` Cada mês entra na fatura do ${cardName} daquele mês (se a fatura ainda não existir, entra quando ela for criada).`
+              ? ` No dia ${form.hasDueDate && form.dueDate ? "do vencimento" : "da cobrança"}, cada mês entra na fatura do ${cardName} daquele mês (quando a fatura existir).`
               : form.hasDueDate && form.dueDate
                 ? " Cada mês entra em Contas a pagar."
                 : " Sem vencimento, conta como débito automático."}

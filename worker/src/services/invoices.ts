@@ -1,14 +1,13 @@
-import { and, between, eq, inArray, max, ne, or, isNull, sql } from "drizzle-orm"
+import { and, between, eq, max, ne, or, isNull, sql } from "drizzle-orm"
 import type { Database } from "../db/client.ts"
 import {
   type CreditCardInvoice,
   creditCardInvoices,
   creditCards,
-  subscriptions,
   transactions,
   type User,
 } from "../db/schema.ts"
-import { daysInMonth, monthBounds } from "../lib/dates.ts"
+import { currentDate, daysInMonth, monthBounds } from "../lib/dates.ts"
 import { ApiError, badRequest, notFound } from "../lib/errors.ts"
 import { isUniqueViolation } from "../lib/db-errors.ts"
 import { withLinks } from "../lib/hal.ts"
@@ -102,27 +101,29 @@ export async function assertCardInPlan(db: Database, planId: string, creditCardI
 }
 
 /**
- * Cobranças de assinaturas deste cartão no mês da fatura que ainda não têm fatura passam a fazer
- * parte dela (geradas antes de a fatura existir).
+ * Assinaturas cobradas no cartão: no dia do vencimento (ou da cobrança, se não houver vencimento)
+ * a cobrança entra na fatura do cartão naquele mês, se a fatura existir. Antes disso é uma conta
+ * comum. Roda nas leituras (com a geração das cobranças) e ao criar uma fatura. Só mexe em
+ * cobranças pendentes ainda sem fatura: um vínculo feito à mão (com outra fatura) fica como está.
  */
-function attachSubscriptionCharges(db: Database, invoice: CreditCardInvoice) {
-  return db
-    .update(transactions)
-    .set({ creditCardInvoiceId: invoice.id, clearedByInvoice: true })
-    .where(
-      and(
-        eq(transactions.planId, invoice.planId),
-        eq(transactions.subscriptionMonth, invoice.referenceMonth),
-        isNull(transactions.creditCardInvoiceId),
-        inArray(
-          transactions.subscriptionId,
-          db
-            .select({ id: subscriptions.id })
-            .from(subscriptions)
-            .where(eq(subscriptions.creditCardId, invoice.creditCardId)),
-        ),
-      ),
-    )
+export function linkDueSubscriptionCharges(db: Database, planId: string) {
+  const invoiceOfCharge = sql`(
+    select i.id from credit_card_invoices i
+    join subscriptions s on s.credit_card_id = i.credit_card_id
+    where s.id = transactions.subscription_id
+      and i.plan_id = transactions.plan_id
+      and i.reference_month = transactions.subscription_month
+  )`
+  return db.run(sql`
+    update transactions
+    set credit_card_invoice_id = ${invoiceOfCharge}, is_cleared_by_invoice = 1
+    where plan_id = ${planId}
+      and credit_card_invoice_id is null
+      and payment_status = 'PENDING'
+      and subscription_id in (select id from subscriptions where plan_id = ${planId} and credit_card_id is not null)
+      and coalesce(due_date, reference_date) <= ${currentDate()}
+      and ${invoiceOfCharge} is not null
+  `)
 }
 
 const duplicate = () => new ApiError(409, "Conflito", "Já existe uma fatura deste cartão neste mês para o plano.")
@@ -142,7 +143,7 @@ export async function create(db: Database, user: User, input: InvoiceInput & { p
         ...paymentFields(input, null),
       })
       .returning()
-    await attachSubscriptionCharges(db, invoice!)
+    await linkDueSubscriptionCharges(db, invoice!.planId)
     return invoice!
   } catch (error) {
     if (isUniqueViolation(error)) throw duplicate()
