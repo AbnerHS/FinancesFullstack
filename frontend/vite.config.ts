@@ -3,6 +3,7 @@ import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
+import { VitePWA } from "vite-plugin-pwa"
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
 /**
@@ -42,6 +43,21 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       stripDevLoginPages(),
+      // App instalável: service worker com o app em cache (abre rápido e sem rede mostra a
+      // interface). A API fica fora do cache: em produção é outro domínio, e no dev o /api é
+      // excluído do fallback. O manifesto é o de public/manifest.webmanifest.
+      VitePWA({
+        registerType: "prompt",
+        injectRegister: false,
+        manifest: false,
+        workbox: {
+          globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest,woff2}"],
+          globIgnores: ["**/dev-login*.html"],
+          navigateFallback: "/index.html",
+          navigateFallbackDenylist: [/^\/api\//, /^\/dev-login/],
+          cleanupOutdatedCaches: true,
+        },
+      }),
     ],
     server: {
       host: true,

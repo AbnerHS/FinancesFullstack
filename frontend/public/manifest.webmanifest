@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "Finances",
   "short_name": "Finances",
   "description": "Planos financeiros, contas a pagar e faturas de cartão.",
   "lang": "pt-BR",
+  "categories": ["finance", "productivity"],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
