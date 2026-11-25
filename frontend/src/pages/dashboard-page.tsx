@@ -126,17 +126,6 @@ export function DashboardPage() {
         />
       </KeepHeightWhileLoading>
 
-      {activePanel ? (
-        <ForecastsCard
-          planId={activePlan?.id ?? null}
-          monthId={activePanel.period.id}
-          forecast={activePanel.forecast}
-          forecasts={activePanel.forecasts ?? []}
-          categories={transactionCategories}
-          responsibleOptions={responsibleOptions}
-        />
-      ) : null}
-
       <section className="space-y-3" aria-label="Transações do mês">
         <div>
           <h3 className="font-serif text-2xl font-semibold text-foreground sm:text-3xl">
@@ -161,6 +150,18 @@ export function DashboardPage() {
           />
         )}
       </section>
+
+      {/* Previsto × real no fim da tela, depois das transações do mês. */}
+      {activePanel ? (
+        <ForecastsCard
+          planId={activePlan?.id ?? null}
+          monthId={activePanel.period.id}
+          forecast={activePanel.forecast}
+          forecasts={activePanel.forecasts ?? []}
+          categories={transactionCategories}
+          responsibleOptions={responsibleOptions}
+        />
+      ) : null}
 
       {activePeriod ? (
         <MonthPickerDialog
