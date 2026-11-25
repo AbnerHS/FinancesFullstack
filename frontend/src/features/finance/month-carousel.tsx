@@ -128,12 +128,22 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       timers = [120, 400, 900].map((delay) => window.setTimeout(() => !moving && fit(), delay))
     }
 
+    // Saltos instantâneos (scrollTo(_, true) ao abrir a página ou recentrar) emitem "select" mas não
+    // "settle": sem este limite o carrossel ficava "em movimento" para sempre, só crescendo, com a
+    // altura do mês mais alto carregado e um espaço vazio embaixo do mês visível.
+    let settleFallback: number | undefined
     let moving = false
     const onSelect = () => {
       moving = true
       grow()
+      window.clearTimeout(settleFallback)
+      settleFallback = window.setTimeout(() => {
+        moving = false
+        fit()
+      }, 800)
     }
     const onSettle = () => {
+      window.clearTimeout(settleFallback)
       moving = false
       fit()
       fitSoon()
@@ -155,6 +165,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       emblaApi.off("select", onSelect).off("settle", onSettle).off("reInit", observeSlides)
       observer.disconnect()
       timers.forEach((timer) => window.clearTimeout(timer))
+      window.clearTimeout(settleFallback)
       container.style.height = ""
     }
   }, [emblaApi])
