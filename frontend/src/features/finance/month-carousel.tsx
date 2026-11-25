@@ -119,6 +119,15 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       if (height !== null && height > container.offsetHeight) container.style.height = `${height}px`
     }
 
+    // Ao parar (ou recentrar a janela), o mês visível pode ainda estar oculto (altura 0) e a
+    // medida é ignorada; sem nova mudança de tamanho, o carrossel ficava com a altura do mês
+    // anterior e sobrava um espaço vazio embaixo. Repete o ajuste logo depois.
+    let timers: number[] = []
+    const fitSoon = () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      timers = [120, 400, 900].map((delay) => window.setTimeout(() => !moving && fit(), delay))
+    }
+
     let moving = false
     const onSelect = () => {
       moving = true
@@ -127,6 +136,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     const onSettle = () => {
       moving = false
       fit()
+      fitSoon()
     }
 
     const observer = new ResizeObserver(() => (moving ? grow() : fit()))
@@ -136,6 +146,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       observer.disconnect()
       emblaApi.slideNodes().forEach((slide) => observer.observe(slide))
       fit()
+      fitSoon()
     }
 
     observeSlides()
@@ -143,6 +154,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     return () => {
       emblaApi.off("select", onSelect).off("settle", onSettle).off("reInit", observeSlides)
       observer.disconnect()
+      timers.forEach((timer) => window.clearTimeout(timer))
       container.style.height = ""
     }
   }, [emblaApi])
