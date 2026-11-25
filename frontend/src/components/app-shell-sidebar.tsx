@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react"
 
+import { InstallAppButton } from "@/components/install-app-button.tsx"
 import { ThemeToggle } from "@/components/theme-toggle.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { cn } from "@/lib/utils.ts"
@@ -176,6 +177,7 @@ export function AppShellSidebar({
                 Aparencia
               </p>
               <ThemeToggle />
+            <InstallAppButton />
             <Button
               type="button"
               variant="outline"

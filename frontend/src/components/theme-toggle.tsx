@@ -9,7 +9,11 @@ const themeOptions = [
   { value: "system", label: "Sistema", icon: Monitor },
 ] as const
 
-export function ThemeToggle() {
+/**
+ * Claro / Escuro / Sistema. `iconsOnMobile`: no celular só os ícones (o nome fica na dica e no
+ * aria-label), para caber ao lado de outros botões.
+ */
+export function ThemeToggle({ iconsOnMobile = false }: { iconsOnMobile?: boolean }) {
   const { theme, setTheme } = useTheme()
 
   return (
@@ -26,9 +30,12 @@ export function ThemeToggle() {
             size="sm"
             className={active ? "bg-primary text-primary-foreground hover:bg-primary/90" : "text-muted-foreground"}
             onClick={() => setTheme(option.value)}
+            title={option.label}
+            aria-label={option.label}
+            aria-pressed={active}
           >
             <Icon size={14} />
-            {option.label}
+            <span className={iconsOnMobile ? "hidden sm:inline" : undefined}>{option.label}</span>
           </Button>
         )
       })}

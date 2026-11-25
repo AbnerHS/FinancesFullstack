@@ -1,6 +1,26 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { Save, SendHorizonal, X } from "lucide-react"
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Ban,
+  CalendarDays,
+  CalendarSync,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  Link2,
+  Minus,
+  Paperclip,
+  Plus,
+  Receipt,
+  Repeat2,
+  Save,
+  SendHorizonal,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -8,10 +28,11 @@ import { Combobox } from "@/components/ui/combobox.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
-import { Switch } from "@/components/ui/switch.tsx"
+import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
-import { todayIso } from "@/features/finance/utils.ts"
+import { ResponsiblePills } from "@/features/finance/responsible-pills.tsx"
+import { formatMonthLabel, recentPaymentDays, todayIso } from "@/features/finance/utils.ts"
+import { cn } from "@/lib/utils"
 import { useEscapeKey } from "@/lib/use-escape-key.ts"
 import type {
   ResponsibleOption,
@@ -22,6 +43,8 @@ import type {
 type TransactionComposerProps = {
   isOpen: boolean
   periodLabel: string
+  /** Mês do painel (AAAA-MM): início da repetição. */
+  periodId: string
   form: TransactionFormValues
   setForm: React.Dispatch<React.SetStateAction<TransactionFormValues>>
   editingTransaction: Transaction | null
@@ -53,6 +76,7 @@ type SharedLayoutProps = {
   categoryOptions: Array<{ label: string; value: string }>
   responsibleOptions: ResponsibleOption[]
   cardOptions: Array<{ label: string; value: string }>
+  periodId: string
 }
 
 type ActionsRowProps = {
@@ -70,6 +94,47 @@ type ActionsRowProps = {
 const CONTINUE_INTENT = "continue"
 
 const fieldClassName = "flex flex-col gap-2"
+
+/** Cores por tipo: saída em vermelho, entrada em verde (as mesmas dos valores na lista). */
+const TYPE_TONE = {
+  EXPENSE: {
+    label: "Saída",
+    icon: ArrowDownCircle,
+    text: "text-rose-600 dark:text-rose-400",
+    selected: "border-rose-500/45 bg-rose-500/12 text-rose-700 dark:text-rose-300",
+    hover: "hover:border-rose-500/40 hover:text-rose-600 dark:hover:text-rose-400",
+    bar: "bg-gradient-to-r from-rose-500 via-rose-400 to-orange-400",
+    pill: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
+  },
+  REVENUE: {
+    label: "Entrada",
+    icon: ArrowUpCircle,
+    text: "text-emerald-600 dark:text-emerald-400",
+    selected: "border-emerald-500/45 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+    hover: "hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400",
+    bar: "bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400",
+    pill: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+  },
+} as const
+
+/** Cores das opções de Cobrança (ícone sempre colorido; fundo quando escolhida). */
+const CHARGE_TONE = {
+  NONE: {
+    icon: "text-sky-600 dark:text-sky-400",
+    selected: "border-sky-500/45 bg-sky-500/12 text-sky-700 dark:text-sky-300",
+    hover: "hover:border-sky-500/40",
+  },
+  RECURRING: {
+    icon: "text-violet-600 dark:text-violet-400",
+    selected: "border-violet-500/45 bg-violet-500/12 text-violet-700 dark:text-violet-300",
+    hover: "hover:border-violet-500/40",
+  },
+  SUBSCRIPTION: {
+    icon: "text-amber-600 dark:text-amber-400",
+    selected: "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+    hover: "hover:border-amber-500/40",
+  },
+} as const
 
 function updateType(
   setForm: React.Dispatch<React.SetStateAction<TransactionFormValues>>,
@@ -161,6 +226,8 @@ function TransactionCommonRow({
         <Label>Valor</Label>
         <CurrencyInput
           value={form.amount}
+          className={cn("font-semibold tabular-nums", TYPE_TONE[form.type].text)}
+          prefixClassName={TYPE_TONE[form.type].text}
           onValueChange={(amount) =>
             setForm((current) => ({ ...current, amount }))
           }
@@ -168,19 +235,36 @@ function TransactionCommonRow({
       </div>
 
       <div className={fieldClassName}>
-        <Label>Tipo</Label>
-        <Select
-          value={form.type}
-          onChange={(event) =>
-            updateType(
-              setForm,
-              event.target.value as TransactionFormValues["type"]
-            )
-          }
+        <Label id="transaction-type-label">Tipo</Label>
+        <div
+          role="radiogroup"
+          aria-labelledby="transaction-type-label"
+          className="grid h-11 grid-cols-2 gap-1.5"
         >
-          <option value="EXPENSE">Saída</option>
-          <option value="REVENUE">Entrada</option>
-        </Select>
+          {(["EXPENSE", "REVENUE"] as const).map((type) => {
+            const tone = TYPE_TONE[type]
+            const Icon = tone.icon
+            const selected = form.type === type
+            return (
+              <button
+                key={type}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => updateType(setForm, type)}
+                className={cn(
+                  "inline-flex items-center justify-center gap-1.5 rounded-xl border text-sm font-medium transition",
+                  selected
+                    ? tone.selected
+                    : cn("border-border bg-card/85 text-foreground", tone.hover)
+                )}
+              >
+                <Icon size={16} className={cn("shrink-0", !selected && tone.text)} aria-hidden="true" />
+                {tone.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -213,31 +297,23 @@ function CategoryField({
   )
 }
 
+/** Responsável em pílulas: "Geral" e cada participante do plano (mesmas cores dos filtros). */
 function ResponsibleField({
   form,
   setForm,
   responsibleOptions,
 }: Pick<SharedLayoutProps, "form" | "setForm" | "responsibleOptions">) {
   return (
-    <div className={fieldClassName}>
-      <Label>Responsável</Label>
-      <Select
-        value={form.responsibleUserId}
-        onChange={(event) =>
-          setForm((current) => ({
-            ...current,
-            responsibleUserId: event.target.value,
-          }))
-        }
-      >
-        <option value="">Geral</option>
-        {responsibleOptions.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
-    </div>
+    <ResponsiblePills
+      id="transaction-responsible"
+      options={responsibleOptions}
+      value={form.responsibleUserId}
+      onChange={(responsibleUserId) =>
+        setForm((current) => ({ ...current, responsibleUserId }))
+      }
+      everyoneLabel="Geral"
+      everyoneTitle="Sem responsável específico"
+    />
   )
 }
 
@@ -261,6 +337,7 @@ function DueDateField({
   )
 }
 
+/** Status do pagamento em pílulas: Pendente (âmbar) ou Pago (verde). */
 function PaymentStatusField({
   form,
   setForm,
@@ -270,50 +347,95 @@ function PaymentStatusField({
   }
 
   return (
-    <div className={fieldClassName}>
-      <Label>Status</Label>
-      <div className="flex h-11 items-center justify-between rounded-xl border border-border bg-card px-3">
-        <span className="text-sm text-foreground">
-          {form.isPaid ? "Pago" : "Pendente"}
-        </span>
-        <Switch
-          checked={form.isPaid}
-          onClick={() =>
-            setForm((current) => ({
-              ...current,
-              isPaid: !current.isPaid,
-              // Ao marcar como pago, a data padrão é hoje.
-              paymentDate: current.isPaid ? "" : current.paymentDate || todayIso(),
-            }))
-          }
-        />
-      </div>
-    </div>
+    <PillGroup<"PENDING" | "PAID">
+      id="payment-status"
+      label="Status"
+      value={form.isPaid ? "PAID" : "PENDING"}
+      options={[
+        {
+          value: "PENDING",
+          label: "Pendente",
+          icon: Clock3,
+          tone: {
+            selected: "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+            hover: "hover:border-amber-500/40",
+          },
+        },
+        {
+          value: "PAID",
+          label: "Pago",
+          icon: CheckCircle2,
+          tone: {
+            selected: "border-emerald-500/45 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+            hover: "hover:border-emerald-500/40",
+          },
+        },
+      ]}
+      onChange={(status) =>
+        setForm((current) => ({
+          ...current,
+          isPaid: status === "PAID",
+          // Ao marcar como pago, a data padrão é hoje.
+          paymentDate: status === "PAID" ? current.paymentDate || todayIso() : "",
+        }))
+      }
+    />
   )
 }
 
+/**
+ * Data do pagamento (só quando pago): os últimos 7 dias em pílulas, como no "marcar como pago", e
+ * "Outra data" para um dia mais antigo.
+ */
 function PaymentDateField({
   form,
   setForm,
 }: Pick<SharedLayoutProps, "form" | "setForm">) {
-  if (form.type !== "EXPENSE" || !form.dueDate) {
+  const days = recentPaymentDays()
+  const isRecent = days.some((day) => day.date === form.paymentDate)
+  const [otherDate, setOtherDate] = useState(() => Boolean(form.paymentDate) && !isRecent)
+
+  if (form.type !== "EXPENSE" || !form.dueDate || !form.isPaid) {
     return null
   }
 
+  const OTHER = "OTHER"
+  const setPaymentDate = (paymentDate: string) =>
+    setForm((current) => ({ ...current, paymentDate }))
+
   return (
-    <div className={fieldClassName}>
-      <Label>Pagamento</Label>
-      <Input
-        type="date"
-        disabled={!form.isPaid}
-        value={form.paymentDate}
-        onChange={(event) =>
-          setForm((current) => ({
-            ...current,
-            paymentDate: event.target.value,
-          }))
-        }
+    <div className="flex flex-col gap-2">
+      <PillGroup<string>
+        id="payment-date"
+        label="Pago em"
+        value={otherDate || !isRecent ? OTHER : form.paymentDate}
+        options={[
+          ...days.map((day) => ({
+            value: day.date,
+            label: day.label === "Hoje" || day.label === "Ontem" ? day.label : day.short,
+            title: `${day.label}, ${day.short}`,
+          })),
+          { value: OTHER, label: "Outra data", icon: CalendarDays },
+        ]}
+        onChange={(value) => {
+          if (value === OTHER) {
+            setOtherDate(true)
+            return
+          }
+          setOtherDate(false)
+          setPaymentDate(value)
+        }}
       />
+      {otherDate || !isRecent ? (
+        <Input
+          type="date"
+          aria-label="Data do pagamento"
+          className="sm:max-w-xs"
+          value={form.paymentDate}
+          max={todayIso()}
+          onChange={(event) => setPaymentDate(event.target.value)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -335,36 +457,32 @@ function BillingDocumentField({
         </p>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-        <div className={fieldClassName}>
-          <Label>Tipo</Label>
-          <Select
-            value={form.billingDocumentType}
-            onChange={(event) =>
-              setForm((current) => {
-                const nextType = event.target.value as
-                  | TransactionFormValues["billingDocumentType"]
-
-                return {
-                  ...current,
-                  billingDocumentType: nextType,
-                  billingDocumentUrl: nextType === "LINK"
-                    ? current.billingDocumentType === "LINK"
-                      ? current.billingDocumentUrl
-                      : current.billingDocumentExisting?.type === "LINK"
-                        ? current.billingDocumentExisting.url || ""
-                        : ""
-                    : "",
-                  billingDocumentFile: null,
-                }
-              })
-            }
-          >
-            <option value="NONE">Nenhum</option>
-            <option value="LINK">Link</option>
-            <option value="FILE">Arquivo</option>
-          </Select>
-        </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)]">
+        <PillGroup<TransactionFormValues["billingDocumentType"]>
+          id="billing-document-type"
+          label="Tipo"
+          value={form.billingDocumentType}
+          options={[
+            { value: "NONE", label: "Nenhum", icon: Ban },
+            { value: "LINK", label: "Link", icon: Link2 },
+            { value: "FILE", label: "Arquivo", icon: Paperclip },
+          ]}
+          onChange={(nextType) =>
+            setForm((current) => ({
+              ...current,
+              billingDocumentType: nextType,
+              billingDocumentUrl:
+                nextType === "LINK"
+                  ? current.billingDocumentType === "LINK"
+                    ? current.billingDocumentUrl
+                    : current.billingDocumentExisting?.type === "LINK"
+                      ? current.billingDocumentExisting.url || ""
+                      : ""
+                  : "",
+              billingDocumentFile: null,
+            }))
+          }
+        />
 
         {form.billingDocumentType === "LINK" ? (
           <div className={fieldClassName}>
@@ -428,7 +546,7 @@ const repeatModeOf = (form: TransactionFormValues): RepeatMode =>
       : "NONE"
 
 /**
- * Repetição: só este mês, N meses (cria todas as ocorrências agora) ou assinatura (despesa mensal
+ * Cobrança: única (só este mês), parcelas (cria todas as ocorrências agora) ou assinatura (despesa mensal
  * sem fim; a cobrança de cada mês é gerada quando o mês chega).
  */
 /** Cartão da assinatura: com cartão, cada cobrança entra na fatura do cartão naquele mês. */
@@ -438,22 +556,104 @@ function SubscriptionCardField({
   cardOptions,
 }: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
   return (
-    <div className={fieldClassName}>
-      <Label htmlFor="subscription-card">Cobrada no cartão</Label>
-      <Select
-        id="subscription-card"
-        value={form.subscriptionCardId}
-        onChange={(event) =>
-          setForm((current) => ({ ...current, subscriptionCardId: event.target.value }))
-        }
-      >
-        <option value="">Não (conta ou débito)</option>
-        {cardOptions.map((card) => (
-          <option key={card.value} value={card.value}>
-            {card.label}
-          </option>
-        ))}
-      </Select>
+    <PillGroup
+      id="subscription-card"
+      label="Cobrada no cartão"
+      value={form.subscriptionCardId}
+      options={[
+        { value: "", label: "Não", title: "Conta ou débito automático", icon: Wallet },
+        ...cardOptions.map((card) => ({ value: card.value, label: card.label, icon: CreditCard })),
+      ]}
+      onChange={(subscriptionCardId) =>
+        setForm((current) => ({ ...current, subscriptionCardId }))
+      }
+    />
+  )
+}
+
+const MIN_MONTHS = 2
+const MAX_MONTHS = 120
+const MONTH_PRESETS = [2, 3, 6, 10, 12, 24]
+
+const clampMonths = (value: number) => Math.min(MAX_MONTHS, Math.max(MIN_MONTHS, Math.round(value)))
+
+/** "nov/2026" a partir de AAAA-MM somado a `offset` meses. */
+function shortMonth(yearMonth: string, offset: number) {
+  const [year, month] = yearMonth.split("-").map(Number)
+  const date = new Date(year, month - 1 + offset, 1)
+  return `${formatMonthLabel(date.getMonth() + 1).slice(0, 3).toLowerCase()}/${date.getFullYear()}`
+}
+
+/** Quantidade de parcelas (uma por mês): − e +, atalhos comuns e o período resultante. */
+function MonthsStepper({
+  value,
+  startMonth,
+  onChange,
+}: {
+  value: number
+  startMonth: string
+  onChange: (months: number) => void
+}) {
+  const months = clampMonths(value)
+
+  return (
+    <div className="flex flex-col gap-2 sm:col-span-2">
+      <Label id="transaction-occurrences-label">Quantas parcelas</Label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div
+          role="group"
+          aria-labelledby="transaction-occurrences-label"
+          className="flex h-11 items-center rounded-xl border border-violet-500/30 bg-violet-500/[0.06]"
+        >
+          <button
+            type="button"
+            className="flex h-full w-11 items-center justify-center rounded-l-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
+            onClick={() => onChange(clampMonths(months - 1))}
+            disabled={months <= MIN_MONTHS}
+            aria-label="Uma parcela a menos"
+          >
+            <Minus size={16} />
+          </button>
+          <span
+            className="min-w-[5.75rem] text-center text-sm font-semibold text-foreground tabular-nums"
+            aria-live="polite"
+          >
+            {months} parcelas
+          </span>
+          <button
+            type="button"
+            className="flex h-full w-11 items-center justify-center rounded-r-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
+            onClick={() => onChange(clampMonths(months + 1))}
+            disabled={months >= MAX_MONTHS}
+            aria-label="Uma parcela a mais"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5" aria-label="Atalhos de parcelas">
+          {MONTH_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onChange(preset)}
+              aria-pressed={months === preset}
+              className={cn(
+                "h-9 min-w-9 rounded-full border px-3 text-sm font-medium tabular-nums transition",
+                months === preset
+                  ? CHARGE_TONE.RECURRING.selected
+                  : "border-border bg-card/85 text-foreground hover:border-violet-500/40 hover:text-violet-600 dark:hover:text-violet-400"
+              )}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      </div>
+      {startMonth ? (
+        <p className="text-xs text-muted-foreground">
+          De {shortMonth(startMonth, 0)} a {shortMonth(startMonth, months - 1)}.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -462,55 +662,81 @@ function RecurrenceField({
   form,
   setForm,
   cardOptions,
-}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
+  periodId,
+}: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions" | "periodId">) {
   const mode = repeatModeOf(form)
   const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
 
+  // Mesmos ícones das linhas de transação: Repeat2 = recorrente/parcelas, CalendarSync = assinatura.
+  const options: Array<{ value: RepeatMode; label: string; title: string; icon: LucideIcon }> = [
+    { value: "NONE", label: "Única", title: "Só este mês", icon: Receipt },
+    {
+      value: "RECURRING",
+      label: "Parcelas",
+      title: "Uma parcela por mês, pela quantidade escolhida",
+      icon: Repeat2,
+    },
+    ...(form.type === "EXPENSE"
+      ? [
+          {
+            value: "SUBSCRIPTION" as const,
+            label: "Assinatura",
+            title: "Todo mês, sem data para acabar",
+            icon: CalendarSync,
+          },
+        ]
+      : []),
+  ]
+  const choose = (next: RepeatMode) =>
+    setForm((current) => ({
+      ...current,
+      isRecurring: next === "RECURRING",
+      isSubscription: next === "SUBSCRIPTION",
+      occurrences:
+        next === "RECURRING" && current.occurrences < 2 ? 2 : current.occurrences,
+    }))
+
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-      <div className={fieldClassName}>
-        <Label htmlFor="transaction-repeat">Repetição</Label>
-        <Select
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label id="transaction-repeat-label">Cobrança</Label>
+        <div
           id="transaction-repeat"
-          value={mode}
-          onChange={(event) => {
-            const next = event.target.value as RepeatMode
-            setForm((current) => ({
-              ...current,
-              isRecurring: next === "RECURRING",
-              isSubscription: next === "SUBSCRIPTION",
-              occurrences:
-                next === "RECURRING" && current.occurrences < 2
-                  ? 2
-                  : current.occurrences,
-            }))
-          }}
+          role="radiogroup"
+          aria-labelledby="transaction-repeat-label"
+          className="flex flex-wrap gap-1.5"
         >
-          <option value="NONE">Não repete</option>
-          <option value="RECURRING">Repetir por alguns meses</option>
-          {form.type === "EXPENSE" ? (
-            <option value="SUBSCRIPTION">Assinatura (todo mês, sem data para acabar)</option>
-          ) : null}
-        </Select>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={mode === option.value}
+              title={option.title}
+              onClick={() => choose(option.value)}
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition sm:px-3.5",
+                mode === option.value
+                  ? CHARGE_TONE[option.value].selected
+                  : cn("border-border bg-card/85 text-foreground", CHARGE_TONE[option.value].hover)
+              )}
+            >
+              <option.icon
+                size={15}
+                className={cn("shrink-0", mode !== option.value && CHARGE_TONE[option.value].icon)}
+                aria-hidden="true"
+              />
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
       {mode === "RECURRING" ? (
-        <div className={fieldClassName}>
-          <Label htmlFor="transaction-occurrences">Meses</Label>
-          <Input
-            id="transaction-occurrences"
-            className="sm:w-24"
-            type="number"
-            min={2}
-            max={120}
-            value={form.occurrences}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                occurrences: Number(event.target.value) || 2,
-              }))
-            }
-          />
-        </div>
+        <MonthsStepper
+          value={form.occurrences}
+          startMonth={periodId}
+          onChange={(occurrences) => setForm((current) => ({ ...current, occurrences }))}
+        />
       ) : null}
       {mode === "SUBSCRIPTION" ? (
         <>
@@ -545,24 +771,38 @@ function EditScopeField({
   }
 
   return (
-    <div className={fieldClassName}>
-      <Label>Aplicar edição</Label>
-      <Select
-        value={editingScope}
-        onChange={(event) =>
-          setEditingScope(event.target.value as "SINGLE" | "GROUP")
-        }
-      >
-        <option value="SINGLE">
-          {isSubscription ? "Somente a cobrança deste mês" : "Somente esta transação"}
-        </option>
-        <option value="GROUP">
-          {isSubscription
-            ? "Esta e as próximas cobranças da assinatura"
-            : "Todas do grupo recorrente"}
-        </option>
-      </Select>
-    </div>
+    <PillGroup<"SINGLE" | "GROUP">
+      id="edit-scope"
+      label="Aplicar edição"
+      value={editingScope}
+      options={
+        isSubscription
+          ? [
+              {
+                value: "SINGLE",
+                label: "Só este mês",
+                title: "Somente a cobrança deste mês",
+                icon: Receipt,
+              },
+              {
+                value: "GROUP",
+                label: "Este e os próximos",
+                title: "Esta e as próximas cobranças da assinatura",
+                icon: CalendarSync,
+              },
+            ]
+          : [
+              { value: "SINGLE", label: "Só esta", title: "Somente esta transação", icon: Receipt },
+              {
+                value: "GROUP",
+                label: "Todo o grupo",
+                title: "Todas do grupo recorrente",
+                icon: Repeat2,
+              },
+            ]
+      }
+      onChange={setEditingScope}
+    />
   )
 }
 
@@ -578,11 +818,12 @@ function ActionButtons({
   formId,
 }: ActionsRowProps) {
   return (
-    <div className="flex flex-wrap items-end gap-2 lg:justify-end">
+    // Sempre numa linha: no celular o "Cancelar" some (o ✕ do topo fecha o formulário).
+    <div className="flex flex-nowrap items-end gap-2 lg:justify-end">
       <Button
         type="submit"
         form={formId}
-        className="h-11 flex-1 lg:min-w-[180px]"
+        className="h-11 min-w-0 flex-1 lg:min-w-[180px]"
         disabled={
           createPending ||
           createRecurringPending ||
@@ -603,7 +844,7 @@ function ActionButtons({
               : form.isRecurring
               ? createRecurringPending
                 ? "Criando..."
-                : "Criar Recorrência"
+                : "Criar Parcelas"
               : createPending
                 ? "Criando..."
                 : "Enviar"}
@@ -614,7 +855,7 @@ function ActionButtons({
           type="submit"
           form={formId}
           variant="outline"
-          className="h-11"
+          className="h-11 shrink-0"
           name="intent"
           value={CONTINUE_INTENT}
           disabled={
@@ -633,7 +874,7 @@ function ActionButtons({
         <Button
           type="button"
           variant="outline"
-          className="h-11"
+          className="hidden h-11 shrink-0 sm:inline-flex"
           onClick={onCancel}
         >
           Cancelar
@@ -649,11 +890,13 @@ function TransactionCreateFormLayout({
   categoryOptions,
   responsibleOptions,
   cardOptions,
+  periodId,
 }: SharedLayoutProps) {
+  // Responsável em pílulas precisa de largura para "Geral" e os participantes numa linha.
   const secondRowClassName =
     form.type === "EXPENSE"
-      ? "grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]"
-      : "grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+      ? "grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]"
+      : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 
   return (
     <>
@@ -677,7 +920,12 @@ function TransactionCreateFormLayout({
         </div>
       )}
 
-      <RecurrenceField form={form} setForm={setForm} cardOptions={cardOptions} />
+      <RecurrenceField
+        form={form}
+        setForm={setForm}
+        cardOptions={cardOptions}
+        periodId={periodId}
+      />
     </>
   )
 }
@@ -696,16 +944,13 @@ function TransactionEditFormLayout({
   editingScope: "SINGLE" | "GROUP"
   setEditingScope: React.Dispatch<React.SetStateAction<"SINGLE" | "GROUP">>
 }) {
-  const secondRowClassName =
-    form.type !== "EXPENSE"
-      ? "grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
-      : form.dueDate
-        ? "grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
-        : "grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"
+  // Categoria e responsável numa linha; vencimento e pagamento na seguinte (as pílulas do
+  // responsável não cabem numa coluna de cinco).
+  const paymentRowClassName = "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
 
   return (
     <>
-      <div className={secondRowClassName}>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <CategoryField
           form={form}
           setForm={setForm}
@@ -716,10 +961,12 @@ function TransactionEditFormLayout({
           setForm={setForm}
           responsibleOptions={responsibleOptions}
         />
+      </div>
+      <div className={form.type === "EXPENSE" ? paymentRowClassName : "hidden"}>
         <DueDateField form={form} setForm={setForm} />
         <PaymentStatusField form={form} setForm={setForm} />
-        <PaymentDateField form={form} setForm={setForm} />
       </div>
+      <PaymentDateField form={form} setForm={setForm} />
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
         <BillingDocumentField form={form} setForm={setForm} />
@@ -742,6 +989,7 @@ function TransactionEditFormLayout({
 export function TransactionComposer({
   isOpen,
   periodLabel,
+  periodId,
   form,
   setForm,
   editingTransaction,
@@ -790,13 +1038,30 @@ export function TransactionComposer({
           aria-label={isEditing ? "Editar transação" : "Nova transação"}
           className="grid max-h-[92dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-b-none border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)] sm:max-h-[90dvh] sm:rounded-b-[1.5rem]"
         >
-          <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
+          <div className="relative flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
+            <span
+              aria-hidden="true"
+              className={cn("absolute inset-x-0 top-0 h-1 transition-colors", TYPE_TONE[form.type].bar)}
+            />
             <div>
               <p className="app-eyebrow">
                 {isEditing ? "Editar transação" : "Nova transação"}
               </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
+              <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                 {periodLabel}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    TYPE_TONE[form.type].pill
+                  )}
+                >
+                  {form.type === "EXPENSE" ? (
+                    <ArrowDownCircle size={12} aria-hidden="true" />
+                  ) : (
+                    <ArrowUpCircle size={12} aria-hidden="true" />
+                  )}
+                  {TYPE_TONE[form.type].label}
+                </span>
               </p>
             </div>
             <Button
@@ -843,6 +1108,7 @@ export function TransactionComposer({
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
                   cardOptions={cardOptions}
+                  periodId={periodId}
                   editingTransaction={editingTransaction}
                   editingScope={editingScope}
                   setEditingScope={setEditingScope}
@@ -854,6 +1120,7 @@ export function TransactionComposer({
                   categoryOptions={categoryOptions}
                   responsibleOptions={responsibleOptions}
                   cardOptions={cardOptions}
+                  periodId={periodId}
                 />
               )}
             </form>

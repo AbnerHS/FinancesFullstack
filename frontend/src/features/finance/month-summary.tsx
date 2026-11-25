@@ -98,9 +98,16 @@ export function MonthSummary({
   const monthInvoices = panel.invoices.filter((invoice) =>
     invoiceBelongsTo(invoice, responsibleFilter)
   )
-  // Faturas com vencimento entram em "Contas a pagar" junto com as despesas.
-  const invoiceBills = monthInvoices
-    .filter((invoice) => invoice.dueDate)
+  // Faturas entram em "Contas a pagar" no mês em que vencem: com o dia de vencimento do cartão, a
+  // fatura de um mês vence no seguinte (outubro vence em novembro), então entram as faturas deste
+  // mês e do anterior com vencimento neste mês.
+  const invoiceBills = [
+    ...(data.previousInvoices ?? []).filter((invoice) =>
+      invoiceBelongsTo(invoice, responsibleFilter)
+    ),
+    ...monthInvoices,
+  ]
+    .filter((invoice) => invoice.dueDate?.startsWith(panel.period.id))
     .map((invoice) => invoiceAsBill(invoice, invoice.creditCardName || "Cartão"))
 
   const insights = buildMonthInsights({

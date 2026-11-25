@@ -236,4 +236,31 @@ describe("faturas", () => {
     const stranger = await createUser()
     expect((await as(stranger).get(`/credit-card-invoices/${invoice.id}/transactions`)).status).not.toBe(200)
   })
+
+  it("dia de vencimento do cartão vale para todas as faturas e para as novas", async () => {
+    const owner = await createUser()
+    const plan = await createPlan(owner)
+    const card = await createCard(owner, owner)
+    const invoiceOf = (referenceMonth: string, extra: Record<string, unknown> = {}) =>
+      json(as(owner).post("/credit-card-invoices", { planId: plan.id, creditCardId: card.id, referenceMonth, amount: 100, ...extra }), 201)
+    const jan = await invoiceOf("2026-01")
+    const feb = await invoiceOf("2026-02", { dueDate: "2026-02-03" })
+    expect(jan.dueDate).toBeNull()
+
+    const updated = await json(as(owner).patch(`/credit-cards/${card.id}`, { dueDay: 31 }))
+    expect(updated).toMatchObject({ dueDay: 31 })
+    // Todas as faturas do cartão acompanham, vencendo no mês seguinte (31 vira o último dia de fevereiro).
+    expect(await json(as(owner).get(`/credit-card-invoices/${jan.id}`))).toMatchObject({ dueDate: "2026-02-28" })
+    expect(await json(as(owner).get(`/credit-card-invoices/${feb.id}`))).toMatchObject({ dueDate: "2026-03-31" })
+
+    // Fatura nova já nasce com o vencimento do cartão.
+    expect(await invoiceOf("2026-04")).toMatchObject({ dueDate: "2026-05-31" })
+    expect(await invoiceOf("2026-12")).toMatchObject({ dueDate: "2027-01-31" })
+
+    // Tirar o dia tira o vencimento de todas.
+    await json(as(owner).patch(`/credit-cards/${card.id}`, { dueDay: null }))
+    expect(await json(as(owner).get(`/credit-card-invoices/${jan.id}`))).toMatchObject({ dueDate: null })
+
+    expect((await as(owner).patch(`/credit-cards/${card.id}`, { dueDay: 32 })).status).toBe(400)
+  })
 })

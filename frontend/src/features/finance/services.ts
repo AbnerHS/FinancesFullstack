@@ -251,11 +251,11 @@ export const creditCardService = {
     >("/users/me/credit-cards")
     return embedded(data, "creditCards")
   },
-  async create(payload: { name: string; userId: string }) {
+  async create(payload: { name: string; userId: string; dueDay?: number | null }) {
     const { data } = await http.post<CreditCard>("/credit-cards", payload)
     return data
   },
-  async update(id: string, payload: { name: string; userId: string }) {
+  async update(id: string, payload: { name: string; userId: string; dueDay?: number | null }) {
     const { data } = await http.put<CreditCard>(`/credit-cards/${id}`, payload)
     return data
   },

@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -21,8 +22,9 @@ import {
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
+import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
 import {
   useCreditCardManager,
   useInvoiceManager,
@@ -39,7 +41,6 @@ import {
   formatCurrency,
   formatDateOnly,
   formatMonthLabel,
-  formatMonthYear,
   todayIso,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
@@ -207,10 +208,16 @@ export function CardsOverview({
               id="card-name"
               autoFocus
               value={cardManager.form.name}
-              onChange={(event) => cardManager.setForm({ name: event.target.value })}
+              onChange={(event) =>
+                cardManager.setForm({ ...cardManager.form, name: event.target.value })
+              }
               placeholder="Ex.: Nubank"
             />
           </div>
+          <DueDayPicker
+            value={cardManager.form.dueDay}
+            onChange={(dueDay) => cardManager.setForm({ ...cardManager.form, dueDay })}
+          />
           <FormError
             message={
               cardManager.saveMutation.error
@@ -228,6 +235,7 @@ export function CardsOverview({
 
       {invoiceDialogCardId !== null ? (
         <InvoiceFormDialog
+          planId={planId}
           creditCards={creditCards}
           periods={periods}
           preferredMonthId={preferredMonthId}
@@ -286,6 +294,7 @@ function CardSection({
           <p className="truncate text-base font-semibold text-foreground">{card.name}</p>
           <p className="text-xs text-muted-foreground">
             {owner ? `De ${owner} · ` : ""}
+            {card.dueDay ? `Vence dia ${card.dueDay} · ` : ""}
             {invoices.length} {invoices.length === 1 ? "fatura" : "faturas"}
             {openAmount > 0 ? ` · ${formatCurrency(openAmount)} a pagar` : ""}
           </p>
@@ -498,12 +507,14 @@ function InvoiceTransactions({ invoice }: { invoice: Invoice }) {
 }
 
 function InvoiceFormDialog({
+  planId,
   creditCards,
   periods,
   preferredMonthId,
   initialCardId,
   onClose,
 }: {
+  planId: string | null
   creditCards: CreditCard[]
   periods: Period[]
   preferredMonthId: string | null
@@ -517,7 +528,10 @@ function InvoiceFormDialog({
     selectedPeriodIds: preferredMonthId ? [preferredMonthId] : [],
     // Aberta pelo "+" de um cartão: já vem com ele escolhido.
     initialCardId,
+    // Com o plano, o mês pode ser qualquer um (seletor em grade), não só os que já têm dados.
+    planId,
   })
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
 
   return (
     <FormDialog open title="Nova fatura" onClose={onClose}>
@@ -528,60 +542,47 @@ function InvoiceFormDialog({
           createInvoice.mutate(undefined, { onSuccess: onClose })
         }}
       >
+        <PillGroup
+          id="invoice-card"
+          label="Cartão"
+          value={form.creditCardId}
+          options={creditCards.map((card) => ({
+            value: card.id,
+            label: card.name || "Cartão",
+            icon: CreditCardIcon,
+          }))}
+          onChange={(creditCardId) => setForm((current) => ({ ...current, creditCardId }))}
+        />
         <div className="space-y-2">
-          <Label htmlFor="invoice-card">Cartão</Label>
-          <Select
-            id="invoice-card"
-            value={form.creditCardId}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, creditCardId: event.target.value }))
-            }
+          <Label id="invoice-month-label">Mês</Label>
+          <button
+            type="button"
+            aria-labelledby="invoice-month-label"
+            onClick={() => setMonthPickerOpen(true)}
+            className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-border bg-card/90 px-3 text-left text-sm font-medium text-foreground transition hover:border-primary/40"
           >
-            {creditCards.map((card) => (
-              <option key={card.id} value={card.id}>
-                {card.name}
-              </option>
-            ))}
-          </Select>
+            <span className="flex items-center gap-2 capitalize">
+              <CalendarDays size={16} className="shrink-0 text-primary" aria-hidden="true" />
+              {form.periodId ? monthLabel(form.periodId) : "Escolher mês"}
+            </span>
+            <ChevronDown size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+          <MonthPickerDialog
+            open={monthPickerOpen}
+            value={form.periodId || todayIso().slice(0, 7)}
+            monthsWithData={periods.map((period) => period.id)}
+            onSelect={(periodId) => setForm((current) => ({ ...current, periodId }))}
+            onClose={() => setMonthPickerOpen(false)}
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="invoice-month">Mês</Label>
-          <Select
-            id="invoice-month"
-            value={form.periodId}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, periodId: event.target.value }))
+          <Label>Valor</Label>
+          <CurrencyInput
+            value={form.amount}
+            onValueChange={(nextValue) =>
+              setForm((current) => ({ ...current, amount: nextValue }))
             }
-          >
-            {periods.length === 0 ? <option value="">Sem meses</option> : null}
-            {periods.map((period) => (
-              <option key={period.id} value={period.id}>
-                {formatMonthYear(period)}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Valor</Label>
-            <CurrencyInput
-              value={form.amount}
-              onValueChange={(nextValue) =>
-                setForm((current) => ({ ...current, amount: nextValue }))
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="invoice-due">Vencimento (opcional)</Label>
-            <Input
-              id="invoice-due"
-              type="date"
-              value={form.dueDate}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, dueDate: event.target.value }))
-              }
-            />
-          </div>
+          />
         </div>
         <FormError message={errorMessage} />
         <DialogActions
@@ -591,6 +592,71 @@ function InvoiceFormDialog({
         />
       </form>
     </FormDialog>
+  )
+}
+
+const DAYS = Array.from({ length: 31 }, (_, index) => index + 1)
+
+/**
+ * Dia de vencimento do cartão: grade de 1 a 31 (sem digitar) e "Sem dia". Vale para todas as
+ * faturas do cartão, que vencem no mês seguinte ao delas; dias que o mês não tem (31 em abril)
+ * caem no último dia.
+ */
+function DueDayPicker({
+  value,
+  onChange,
+}: {
+  value: number | null
+  onChange: (dueDay: number | null) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <Label id="card-due-day-label">Dia de vencimento</Label>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={value === null}
+          onClick={() => onChange(null)}
+          className={cn(
+            "h-7 rounded-full border px-2.5 text-xs font-medium transition",
+            value === null
+              ? "border-primary/40 bg-primary/12 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+          )}
+        >
+          Sem dia
+        </button>
+      </div>
+      <div
+        role="radiogroup"
+        aria-labelledby="card-due-day-label"
+        className="grid grid-cols-7 gap-1"
+      >
+        {DAYS.map((day) => (
+          <button
+            key={day}
+            type="button"
+            role="radio"
+            aria-checked={value === day}
+            onClick={() => onChange(day)}
+            className={cn(
+              "h-9 rounded-lg text-sm font-medium tabular-nums transition",
+              value === day
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground hover:bg-primary/10 hover:text-primary"
+            )}
+          >
+            {day}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {value
+          ? `Cada fatura vence no dia ${value} do mês seguinte (a de outubro, em novembro), ou no último dia se o mês for mais curto. Vale para todas as faturas deste cartão.`
+          : "Sem dia, as faturas ficam sem vencimento e não entram em Contas a pagar."}
+      </p>
+    </div>
   )
 }
 

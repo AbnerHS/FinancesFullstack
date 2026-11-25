@@ -36,6 +36,7 @@ import {
   Repeat2,
   Save,
   Search,
+  SlidersHorizontal,
   SendHorizonal,
   Trash2,
   X,
@@ -51,9 +52,8 @@ import {
   type ConfirmationDialogState,
 } from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
-import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
+import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
@@ -662,8 +662,6 @@ function InvoiceRow({
   isEditing,
   editingAmount,
   onEditingAmountChange,
-  editingDueDate,
-  onEditingDueDateChange,
   savePending,
   onSave,
   onCancel,
@@ -677,8 +675,6 @@ function InvoiceRow({
   isEditing: boolean
   editingAmount: string
   onEditingAmountChange: (amount: string) => void
-  editingDueDate: string
-  onEditingDueDateChange: (dueDate: string) => void
   savePending: boolean
   onSave: () => void
   onCancel: () => void
@@ -691,31 +687,27 @@ function InvoiceRow({
     return (
       <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
         <td colSpan={3} className="max-w-0 px-3 py-2 sm:px-4">
-          <div data-carousel-no-drag className="flex flex-wrap items-center gap-2">
-            <span className="flex w-full min-w-0 items-center gap-2 text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
+          {/* Só o valor: o vencimento vem do dia de vencimento do cartão (tela Cartões).
+              Celular: nome; valor, salvar e cancelar. Desktop: tudo numa linha. */}
+          <div data-carousel-no-drag className="flex flex-wrap items-end gap-2">
+            <span className="flex w-full min-w-0 items-center gap-2 self-center text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
               <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
               <span className="truncate">{label}</span>
             </span>
-            <div className="w-32 shrink-0 sm:w-40">
+            <label className="flex min-w-0 flex-1 flex-col gap-1 sm:w-40 sm:flex-none">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:sr-only">
+                Valor
+              </span>
               <CurrencyInput value={editingAmount} onValueChange={onEditingAmountChange} />
-            </div>
-            <label className="min-w-0 flex-1 sm:w-40 sm:flex-none">
-              <span className="sr-only">Vencimento da fatura</span>
-              <Input
-                type="date"
-                value={editingDueDate}
-                onChange={(event) => onEditingDueDateChange(event.target.value)}
-                title="Vencimento (opcional)"
-              />
             </label>
             <Button
               type="button"
-              className="h-11 shrink-0 max-sm:w-11 max-sm:px-0"
+              className="h-11 shrink-0"
               onClick={onSave}
               disabled={savePending}
               aria-label="Salvar fatura"
             >
-              <span className="hidden sm:inline">{savePending ? "Salvando..." : "Salvar"}</span>
+              {savePending ? "Salvando..." : "Salvar"}
               <Save size={14} />
             </Button>
             <Button
@@ -1194,6 +1186,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   const [quickFilter, setQuickFilter] = useState<TransactionQuickFilter>("ALL")
   const normalizedQuery = normalizeSearchText(searchQuery)
   const isFiltering = normalizedQuery !== "" || quickFilter !== "ALL"
+  const activeFilterCount = (normalizedQuery !== "" ? 1 : 0) + (quickFilter !== "ALL" ? 1 : 0)
+  // No celular a busca e os filtros rápidos ficam recolhidos atrás do botão "Filtrar".
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const quickFilterCounts = useMemo(() => {
     const counts = {} as Record<TransactionQuickFilter, number>
     for (const { value } of TRANSACTION_QUICK_FILTERS) {
@@ -1731,8 +1726,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         <p className="app-eyebrow text-[13px] font-bold text-primary">
           {panel.label}
         </p>
+        {/* No celular o "+" da barra inferior já cria transação. */}
         {!isComposerOpen ? (
-          <Button type="button" size="sm" onClick={startCreateTransaction}>
+          <Button type="button" size="sm" className="max-sm:hidden" onClick={startCreateTransaction}>
             Nova transação
             <Plus size={14} />
           </Button>
@@ -1768,31 +1764,26 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               data-carousel-no-drag
               className="border-b border-border/70 bg-secondary/40 p-3 sm:p-4"
             >
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
-                <div>
-                  <Label>Cartão</Label>
-                  <Select
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
+                {shared.creditCards.length === 0 ? (
+                  <p className="self-center text-sm text-muted-foreground">
+                    Nenhum cartão no plano. Cadastre um na tela Cartões.
+                  </p>
+                ) : (
+                  <PillGroup
+                    id="new-invoice-card"
+                    label="Cartão"
                     value={invoiceManager.createForm.creditCardId}
-                    onChange={(event) =>
-                      invoiceManager.setCreateForm((current) => ({
-                        ...current,
-                        creditCardId: event.target.value,
-                      }))
+                    options={shared.creditCards.map((card) => ({
+                      value: card.id,
+                      label: card.name || "Cartão",
+                      icon: CreditCardIcon,
+                    }))}
+                    onChange={(creditCardId) =>
+                      invoiceManager.setCreateForm((current) => ({ ...current, creditCardId }))
                     }
-                  >
-                    {shared.creditCards.length === 0 ? (
-                      <option value="">Sem cartões</option>
-                    ) : null}
-                    {shared.creditCards.length > 0 ? (
-                      <option value="">Selecione o cartão</option>
-                    ) : null}
-                    {shared.creditCards.map((card) => (
-                      <option key={card.id} value={card.id}>
-                        {card.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                  />
+                )}
                 <div>
                   <Label>Valor</Label>
                   <CurrencyInput
@@ -1801,20 +1792,6 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                       invoiceManager.setCreateForm((current) => ({
                         ...current,
                         amount,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`invoice-due-${panel.period.id}`}>Vencimento (opcional)</Label>
-                  <Input
-                    id={`invoice-due-${panel.period.id}`}
-                    type="date"
-                    value={invoiceManager.createForm.dueDate}
-                    onChange={(event) =>
-                      invoiceManager.setCreateForm((current) => ({
-                        ...current,
-                        dueDate: event.target.value,
                       }))
                     }
                   />
@@ -1873,8 +1850,6 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         isEditing={isEditing}
                         editingAmount={invoiceManager.editingAmount}
                         onEditingAmountChange={invoiceManager.setEditingAmount}
-                        editingDueDate={invoiceManager.editingDueDate}
-                        onEditingDueDateChange={invoiceManager.setEditingDueDate}
                         savePending={invoiceManager.updateInvoice.isPending}
                         onSave={() => invoiceManager.updateInvoice.mutate()}
                         onCancel={invoiceManager.cancelEdit}
@@ -1937,7 +1912,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                 ]
               : []),
             {
-              label: actionsInvoice?.dueDate ? "Editar valor e vencimento" : "Editar valor e definir vencimento",
+              label: "Editar valor",
               icon: Pencil,
               onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
             },
@@ -1988,6 +1963,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           <TransactionComposer
             isOpen={isComposerOpen}
             periodLabel={panel.label}
+            periodId={panel.period.id}
             form={form}
             setForm={setForm}
             editingTransaction={editingTransaction}
@@ -2025,21 +2001,41 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
 
         <Card className="gap-0 overflow-hidden border-border bg-card p-0">
           <div className="flex items-baseline justify-between gap-3 border-b border-border/70 px-3 py-2.5 sm:px-4">
-            <h4 className="app-eyebrow">Transações</h4>
+            <h4 className="app-eyebrow self-center">Transações</h4>
             {documentError ? (
               <p role="alert" className="truncate text-[11px] text-rose-600 dark:text-rose-400">
                 {documentError}
               </p>
             ) : groupedTransactions.length > 0 ? (
-              <p className="truncate text-[11px] text-muted-foreground sm:hidden">
-                Toque na linha para ações
-              </p>
+              <button
+                type="button"
+                data-carousel-no-drag
+                className={`flex h-8 shrink-0 items-center gap-1.5 self-center rounded-full border px-3 text-xs font-medium transition sm:hidden ${
+                  filtersOpen || activeFilterCount > 0
+                    ? "border-primary/40 bg-primary/12 text-primary"
+                    : "border-border bg-card text-muted-foreground"
+                }`}
+                aria-expanded={filtersOpen}
+                aria-controls={`transaction-filters-${panel.period.id}`}
+                onClick={() => setFiltersOpen((current) => !current)}
+              >
+                <SlidersHorizontal size={13} aria-hidden="true" />
+                Filtrar
+                {activeFilterCount > 0 ? (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground tabular-nums">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </button>
             ) : null}
           </div>
           {groupedTransactions.length > 0 ? (
             <div
+              id={`transaction-filters-${panel.period.id}`}
               data-carousel-no-drag
-              className="flex flex-col gap-2 border-b border-border/70 px-3 py-2 sm:flex-row sm:items-center sm:px-4"
+              className={`flex-col gap-2 border-b border-border/70 px-3 py-2 sm:flex sm:flex-row sm:items-center sm:px-4 ${
+                filtersOpen ? "flex" : "hidden"
+              }`}
             >
               <label className="relative block sm:w-56 sm:shrink-0">
                 <span className="sr-only">Buscar transação</span>
@@ -2240,27 +2236,43 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
 
               <div className="overflow-y-auto px-4 py-4 sm:px-5">
                 <div className="space-y-2">
-                  <Label>Fatura</Label>
-                  <Select
-                    value={transactionLinking.selectedInvoiceId}
-                    onChange={(event) =>
-                      transactionLinking.setSelectedInvoiceId(event.target.value)
-                    }
+                  <Label id="link-invoice-label">Fatura</Label>
+                  {/* Pílulas como no formulário: uma por fatura do mês (cartão e valor). */}
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="link-invoice-label"
+                    className="flex flex-wrap gap-1.5"
                   >
-                    <option value="">Selecione a fatura</option>
                     {panel.invoices.map((invoice) => {
                       const card = shared.creditCards.find(
                         (creditCard) => creditCard.id === invoice.creditCardId
                       )
+                      const selected = transactionLinking.selectedInvoiceId === invoice.id
 
                       return (
-                        <option key={invoice.id} value={invoice.id}>
-                          {card?.name || "Fatura"} -{" "}
-                          {formatCurrency(invoice.amount)}
-                        </option>
+                        <button
+                          key={invoice.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => transactionLinking.setSelectedInvoiceId(invoice.id)}
+                          className={`inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition sm:px-3.5 ${
+                            selected
+                              ? "border-primary/40 bg-primary/12 text-primary"
+                              : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
+                          }`}
+                        >
+                          <CreditCardIcon size={15} className="shrink-0" aria-hidden="true" />
+                          <span className="truncate">{card?.name || "Fatura"}</span>
+                          <span
+                            className={`shrink-0 tabular-nums ${selected ? "" : "text-muted-foreground"}`}
+                          >
+                            {formatCurrency(invoice.amount)}
+                          </span>
+                        </button>
                       )
                     })}
-                  </Select>
+                  </div>
                 </div>
 
                 {transactionLinking.linkTransactionError ? (
