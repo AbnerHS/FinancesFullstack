@@ -10,6 +10,7 @@ import {
   Repeat2,
   Save,
   SendHorizonal,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react"
@@ -289,30 +290,99 @@ function CategoryField({
   )
 }
 
+/** Cor de cada participante (pela ordem no plano). "Geral" fica neutro. */
+const PERSON_TONES = [
+  {
+    dot: "bg-indigo-500 text-white",
+    selected: "border-indigo-500/45 bg-indigo-500/12 text-indigo-700 dark:text-indigo-300",
+    hover: "hover:border-indigo-500/40",
+  },
+  {
+    dot: "bg-pink-500 text-white",
+    selected: "border-pink-500/45 bg-pink-500/12 text-pink-700 dark:text-pink-300",
+    hover: "hover:border-pink-500/40",
+  },
+  {
+    dot: "bg-teal-500 text-white",
+    selected: "border-teal-500/45 bg-teal-500/12 text-teal-700 dark:text-teal-300",
+    hover: "hover:border-teal-500/40",
+  },
+  {
+    dot: "bg-orange-500 text-white",
+    selected: "border-orange-500/45 bg-orange-500/12 text-orange-700 dark:text-orange-300",
+    hover: "hover:border-orange-500/40",
+  },
+] as const
+
+const GENERAL_TONE = {
+  selected: "border-slate-500/45 bg-slate-500/12 text-slate-700 dark:text-slate-200",
+  hover: "hover:border-slate-500/40",
+}
+
+const firstName = (label: string) => label.trim().split(/\s+/)[0] || label
+
+/** Responsável em pílulas: "Geral" e cada participante do plano (primeiro nome, inicial colorida). */
 function ResponsibleField({
   form,
   setForm,
   responsibleOptions,
 }: Pick<SharedLayoutProps, "form" | "setForm" | "responsibleOptions">) {
+  const choose = (responsibleUserId: string) =>
+    setForm((current) => ({ ...current, responsibleUserId }))
+  const pillClassName = (selected: boolean, tone: { selected: string; hover: string }) =>
+    cn(
+      "inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border pr-3.5 pl-1.5 text-sm font-medium transition",
+      selected ? tone.selected : cn("border-border bg-card/85 text-foreground", tone.hover)
+    )
+
   return (
     <div className={fieldClassName}>
-      <Label>Responsável</Label>
-      <Select
-        value={form.responsibleUserId}
-        onChange={(event) =>
-          setForm((current) => ({
-            ...current,
-            responsibleUserId: event.target.value,
-          }))
-        }
+      <Label id="transaction-responsible-label">Responsável</Label>
+      <div
+        role="radiogroup"
+        aria-labelledby="transaction-responsible-label"
+        className="flex min-h-11 flex-wrap items-center gap-1.5"
       >
-        <option value="">Geral</option>
-        {responsibleOptions.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!form.responsibleUserId}
+          title="Sem responsável específico"
+          onClick={() => choose("")}
+          className={pillClassName(!form.responsibleUserId, GENERAL_TONE)}
+        >
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300">
+            <Users size={13} aria-hidden="true" />
+          </span>
+          Geral
+        </button>
+        {responsibleOptions.map((option, index) => {
+          const tone = PERSON_TONES[index % PERSON_TONES.length]
+          const selected = form.responsibleUserId === option.id
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              title={option.label}
+              onClick={() => choose(option.id)}
+              className={pillClassName(selected, tone)}
+            >
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+                  tone.dot
+                )}
+                aria-hidden="true"
+              >
+                {option.label.trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="truncate">{firstName(option.label)}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -840,10 +910,11 @@ function TransactionCreateFormLayout({
   cardOptions,
   periodId,
 }: SharedLayoutProps) {
+  // Responsável em pílulas precisa de largura para "Geral" e os participantes numa linha.
   const secondRowClassName =
     form.type === "EXPENSE"
-      ? "grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]"
-      : "grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+      ? "grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.8fr)]"
+      : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 
   return (
     <>
@@ -891,16 +962,15 @@ function TransactionEditFormLayout({
   editingScope: "SINGLE" | "GROUP"
   setEditingScope: React.Dispatch<React.SetStateAction<"SINGLE" | "GROUP">>
 }) {
-  const secondRowClassName =
-    form.type !== "EXPENSE"
-      ? "grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]"
-      : form.dueDate
-        ? "grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
-        : "grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]"
+  // Categoria e responsável numa linha; vencimento e pagamento na seguinte (as pílulas do
+  // responsável não cabem numa coluna de cinco).
+  const paymentRowClassName = form.dueDate
+    ? "grid gap-3 lg:grid-cols-3"
+    : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
 
   return (
     <>
-      <div className={secondRowClassName}>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <CategoryField
           form={form}
           setForm={setForm}
@@ -911,6 +981,8 @@ function TransactionEditFormLayout({
           setForm={setForm}
           responsibleOptions={responsibleOptions}
         />
+      </div>
+      <div className={form.type === "EXPENSE" ? paymentRowClassName : "hidden"}>
         <DueDateField form={form} setForm={setForm} />
         <PaymentStatusField form={form} setForm={setForm} />
         <PaymentDateField form={form} setForm={setForm} />
