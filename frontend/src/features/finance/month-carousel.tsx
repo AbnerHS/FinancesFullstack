@@ -69,14 +69,20 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 
     // Destino do swipe: a barra do rodapé troca na hora; o painel completo do destino (e vizinhos)
     // monta numa transição, interrompível, sem travar a animação (ver `slides`).
+    // Saltos instantâneos (scrollTo(_, true)) emitem "select" mas não "settle": sem este limite o
+    // mês parado (que define a altura do carrossel) ficaria desatualizado.
+    let settleFallback: number | undefined
     const sync = () => {
       const index = emblaApi.selectedScrollSnap()
       setSelectedIndex(index)
       startTransition(() => setTargetIndex(index))
+      window.clearTimeout(settleFallback)
+      settleFallback = window.setTimeout(notify, 800)
     }
     // Avisar a página re-renderiza o dashboard inteiro (resumo, painéis, gráficos). Feito no meio
     // da animação, isso travava o slide; por isso só acontece quando o carrossel para.
     const notify = () => {
+      window.clearTimeout(settleFallback)
       const index = emblaApi.selectedScrollSnap()
       const id = emblaApi.slideNodes()[index]?.dataset.periodId
       startTransition(() => {
@@ -93,80 +99,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     emblaApi.on("select", sync).on("settle", notify).on("reInit", syncAndNotify)
     return () => {
       emblaApi.off("select", sync).off("settle", notify).off("reInit", syncAndNotify)
-    }
-  }, [emblaApi])
-
-  // Altura do carrossel = altura do mês visível, acompanhando qualquer mudança de tamanho do slide
-  // (o plugin AutoHeight do Embla media os slides uma vez só, antes das transações carregarem).
-  // Sem transição de altura: animar height refaz o layout da página inteira a cada quadro do
-  // slide. Ao selecionar, só cresce (o mês de destino não aparece cortado); encolhe ao parar.
-  useEffect(() => {
-    if (!emblaApi) return
-    const container = emblaApi.containerNode()
-    const activeSlide = () => emblaApi.slideNodes()[emblaApi.selectedScrollSnap()]
-    // 0 = slide ainda com content-visibility: hidden (logo depois de a janela se recentrar, antes de
-    // re-renderizar): ignora, em vez de zerar a altura do carrossel por um instante.
-    const activeHeight = () => activeSlide()?.offsetHeight || null
-
-    const fit = () => {
-      // Mês ainda carregando (esqueleto): não encolhe; ajusta quando o conteúdo chegar.
-      if (activeSlide()?.querySelector('[aria-busy="true"]')) return grow()
-      const height = activeHeight()
-      if (height !== null) container.style.height = `${height}px`
-    }
-    const grow = () => {
-      const height = activeHeight()
-      if (height !== null && height > container.offsetHeight) container.style.height = `${height}px`
-    }
-
-    // Ao parar (ou recentrar a janela), o mês visível pode ainda estar oculto (altura 0) e a
-    // medida é ignorada; sem nova mudança de tamanho, o carrossel ficava com a altura do mês
-    // anterior e sobrava um espaço vazio embaixo. Repete o ajuste logo depois.
-    let timers: number[] = []
-    const fitSoon = () => {
-      timers.forEach((timer) => window.clearTimeout(timer))
-      timers = [120, 400, 900].map((delay) => window.setTimeout(() => !moving && fit(), delay))
-    }
-
-    // Saltos instantâneos (scrollTo(_, true) ao abrir a página ou recentrar) emitem "select" mas não
-    // "settle": sem este limite o carrossel ficava "em movimento" para sempre, só crescendo, com a
-    // altura do mês mais alto carregado e um espaço vazio embaixo do mês visível.
-    let settleFallback: number | undefined
-    let moving = false
-    const onSelect = () => {
-      moving = true
-      grow()
       window.clearTimeout(settleFallback)
-      settleFallback = window.setTimeout(() => {
-        moving = false
-        fit()
-      }, 800)
-    }
-    const onSettle = () => {
-      window.clearTimeout(settleFallback)
-      moving = false
-      fit()
-      fitSoon()
-    }
-
-    const observer = new ResizeObserver(() => (moving ? grow() : fit()))
-    const observeSlides = () => {
-      // reInit (janela recentrada) salta sem animação e não emite "settle".
-      moving = false
-      observer.disconnect()
-      emblaApi.slideNodes().forEach((slide) => observer.observe(slide))
-      fit()
-      fitSoon()
-    }
-
-    observeSlides()
-    emblaApi.on("select", onSelect).on("settle", onSettle).on("reInit", observeSlides)
-    return () => {
-      emblaApi.off("select", onSelect).off("settle", onSettle).off("reInit", observeSlides)
-      observer.disconnect()
-      timers.forEach((timer) => window.clearTimeout(timer))
-      window.clearTimeout(settleFallback)
-      container.style.height = ""
     }
   }, [emblaApi])
 
@@ -219,6 +152,10 @@ export function MonthCarousel<Panel extends CarouselPanel>({
           data-period-id={panel.period.id}
           className={cn(
             "min-w-0 shrink-0 grow-0 basis-full pl-4",
+            // Só o mês parado ocupa altura: os outros continuam desenhados (aparecem no swipe,
+            // recortados pela área visível), mas não aumentam o carrossel. A altura vem do layout,
+            // sem medir nada em JS, e não sobra espaço embaixo de um mês mais curto.
+            index !== settledIndex && "h-0",
             Math.abs(index - settledIndex) > VISIBLE_RADIUS &&
               Math.abs(index - selectedIndex) > VISIBLE_RADIUS &&
               "[content-visibility:hidden]"
@@ -281,7 +218,7 @@ export function MonthCarousel<Panel extends CarouselPanel>({
             (ia para o topo ao trocar de mês). Fica aqui, e não no trilho, porque transform muda a
             referência do offsetLeft que o Embla usa para medir os slides. */}
         <div className="overflow-hidden [transform:translate3d(0,0,0)]" ref={emblaRef}>
-          {/* items-start: cada mês com a sua altura (a altura acompanha o mês visível). */}
+          {/* items-start: cada mês com a sua altura; só o mês parado ocupa altura (ver `slides`). */}
           <div className="-ml-4 flex touch-pan-y items-start">
             {slides}
           </div>
