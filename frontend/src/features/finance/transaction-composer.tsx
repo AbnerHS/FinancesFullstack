@@ -558,32 +558,57 @@ function RecurrenceField({
   const mode = repeatModeOf(form)
   const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
 
+  const options: Array<{ value: RepeatMode; label: string; title: string }> = [
+    { value: "NONE", label: "Não repete", title: "Só este mês" },
+    { value: "RECURRING", label: "Alguns meses", title: "Repetir por uma quantidade de meses" },
+    ...(form.type === "EXPENSE"
+      ? [
+          {
+            value: "SUBSCRIPTION" as const,
+            label: "Assinatura",
+            title: "Todo mês, sem data para acabar",
+          },
+        ]
+      : []),
+  ]
+  const choose = (next: RepeatMode) =>
+    setForm((current) => ({
+      ...current,
+      isRecurring: next === "RECURRING",
+      isSubscription: next === "SUBSCRIPTION",
+      occurrences:
+        next === "RECURRING" && current.occurrences < 2 ? 2 : current.occurrences,
+    }))
+
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-      <div className={fieldClassName}>
-        <Label htmlFor="transaction-repeat">Repetição</Label>
-        <Select
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label id="transaction-repeat-label">Repetição</Label>
+        <div
           id="transaction-repeat"
-          value={mode}
-          onChange={(event) => {
-            const next = event.target.value as RepeatMode
-            setForm((current) => ({
-              ...current,
-              isRecurring: next === "RECURRING",
-              isSubscription: next === "SUBSCRIPTION",
-              occurrences:
-                next === "RECURRING" && current.occurrences < 2
-                  ? 2
-                  : current.occurrences,
-            }))
-          }}
+          role="radiogroup"
+          aria-labelledby="transaction-repeat-label"
+          className="flex flex-wrap gap-1.5"
         >
-          <option value="NONE">Não repete</option>
-          <option value="RECURRING">Repetir por alguns meses</option>
-          {form.type === "EXPENSE" ? (
-            <option value="SUBSCRIPTION">Assinatura (todo mês, sem data para acabar)</option>
-          ) : null}
-        </Select>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={mode === option.value}
+              title={option.title}
+              onClick={() => choose(option.value)}
+              className={cn(
+                "h-9 rounded-full border px-4 text-sm font-medium transition",
+                mode === option.value
+                  ? "border-primary/40 bg-primary/12 text-primary"
+                  : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
       {mode === "RECURRING" ? (
         <MonthsStepper
