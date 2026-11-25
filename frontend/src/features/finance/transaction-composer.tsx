@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
+  ArrowDownCircle,
+  ArrowUpCircle,
   CalendarSync,
   Minus,
   Plus,
@@ -84,6 +86,47 @@ type ActionsRowProps = {
 const CONTINUE_INTENT = "continue"
 
 const fieldClassName = "flex flex-col gap-2"
+
+/** Cores por tipo: saída em vermelho, entrada em verde (as mesmas dos valores na lista). */
+const TYPE_TONE = {
+  EXPENSE: {
+    label: "Saída",
+    icon: ArrowDownCircle,
+    text: "text-rose-600 dark:text-rose-400",
+    selected: "border-rose-500/45 bg-rose-500/12 text-rose-700 dark:text-rose-300",
+    hover: "hover:border-rose-500/40 hover:text-rose-600 dark:hover:text-rose-400",
+    bar: "bg-gradient-to-r from-rose-500 via-rose-400 to-orange-400",
+    pill: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
+  },
+  REVENUE: {
+    label: "Entrada",
+    icon: ArrowUpCircle,
+    text: "text-emerald-600 dark:text-emerald-400",
+    selected: "border-emerald-500/45 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+    hover: "hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400",
+    bar: "bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400",
+    pill: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+  },
+} as const
+
+/** Cores das opções de Cobrança (ícone sempre colorido; fundo quando escolhida). */
+const CHARGE_TONE = {
+  NONE: {
+    icon: "text-sky-600 dark:text-sky-400",
+    selected: "border-sky-500/45 bg-sky-500/12 text-sky-700 dark:text-sky-300",
+    hover: "hover:border-sky-500/40",
+  },
+  RECURRING: {
+    icon: "text-violet-600 dark:text-violet-400",
+    selected: "border-violet-500/45 bg-violet-500/12 text-violet-700 dark:text-violet-300",
+    hover: "hover:border-violet-500/40",
+  },
+  SUBSCRIPTION: {
+    icon: "text-amber-600 dark:text-amber-400",
+    selected: "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+    hover: "hover:border-amber-500/40",
+  },
+} as const
 
 function updateType(
   setForm: React.Dispatch<React.SetStateAction<TransactionFormValues>>,
@@ -175,6 +218,8 @@ function TransactionCommonRow({
         <Label>Valor</Label>
         <CurrencyInput
           value={form.amount}
+          className={cn("font-semibold tabular-nums", TYPE_TONE[form.type].text)}
+          prefixClassName={TYPE_TONE[form.type].text}
           onValueChange={(amount) =>
             setForm((current) => ({ ...current, amount }))
           }
@@ -182,19 +227,36 @@ function TransactionCommonRow({
       </div>
 
       <div className={fieldClassName}>
-        <Label>Tipo</Label>
-        <Select
-          value={form.type}
-          onChange={(event) =>
-            updateType(
-              setForm,
-              event.target.value as TransactionFormValues["type"]
-            )
-          }
+        <Label id="transaction-type-label">Tipo</Label>
+        <div
+          role="radiogroup"
+          aria-labelledby="transaction-type-label"
+          className="grid h-11 grid-cols-2 gap-1.5"
         >
-          <option value="EXPENSE">Saída</option>
-          <option value="REVENUE">Entrada</option>
-        </Select>
+          {(["EXPENSE", "REVENUE"] as const).map((type) => {
+            const tone = TYPE_TONE[type]
+            const Icon = tone.icon
+            const selected = form.type === type
+            return (
+              <button
+                key={type}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => updateType(setForm, type)}
+                className={cn(
+                  "inline-flex items-center justify-center gap-1.5 rounded-xl border text-sm font-medium transition",
+                  selected
+                    ? tone.selected
+                    : cn("border-border bg-card/85 text-foreground", tone.hover)
+                )}
+              >
+                <Icon size={16} className={cn("shrink-0", !selected && tone.text)} aria-hidden="true" />
+                {tone.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -504,7 +566,7 @@ function MonthsStepper({
         <div
           role="group"
           aria-labelledby="transaction-occurrences-label"
-          className="flex h-11 items-center rounded-xl border border-border bg-card/90"
+          className="flex h-11 items-center rounded-xl border border-violet-500/30 bg-violet-500/[0.06]"
         >
           <button
             type="button"
@@ -541,8 +603,8 @@ function MonthsStepper({
               className={cn(
                 "h-9 min-w-9 rounded-full border px-3 text-sm font-medium tabular-nums transition",
                 months === preset
-                  ? "border-primary/40 bg-primary/12 text-primary"
-                  : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
+                  ? CHARGE_TONE.RECURRING.selected
+                  : "border-border bg-card/85 text-foreground hover:border-violet-500/40 hover:text-violet-600 dark:hover:text-violet-400"
               )}
             >
               {preset}
@@ -618,11 +680,15 @@ function RecurrenceField({
               className={cn(
                 "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition",
                 mode === option.value
-                  ? "border-primary/40 bg-primary/12 text-primary"
-                  : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
+                  ? CHARGE_TONE[option.value].selected
+                  : cn("border-border bg-card/85 text-foreground", CHARGE_TONE[option.value].hover)
               )}
             >
-              <option.icon size={15} className="shrink-0" aria-hidden="true" />
+              <option.icon
+                size={15}
+                className={cn("shrink-0", mode !== option.value && CHARGE_TONE[option.value].icon)}
+                aria-hidden="true"
+              />
               {option.label}
             </button>
           ))}
@@ -920,13 +986,30 @@ export function TransactionComposer({
           aria-label={isEditing ? "Editar transação" : "Nova transação"}
           className="grid max-h-[92dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-b-none border-border bg-card shadow-[0_30px_80px_rgba(2,6,23,0.50)] sm:max-h-[90dvh] sm:rounded-b-[1.5rem]"
         >
-          <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
+          <div className="relative flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-5">
+            <span
+              aria-hidden="true"
+              className={cn("absolute inset-x-0 top-0 h-1 transition-colors", TYPE_TONE[form.type].bar)}
+            />
             <div>
               <p className="app-eyebrow">
                 {isEditing ? "Editar transação" : "Nova transação"}
               </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
+              <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                 {periodLabel}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    TYPE_TONE[form.type].pill
+                  )}
+                >
+                  {form.type === "EXPENSE" ? (
+                    <ArrowDownCircle size={12} aria-hidden="true" />
+                  ) : (
+                    <ArrowUpCircle size={12} aria-hidden="true" />
+                  )}
+                  {TYPE_TONE[form.type].label}
+                </span>
               </p>
             </div>
             <Button
