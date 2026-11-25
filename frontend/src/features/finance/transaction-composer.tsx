@@ -432,7 +432,7 @@ const repeatModeOf = (form: TransactionFormValues): RepeatMode =>
       : "NONE"
 
 /**
- * Repetição: só este mês, N meses (cria todas as ocorrências agora) ou assinatura (despesa mensal
+ * Cobrança: única (só este mês), parcelas (cria todas as ocorrências agora) ou assinatura (despesa mensal
  * sem fim; a cobrança de cada mês é gerada quando o mês chega).
  */
 /** Cartão da assinatura: com cartão, cada cobrança entra na fatura do cartão naquele mês. */
@@ -475,7 +475,7 @@ function shortMonth(yearMonth: string, offset: number) {
   return `${formatMonthLabel(date.getMonth() + 1).slice(0, 3).toLowerCase()}/${date.getFullYear()}`
 }
 
-/** Quantidade de meses da repetição: − e +, atalhos comuns e o período resultante. */
+/** Quantidade de parcelas (uma por mês): − e +, atalhos comuns e o período resultante. */
 function MonthsStepper({
   value,
   startMonth,
@@ -489,7 +489,7 @@ function MonthsStepper({
 
   return (
     <div className="flex flex-col gap-2 sm:col-span-2">
-      <Label id="transaction-occurrences-label">Quantos meses</Label>
+      <Label id="transaction-occurrences-label">Quantas parcelas</Label>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div
           role="group"
@@ -501,27 +501,27 @@ function MonthsStepper({
             className="flex h-full w-11 items-center justify-center rounded-l-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
             onClick={() => onChange(clampMonths(months - 1))}
             disabled={months <= MIN_MONTHS}
-            aria-label="Um mês a menos"
+            aria-label="Uma parcela a menos"
           >
             <Minus size={16} />
           </button>
           <span
-            className="min-w-[4.5rem] text-center text-sm font-semibold text-foreground tabular-nums"
+            className="min-w-[5.75rem] text-center text-sm font-semibold text-foreground tabular-nums"
             aria-live="polite"
           >
-            {months} meses
+            {months} parcelas
           </span>
           <button
             type="button"
             className="flex h-full w-11 items-center justify-center rounded-r-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
             onClick={() => onChange(clampMonths(months + 1))}
             disabled={months >= MAX_MONTHS}
-            aria-label="Um mês a mais"
+            aria-label="Uma parcela a mais"
           >
             <Plus size={16} />
           </button>
         </div>
-        <div className="flex flex-wrap gap-1.5" aria-label="Atalhos de meses">
+        <div className="flex flex-wrap gap-1.5" aria-label="Atalhos de parcelas">
           {MONTH_PRESETS.map((preset) => (
             <button
               key={preset}
@@ -559,8 +559,8 @@ function RecurrenceField({
   const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
 
   const options: Array<{ value: RepeatMode; label: string; title: string }> = [
-    { value: "NONE", label: "Não repete", title: "Só este mês" },
-    { value: "RECURRING", label: "Alguns meses", title: "Repetir por uma quantidade de meses" },
+    { value: "NONE", label: "Única", title: "Só este mês" },
+    { value: "RECURRING", label: "Parcelas", title: "Uma parcela por mês, pela quantidade escolhida" },
     ...(form.type === "EXPENSE"
       ? [
           {
@@ -583,7 +583,7 @@ function RecurrenceField({
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <div className="flex flex-col gap-2 sm:col-span-2">
-        <Label id="transaction-repeat-label">Repetição</Label>
+        <Label id="transaction-repeat-label">Cobrança</Label>
         <div
           id="transaction-repeat"
           role="radiogroup"
@@ -708,7 +708,7 @@ function ActionButtons({
               : form.isRecurring
               ? createRecurringPending
                 ? "Criando..."
-                : "Criar Recorrência"
+                : "Criar Parcelas"
               : createPending
                 ? "Criando..."
                 : "Enviar"}
