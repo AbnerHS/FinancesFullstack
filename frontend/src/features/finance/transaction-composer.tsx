@@ -1,6 +1,16 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Minus, Plus, Save, SendHorizonal, X } from "lucide-react"
+import {
+  CalendarSync,
+  Minus,
+  Plus,
+  Receipt,
+  Repeat2,
+  Save,
+  SendHorizonal,
+  X,
+  type LucideIcon,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
@@ -558,15 +568,22 @@ function RecurrenceField({
   const mode = repeatModeOf(form)
   const cardName = cardOptions.find((card) => card.value === form.subscriptionCardId)?.label
 
-  const options: Array<{ value: RepeatMode; label: string; title: string }> = [
-    { value: "NONE", label: "Única", title: "Só este mês" },
-    { value: "RECURRING", label: "Parcelas", title: "Uma parcela por mês, pela quantidade escolhida" },
+  // Mesmos ícones das linhas de transação: Repeat2 = recorrente/parcelas, CalendarSync = assinatura.
+  const options: Array<{ value: RepeatMode; label: string; title: string; icon: LucideIcon }> = [
+    { value: "NONE", label: "Única", title: "Só este mês", icon: Receipt },
+    {
+      value: "RECURRING",
+      label: "Parcelas",
+      title: "Uma parcela por mês, pela quantidade escolhida",
+      icon: Repeat2,
+    },
     ...(form.type === "EXPENSE"
       ? [
           {
             value: "SUBSCRIPTION" as const,
             label: "Assinatura",
             title: "Todo mês, sem data para acabar",
+            icon: CalendarSync,
           },
         ]
       : []),
@@ -599,12 +616,13 @@ function RecurrenceField({
               title={option.title}
               onClick={() => choose(option.value)}
               className={cn(
-                "h-9 rounded-full border px-4 text-sm font-medium transition",
+                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition",
                 mode === option.value
                   ? "border-primary/40 bg-primary/12 text-primary"
                   : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
               )}
             >
+              <option.icon size={15} className="shrink-0" aria-hidden="true" />
               {option.label}
             </button>
           ))}
