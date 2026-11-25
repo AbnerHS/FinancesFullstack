@@ -720,11 +720,14 @@ export function useProfileSettings() {
 export function useCreditCardManager({ userId }: { userId: string | null }) {
   const queryClient = useQueryClient()
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null)
-  const [form, setFormState] = useState({ name: "" })
+  const [form, setFormState] = useState<{ name: string; dueDay: number | null }>({
+    name: "",
+    dueDay: null,
+  })
 
   const resetForm = () => {
     setEditingCard(null)
-    setFormState({ name: "" })
+    setFormState({ name: "", dueDay: null })
   }
 
   const saveMutation = useMutation({
@@ -738,7 +741,7 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
         throw new Error("Informe o nome do cartão.")
       }
 
-      const payload = { name, userId }
+      const payload = { name, userId, dueDay: form.dueDay }
       if (editingCard?.id) {
         return creditCardService.update(editingCard.id, payload)
       }
@@ -746,7 +749,11 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
     },
     onSuccess: async () => {
       resetForm()
-      await queryClient.invalidateQueries({ queryKey: financeKeys.cards })
+      // O dia de vencimento muda o vencimento de todas as faturas do cartão.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: financeKeys.cards }),
+        queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoicesRoot }),
+      ])
     },
   })
 
@@ -762,7 +769,7 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
 
   return {
     form,
-    setForm: (next: { name: string }) => setFormState(next),
+    setForm: (next: { name: string; dueDay: number | null }) => setFormState(next),
     editingCard,
     isEditing: Boolean(editingCard?.id),
     saveMutation,
@@ -778,7 +785,7 @@ export function useCreditCardManager({ userId }: { userId: string | null }) {
     startCreate: resetForm,
     startEdit: (card: CreditCard) => {
       setEditingCard(card)
-      setFormState({ name: card.name ?? "" })
+      setFormState({ name: card.name ?? "", dueDay: card.dueDay ?? null })
     },
     cancelEdit: resetForm,
   }
@@ -827,7 +834,6 @@ export function useInvoiceManager({
     creditCardId: initialCardId,
     periodId: "",
     amount: "",
-    dueDate: "",
   })
 
   const resolvedForm = useMemo(() => {
@@ -869,11 +875,10 @@ export function useInvoiceManager({
         creditCardId: resolvedForm.creditCardId,
         referenceMonth: resolvedForm.periodId,
         amount: amountNumber,
-        dueDate: resolvedForm.dueDate || null,
       })
     },
     onSuccess: async () => {
-      setForm((current) => ({ ...current, amount: "", dueDate: "" }))
+      setForm((current) => ({ ...current, amount: "" }))
       // A fatura nova pode receber cobranças de assinaturas do cartão: as transações mudam também.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: financeKeys.periodInvoicesRoot }),
@@ -906,11 +911,9 @@ export function usePeriodInvoiceManager({
   const [createForm, setCreateForm] = useState({
     creditCardId: creditCards[0]?.id || "",
     amount: "",
-    dueDate: "",
   })
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [editingAmount, setEditingAmount] = useState("")
-  const [editingDueDate, setEditingDueDate] = useState("")
   const resolvedCreateForm = useMemo(() => {
     const hasCurrentCard = creditCards.some(
       (card) => card.id === createForm.creditCardId
@@ -946,11 +949,10 @@ export function usePeriodInvoiceManager({
         creditCardId: resolvedCreateForm.creditCardId,
         referenceMonth: period.id,
         amount: amountNumber,
-        dueDate: resolvedCreateForm.dueDate || null,
       })
     },
     onSuccess: async () => {
-      setCreateForm((current) => ({ ...current, amount: "", dueDate: "" }))
+      setCreateForm((current) => ({ ...current, amount: "" }))
       setIsCreateOpen(false)
       await invalidatePeriodInvoices()
     },
@@ -976,13 +978,11 @@ export function usePeriodInvoiceManager({
         creditCardId: invoice.creditCardId,
         referenceMonth: invoice.referenceMonth,
         amount: amountNumber,
-        dueDate: editingDueDate || null,
       })
     },
     onSuccess: async () => {
       setEditingInvoiceId(null)
       setEditingAmount("")
-      setEditingDueDate("")
       await invalidatePeriodInvoices()
     },
   })
@@ -1006,7 +1006,7 @@ export function usePeriodInvoiceManager({
   }
 
   const cancelCreate = () => {
-    setCreateForm((current) => ({ ...current, amount: "", dueDate: "" }))
+    setCreateForm((current) => ({ ...current, amount: "" }))
     setIsCreateOpen(false)
   }
 
@@ -1019,13 +1019,11 @@ export function usePeriodInvoiceManager({
         maximumFractionDigits: 2,
       })
     )
-    setEditingDueDate(invoice.dueDate ?? "")
   }
 
   const cancelEdit = () => {
     setEditingInvoiceId(null)
     setEditingAmount("")
-    setEditingDueDate("")
   }
 
   return {
@@ -1038,8 +1036,6 @@ export function usePeriodInvoiceManager({
     editingInvoiceId,
     editingAmount,
     setEditingAmount,
-    editingDueDate,
-    setEditingDueDate,
     startEdit,
     cancelEdit,
     updateInvoice,

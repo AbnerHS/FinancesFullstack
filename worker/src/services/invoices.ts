@@ -7,7 +7,7 @@ import {
   transactions,
   type User,
 } from "../db/schema.ts"
-import { currentDate, daysInMonth, monthBounds } from "../lib/dates.ts"
+import { addMonthsToYearMonth, currentDate, dayOfMonth, daysInMonth, monthBounds } from "../lib/dates.ts"
 import { ApiError, badRequest, notFound } from "../lib/errors.ts"
 import { isUniqueViolation } from "../lib/db-errors.ts"
 import { withLinks } from "../lib/hal.ts"
@@ -131,6 +131,13 @@ const duplicate = () => new ApiError(409, "Conflito", "Já existe uma fatura des
 export async function create(db: Database, user: User, input: InvoiceInput & { planId: string }) {
   await requirePlanAccess(db, input.planId, user)
   await assertCardInPlan(db, input.planId, input.creditCardId)
+  // Sem vencimento informado, vale o dia de vencimento do cartão (no mês seguinte ao da fatura).
+  if (input.dueDate === undefined) {
+    const card = await db.query.creditCards.findFirst({ where: eq(creditCards.id, input.creditCardId) })
+    if (card?.dueDay) {
+      input = { ...input, dueDate: dayOfMonth(addMonthsToYearMonth(input.referenceMonth, 1), card.dueDay) }
+    }
+  }
   try {
     const [invoice] = await db
       .insert(creditCardInvoices)

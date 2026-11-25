@@ -79,6 +79,8 @@ export type CreditCard = EntityModel<{
   id: string
   name: string
   userId: string
+  /** Dia de vencimento das faturas (1–31); vale para todos os meses. */
+  dueDay?: number | null
 }>
 
 export type Invoice = EntityModel<{

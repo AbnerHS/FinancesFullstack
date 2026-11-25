@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import type { Database } from "../db/client.ts"
 import { type CreditCard, creditCardInvoices, creditCards, type User } from "../db/schema.ts"
 import { ApiError, forbidden, notFound } from "../lib/errors.ts"
@@ -11,7 +11,7 @@ import { participantIds, plansOfUser, requirePlanAccess, sharesPlan } from "./ac
 
 export const cardModel = (card: CreditCard) =>
   withLinks(
-    { id: card.id, name: card.name, userId: card.userId },
+    { id: card.id, name: card.name, userId: card.userId, dueDay: card.dueDay },
     { self: `/api/credit-cards/${card.id}`, invoices: `/api/credit-cards/${card.id}/invoices` },
   )
 
@@ -39,31 +39,62 @@ export async function listByPlan(db: Database, user: User, planId: string) {
   return db.select().from(creditCards).where(inArray(creditCards.userId, ids)).orderBy(creditCards.name)
 }
 
-export async function create(db: Database, user: User, input: { name: string; userId: string }) {
+export async function create(
+  db: Database,
+  user: User,
+  input: { name: string; userId: string; dueDay?: number | null | undefined },
+) {
   await assertCanAssignTo(db, user, input.userId)
   const [card] = await db
     .insert(creditCards)
-    .values({ id: crypto.randomUUID(), name: input.name.trim(), userId: input.userId })
+    .values({ id: crypto.randomUUID(), name: input.name.trim(), userId: input.userId, dueDay: input.dueDay ?? null })
     .returning()
   return card!
+}
+
+/**
+ * Vencimento das faturas do cartão a partir do dia: a fatura de um mês vence no mês seguinte
+ * (outubro vence em novembro), no dia escolhido, limitado ao último dia do mês (31 em fevereiro
+ * vira 28/29). Sem dia, sem vencimento.
+ */
+function dueDateOfInvoices(dueDay: number | null) {
+  if (dueDay == null) return sql`null`
+  const firstOfMonth = sql`${creditCardInvoices.referenceMonth} || '-01'`
+  const nextMonth = sql`strftime('%Y-%m', date(${firstOfMonth}, '+1 month'))`
+  const lastDay = sql`cast(strftime('%d', date(${firstOfMonth}, '+2 month', '-1 day')) as integer)`
+  return sql`${nextMonth} || '-' || printf('%02d', min(${dueDay}, ${lastDay}))`
 }
 
 export async function update(
   db: Database,
   user: User,
   id: string,
-  input: { name?: string | undefined; userId?: string | undefined },
+  input: { name?: string | undefined; userId?: string | undefined; dueDay?: number | null | undefined },
 ) {
-  await getAccessibleCard(db, user, id)
+  const current = await getAccessibleCard(db, user, id)
   if (input.userId) await assertCanAssignTo(db, user, input.userId)
-  const [card] = await db
+  const updateCard = db
     .update(creditCards)
     .set({
       ...(input.name !== undefined && { name: input.name.trim() }),
       ...(input.userId !== undefined && { userId: input.userId }),
+      ...(input.dueDay !== undefined && { dueDay: input.dueDay }),
     })
     .where(eq(creditCards.id, id))
     .returning()
+
+  // Mudou o dia: o vencimento de todas as faturas do cartão (todos os meses) acompanha.
+  if (input.dueDay !== undefined && input.dueDay !== current.dueDay) {
+    const [[card]] = await db.batch([
+      updateCard,
+      db
+        .update(creditCardInvoices)
+        .set({ dueDate: dueDateOfInvoices(input.dueDay) })
+        .where(eq(creditCardInvoices.creditCardId, id)),
+    ])
+    return card!
+  }
+  const [card] = await updateCard
   return card!
 }
 

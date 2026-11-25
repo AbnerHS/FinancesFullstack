@@ -51,7 +51,6 @@ import {
   type ConfirmationDialogState,
 } from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
-import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
@@ -662,8 +661,6 @@ function InvoiceRow({
   isEditing,
   editingAmount,
   onEditingAmountChange,
-  editingDueDate,
-  onEditingDueDateChange,
   savePending,
   onSave,
   onCancel,
@@ -677,8 +674,6 @@ function InvoiceRow({
   isEditing: boolean
   editingAmount: string
   onEditingAmountChange: (amount: string) => void
-  editingDueDate: string
-  onEditingDueDateChange: (dueDate: string) => void
   savePending: boolean
   onSave: () => void
   onCancel: () => void
@@ -691,35 +686,22 @@ function InvoiceRow({
     return (
       <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
         <td colSpan={3} className="max-w-0 px-3 py-2 sm:px-4">
-          {/* Celular: nome; valor e vencimento lado a lado (com rótulo; a data, mais larga, cabe inteira);
-              salvar largo + cancelar.
-              Desktop: tudo numa linha. */}
+          {/* Só o valor: o vencimento vem do dia de vencimento do cartão (tela Cartões).
+              Celular: nome; valor, salvar e cancelar. Desktop: tudo numa linha. */}
           <div data-carousel-no-drag className="flex flex-wrap items-end gap-2">
             <span className="flex w-full min-w-0 items-center gap-2 self-center text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
               <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
               <span className="truncate">{label}</span>
             </span>
-            <label className="flex w-[calc(42%-0.25rem)] flex-col gap-1 sm:w-40">
+            <label className="flex min-w-0 flex-1 flex-col gap-1 sm:w-40 sm:flex-none">
               <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:sr-only">
                 Valor
               </span>
               <CurrencyInput value={editingAmount} onValueChange={onEditingAmountChange} />
             </label>
-            <label className="flex w-[calc(58%-0.25rem)] flex-col gap-1 sm:w-44">
-              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:sr-only">
-                Vencimento
-              </span>
-              <Input
-                type="date"
-                className="min-w-0 px-2.5 sm:px-4"
-                value={editingDueDate}
-                onChange={(event) => onEditingDueDateChange(event.target.value)}
-                title="Vencimento (opcional)"
-              />
-            </label>
             <Button
               type="button"
-              className="h-11 flex-1 sm:flex-none"
+              className="h-11 shrink-0"
               onClick={onSave}
               disabled={savePending}
               aria-label="Salvar fatura"
@@ -1777,7 +1759,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               data-carousel-no-drag
               className="border-b border-border/70 bg-secondary/40 p-3 sm:p-4"
             >
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
                 {shared.creditCards.length === 0 ? (
                   <p className="self-center text-sm text-muted-foreground">
                     Nenhum cartão no plano. Cadastre um na tela Cartões.
@@ -1805,20 +1787,6 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                       invoiceManager.setCreateForm((current) => ({
                         ...current,
                         amount,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`invoice-due-${panel.period.id}`}>Vencimento (opcional)</Label>
-                  <Input
-                    id={`invoice-due-${panel.period.id}`}
-                    type="date"
-                    value={invoiceManager.createForm.dueDate}
-                    onChange={(event) =>
-                      invoiceManager.setCreateForm((current) => ({
-                        ...current,
-                        dueDate: event.target.value,
                       }))
                     }
                   />
@@ -1877,8 +1845,6 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         isEditing={isEditing}
                         editingAmount={invoiceManager.editingAmount}
                         onEditingAmountChange={invoiceManager.setEditingAmount}
-                        editingDueDate={invoiceManager.editingDueDate}
-                        onEditingDueDateChange={invoiceManager.setEditingDueDate}
                         savePending={invoiceManager.updateInvoice.isPending}
                         onSave={() => invoiceManager.updateInvoice.mutate()}
                         onCancel={invoiceManager.cancelEdit}
@@ -1941,7 +1907,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                 ]
               : []),
             {
-              label: actionsInvoice?.dueDate ? "Editar valor e vencimento" : "Editar valor e definir vencimento",
+              label: "Editar valor",
               icon: Pencil,
               onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
             },

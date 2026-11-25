@@ -208,10 +208,16 @@ export function CardsOverview({
               id="card-name"
               autoFocus
               value={cardManager.form.name}
-              onChange={(event) => cardManager.setForm({ name: event.target.value })}
+              onChange={(event) =>
+                cardManager.setForm({ ...cardManager.form, name: event.target.value })
+              }
               placeholder="Ex.: Nubank"
             />
           </div>
+          <DueDayPicker
+            value={cardManager.form.dueDay}
+            onChange={(dueDay) => cardManager.setForm({ ...cardManager.form, dueDay })}
+          />
           <FormError
             message={
               cardManager.saveMutation.error
@@ -288,6 +294,7 @@ function CardSection({
           <p className="truncate text-base font-semibold text-foreground">{card.name}</p>
           <p className="text-xs text-muted-foreground">
             {owner ? `De ${owner} · ` : ""}
+            {card.dueDay ? `Vence dia ${card.dueDay} · ` : ""}
             {invoices.length} {invoices.length === 1 ? "fatura" : "faturas"}
             {openAmount > 0 ? ` · ${formatCurrency(openAmount)} a pagar` : ""}
           </p>
@@ -568,27 +575,14 @@ function InvoiceFormDialog({
             onClose={() => setMonthPickerOpen(false)}
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Valor</Label>
-            <CurrencyInput
-              value={form.amount}
-              onValueChange={(nextValue) =>
-                setForm((current) => ({ ...current, amount: nextValue }))
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="invoice-due" title="Opcional: com vencimento, a fatura entra em Contas a pagar">Vencimento</Label>
-            <Input
-              id="invoice-due"
-              type="date"
-              value={form.dueDate}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, dueDate: event.target.value }))
-              }
-            />
-          </div>
+        <div className="space-y-2">
+          <Label>Valor</Label>
+          <CurrencyInput
+            value={form.amount}
+            onValueChange={(nextValue) =>
+              setForm((current) => ({ ...current, amount: nextValue }))
+            }
+          />
         </div>
         <FormError message={errorMessage} />
         <DialogActions
@@ -598,6 +592,71 @@ function InvoiceFormDialog({
         />
       </form>
     </FormDialog>
+  )
+}
+
+const DAYS = Array.from({ length: 31 }, (_, index) => index + 1)
+
+/**
+ * Dia de vencimento do cartão: grade de 1 a 31 (sem digitar) e "Sem dia". Vale para todas as
+ * faturas do cartão, que vencem no mês seguinte ao delas; dias que o mês não tem (31 em abril)
+ * caem no último dia.
+ */
+function DueDayPicker({
+  value,
+  onChange,
+}: {
+  value: number | null
+  onChange: (dueDay: number | null) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <Label id="card-due-day-label">Dia de vencimento</Label>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={value === null}
+          onClick={() => onChange(null)}
+          className={cn(
+            "h-7 rounded-full border px-2.5 text-xs font-medium transition",
+            value === null
+              ? "border-primary/40 bg-primary/12 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+          )}
+        >
+          Sem dia
+        </button>
+      </div>
+      <div
+        role="radiogroup"
+        aria-labelledby="card-due-day-label"
+        className="grid grid-cols-7 gap-1"
+      >
+        {DAYS.map((day) => (
+          <button
+            key={day}
+            type="button"
+            role="radio"
+            aria-checked={value === day}
+            onClick={() => onChange(day)}
+            className={cn(
+              "h-9 rounded-lg text-sm font-medium tabular-nums transition",
+              value === day
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground hover:bg-primary/10 hover:text-primary"
+            )}
+          >
+            {day}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {value
+          ? `Cada fatura vence no dia ${value} do mês seguinte (a de outubro, em novembro), ou no último dia se o mês for mais curto. Vale para todas as faturas deste cartão.`
+          : "Sem dia, as faturas ficam sem vencimento e não entram em Contas a pagar."}
+      </p>
+    </div>
   )
 }
 

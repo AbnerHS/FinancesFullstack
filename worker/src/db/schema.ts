@@ -82,6 +82,8 @@ export const creditCards = sqliteTable(
       .notNull()
       .references(() => users.id),
     name: text("name"),
+    // Dia de vencimento das faturas (1–31, limitado ao fim do mês); null = sem vencimento padrão.
+    dueDay: integer("due_day"),
   },
   (t) => [index("idx_credit_cards_user").on(t.userId)],
 )

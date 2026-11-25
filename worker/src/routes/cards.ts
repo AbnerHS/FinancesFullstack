@@ -10,6 +10,13 @@ import type { AppEnv } from "../types.ts"
 const cardSchema = z.object({
   name: z.string().trim().min(1, "O nome é obrigatório"),
   userId: id("O id do Usuário do cartão é obrigatório"),
+  dueDay: z.coerce
+    .number()
+    .int()
+    .min(1, "Dia de vencimento entre 1 e 31")
+    .max(31, "Dia de vencimento entre 1 e 31")
+    .nullable()
+    .optional(),
 })
 
 export const cardRoutes = new Hono<AppEnv>()
