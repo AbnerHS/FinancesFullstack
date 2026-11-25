@@ -3,14 +3,19 @@ import { createPortal } from "react-dom"
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  Ban,
   CalendarSync,
+  CreditCard,
+  Link2,
   Minus,
+  Paperclip,
   Plus,
   Receipt,
   Repeat2,
   Save,
   SendHorizonal,
   Users,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react"
@@ -21,7 +26,6 @@ import { Combobox } from "@/components/ui/combobox.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
 import { Switch } from "@/components/ui/switch.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { formatMonthLabel, todayIso } from "@/features/finance/utils.ts"
@@ -188,6 +192,70 @@ function shouldShowBillingDocumentField(form: TransactionFormValues) {
     (form.type === "EXPENSE" && form.dueDate) ||
     form.billingDocumentExisting ||
     form.billingDocumentType !== "NONE"
+  )
+}
+
+type PillOption<T extends string> = {
+  value: T
+  label: string
+  /** Texto completo na dica (quando o rótulo é curto). */
+  title?: string
+  icon?: LucideIcon
+}
+
+const PRIMARY_PILL = {
+  selected: "border-primary/40 bg-primary/12 text-primary",
+  hover: "hover:border-primary/40 hover:text-primary",
+}
+
+/** Escolha única em pílulas (no lugar de um select com poucas opções). */
+function PillGroup<T extends string>({
+  id,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  id: string
+  label: string
+  options: Array<PillOption<T>>
+  value: T
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className={fieldClassName}>
+      <Label id={`${id}-label`}>{label}</Label>
+      <div
+        id={id}
+        role="radiogroup"
+        aria-labelledby={`${id}-label`}
+        className="flex min-h-11 flex-wrap items-center gap-1.5"
+      >
+        {options.map((option) => {
+          const selected = option.value === value
+          const Icon = option.icon
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              title={option.title}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition sm:px-3.5",
+                selected
+                  ? PRIMARY_PILL.selected
+                  : cn("border-border bg-card/85 text-foreground", PRIMARY_PILL.hover)
+              )}
+            >
+              {Icon ? <Icon size={15} className="shrink-0" aria-hidden="true" /> : null}
+              <span className="truncate">{option.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -481,36 +549,32 @@ function BillingDocumentField({
         </p>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-        <div className={fieldClassName}>
-          <Label>Tipo</Label>
-          <Select
-            value={form.billingDocumentType}
-            onChange={(event) =>
-              setForm((current) => {
-                const nextType = event.target.value as
-                  | TransactionFormValues["billingDocumentType"]
-
-                return {
-                  ...current,
-                  billingDocumentType: nextType,
-                  billingDocumentUrl: nextType === "LINK"
-                    ? current.billingDocumentType === "LINK"
-                      ? current.billingDocumentUrl
-                      : current.billingDocumentExisting?.type === "LINK"
-                        ? current.billingDocumentExisting.url || ""
-                        : ""
-                    : "",
-                  billingDocumentFile: null,
-                }
-              })
-            }
-          >
-            <option value="NONE">Nenhum</option>
-            <option value="LINK">Link</option>
-            <option value="FILE">Arquivo</option>
-          </Select>
-        </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)]">
+        <PillGroup<TransactionFormValues["billingDocumentType"]>
+          id="billing-document-type"
+          label="Tipo"
+          value={form.billingDocumentType}
+          options={[
+            { value: "NONE", label: "Nenhum", icon: Ban },
+            { value: "LINK", label: "Link", icon: Link2 },
+            { value: "FILE", label: "Arquivo", icon: Paperclip },
+          ]}
+          onChange={(nextType) =>
+            setForm((current) => ({
+              ...current,
+              billingDocumentType: nextType,
+              billingDocumentUrl:
+                nextType === "LINK"
+                  ? current.billingDocumentType === "LINK"
+                    ? current.billingDocumentUrl
+                    : current.billingDocumentExisting?.type === "LINK"
+                      ? current.billingDocumentExisting.url || ""
+                      : ""
+                  : "",
+              billingDocumentFile: null,
+            }))
+          }
+        />
 
         {form.billingDocumentType === "LINK" ? (
           <div className={fieldClassName}>
@@ -584,23 +648,18 @@ function SubscriptionCardField({
   cardOptions,
 }: Pick<SharedLayoutProps, "form" | "setForm" | "cardOptions">) {
   return (
-    <div className={fieldClassName}>
-      <Label htmlFor="subscription-card">Cobrada no cartão</Label>
-      <Select
-        id="subscription-card"
-        value={form.subscriptionCardId}
-        onChange={(event) =>
-          setForm((current) => ({ ...current, subscriptionCardId: event.target.value }))
-        }
-      >
-        <option value="">Não (conta ou débito)</option>
-        {cardOptions.map((card) => (
-          <option key={card.value} value={card.value}>
-            {card.label}
-          </option>
-        ))}
-      </Select>
-    </div>
+    <PillGroup
+      id="subscription-card"
+      label="Cobrada no cartão"
+      value={form.subscriptionCardId}
+      options={[
+        { value: "", label: "Não", title: "Conta ou débito automático", icon: Wallet },
+        ...cardOptions.map((card) => ({ value: card.value, label: card.label, icon: CreditCard })),
+      ]}
+      onChange={(subscriptionCardId) =>
+        setForm((current) => ({ ...current, subscriptionCardId }))
+      }
+    />
   )
 }
 
@@ -804,24 +863,38 @@ function EditScopeField({
   }
 
   return (
-    <div className={fieldClassName}>
-      <Label>Aplicar edição</Label>
-      <Select
-        value={editingScope}
-        onChange={(event) =>
-          setEditingScope(event.target.value as "SINGLE" | "GROUP")
-        }
-      >
-        <option value="SINGLE">
-          {isSubscription ? "Somente a cobrança deste mês" : "Somente esta transação"}
-        </option>
-        <option value="GROUP">
-          {isSubscription
-            ? "Esta e as próximas cobranças da assinatura"
-            : "Todas do grupo recorrente"}
-        </option>
-      </Select>
-    </div>
+    <PillGroup<"SINGLE" | "GROUP">
+      id="edit-scope"
+      label="Aplicar edição"
+      value={editingScope}
+      options={
+        isSubscription
+          ? [
+              {
+                value: "SINGLE",
+                label: "Só este mês",
+                title: "Somente a cobrança deste mês",
+                icon: Receipt,
+              },
+              {
+                value: "GROUP",
+                label: "Este e os próximos",
+                title: "Esta e as próximas cobranças da assinatura",
+                icon: CalendarSync,
+              },
+            ]
+          : [
+              { value: "SINGLE", label: "Só esta", title: "Somente esta transação", icon: Receipt },
+              {
+                value: "GROUP",
+                label: "Todo o grupo",
+                title: "Todas do grupo recorrente",
+                icon: Repeat2,
+              },
+            ]
+      }
+      onChange={setEditingScope}
+    />
   )
 }
 
