@@ -691,18 +691,27 @@ function InvoiceRow({
     return (
       <tr className="border-b border-border/60 bg-primary/5 last:border-b-0">
         <td colSpan={3} className="max-w-0 px-3 py-2 sm:px-4">
-          <div data-carousel-no-drag className="flex flex-wrap items-center gap-2">
-            <span className="flex w-full min-w-0 items-center gap-2 text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
+          {/* Celular: nome; valor e vencimento lado a lado (com rótulo; a data, mais larga, cabe inteira);
+              salvar largo + cancelar.
+              Desktop: tudo numa linha. */}
+          <div data-carousel-no-drag className="flex flex-wrap items-end gap-2">
+            <span className="flex w-full min-w-0 items-center gap-2 self-center text-sm font-medium text-foreground sm:mr-auto sm:w-auto">
               <CreditCardIcon size={14} className="shrink-0 text-muted-foreground" />
               <span className="truncate">{label}</span>
             </span>
-            <div className="w-32 shrink-0 sm:w-40">
+            <label className="flex w-[calc(42%-0.25rem)] flex-col gap-1 sm:w-40">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:sr-only">
+                Valor
+              </span>
               <CurrencyInput value={editingAmount} onValueChange={onEditingAmountChange} />
-            </div>
-            <label className="min-w-0 flex-1 sm:w-40 sm:flex-none">
-              <span className="sr-only">Vencimento da fatura</span>
+            </label>
+            <label className="flex w-[calc(58%-0.25rem)] flex-col gap-1 sm:w-44">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase sm:sr-only">
+                Vencimento
+              </span>
               <Input
                 type="date"
+                className="min-w-0 px-2.5 sm:px-4"
                 value={editingDueDate}
                 onChange={(event) => onEditingDueDateChange(event.target.value)}
                 title="Vencimento (opcional)"
@@ -710,12 +719,12 @@ function InvoiceRow({
             </label>
             <Button
               type="button"
-              className="h-11 shrink-0 max-sm:w-11 max-sm:px-0"
+              className="h-11 flex-1 sm:flex-none"
               onClick={onSave}
               disabled={savePending}
               aria-label="Salvar fatura"
             >
-              <span className="hidden sm:inline">{savePending ? "Salvando..." : "Salvar"}</span>
+              {savePending ? "Salvando..." : "Salvar"}
               <Save size={14} />
             </Button>
             <Button
