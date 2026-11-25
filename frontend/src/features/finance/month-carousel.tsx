@@ -23,8 +23,8 @@ const isEditable = (target: EventTarget | null) =>
 /**
  * Navegação de meses: um mês por vez. Só o mês ativo é renderizado; trocar de mês troca os dados
  * do painel (os meses vizinhos já ficam no cache, então a troca é imediata). Troca por swipe
- * (gesto horizontal), setas laterais (desktop), barra no rodapé (mobile) e teclado (← →), com uma
- * animação curta de entrada na direção da troca.
+ * (gesto horizontal), setas laterais (desktop), barra no rodapé (mobile) e teclado (← →), sem
+ * animação: os dados do painel são trocados, com esqueleto enquanto o mês carrega.
  *
  * Antes era um carrossel com vários meses montados lado a lado para o painel acompanhar o dedo; a
  * altura do carrossel precisava ser medida em JS e falhava (sobrava espaço embaixo de meses curtos).
@@ -46,7 +46,6 @@ export function MonthCarousel<Panel extends CarouselPanel>({
 }) {
   const sectionRef = useRef<HTMLDivElement | null>(null)
   const touchRef = useRef<{ x: number; y: number; time: number } | null>(null)
-  const [direction, setDirection] = useState<"next" | "prev" | null>(null)
   const [inViewport, setInViewport] = useState(false)
 
   // Mês ativo; sem ele na lista (outro plano, filtro), o mês atual ou o último.
@@ -79,7 +78,6 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   const go = (delta: 1 | -1) => {
     const target = panels[index + delta]
     if (!target) return
-    setDirection(delta > 0 ? "next" : "prev")
     onActiveIdChange(target.period.id)
     // Trocando de mês com o painel rolado para baixo (ex.: pela barra do rodapé), volta ao topo
     // do painel: o mês novo começa do início, não no meio da tabela.
@@ -142,17 +140,10 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     >
       <div className="relative">
         <div className="overflow-x-clip" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-          {/* A chave troca o painel inteiro ao mudar de mês; a animação entra pelo lado da troca. */}
-          <div
-            key={activePanel.period.id}
-            role="group"
-            aria-label={activePanel.label}
-            className={cn(
-              "animate-in fade-in duration-200 ease-out motion-reduce:animate-none",
-              direction === "next" && "slide-in-from-right-8",
-              direction === "prev" && "slide-in-from-left-8"
-            )}
-          >
+          {/* Sem animação: trocar de mês só troca os dados do painel (esqueleto enquanto o mês
+              carrega). A chave recria o painel para o estado de um mês (formulário aberto, busca)
+              não passar para o outro. */}
+          <div key={activePanel.period.id} role="group" aria-label={activePanel.label}>
             {renderPanel(activePanel, true)}
           </div>
         </div>
