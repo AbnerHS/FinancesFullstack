@@ -748,7 +748,7 @@ function RecurrenceField({
               title={option.title}
               onClick={() => choose(option.value)}
               className={cn(
-                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition",
+                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition sm:px-3.5",
                 mode === option.value
                   ? CHARGE_TONE[option.value].selected
                   : cn("border-border bg-card/85 text-foreground", CHARGE_TONE[option.value].hover)
@@ -837,11 +837,12 @@ function ActionButtons({
   formId,
 }: ActionsRowProps) {
   return (
-    <div className="flex flex-wrap items-end gap-2 lg:justify-end">
+    // Sempre numa linha: no celular o "Cancelar" some (o ✕ do topo fecha o formulário).
+    <div className="flex flex-nowrap items-end gap-2 lg:justify-end">
       <Button
         type="submit"
         form={formId}
-        className="h-11 flex-1 lg:min-w-[180px]"
+        className="h-11 min-w-0 flex-1 lg:min-w-[180px]"
         disabled={
           createPending ||
           createRecurringPending ||
@@ -873,7 +874,7 @@ function ActionButtons({
           type="submit"
           form={formId}
           variant="outline"
-          className="h-11"
+          className="h-11 shrink-0"
           name="intent"
           value={CONTINUE_INTENT}
           disabled={
@@ -892,7 +893,7 @@ function ActionButtons({
         <Button
           type="button"
           variant="outline"
-          className="h-11"
+          className="hidden h-11 shrink-0 sm:inline-flex"
           onClick={onCancel}
         >
           Cancelar
