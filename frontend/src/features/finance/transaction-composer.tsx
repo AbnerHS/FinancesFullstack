@@ -1,10 +1,13 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   ArrowDownCircle,
   ArrowUpCircle,
   Ban,
+  CalendarDays,
   CalendarSync,
+  CheckCircle2,
+  Clock3,
   CreditCard,
   Link2,
   Minus,
@@ -14,7 +17,6 @@ import {
   Repeat2,
   Save,
   SendHorizonal,
-  Users,
   Wallet,
   X,
   type LucideIcon,
@@ -26,9 +28,10 @@ import { Combobox } from "@/components/ui/combobox.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Switch } from "@/components/ui/switch.tsx"
+import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
-import { formatMonthLabel, todayIso } from "@/features/finance/utils.ts"
+import { ResponsiblePills } from "@/features/finance/responsible-pills.tsx"
+import { formatMonthLabel, recentPaymentDays, todayIso } from "@/features/finance/utils.ts"
 import { cn } from "@/lib/utils"
 import { useEscapeKey } from "@/lib/use-escape-key.ts"
 import type {
@@ -195,70 +198,6 @@ function shouldShowBillingDocumentField(form: TransactionFormValues) {
   )
 }
 
-type PillOption<T extends string> = {
-  value: T
-  label: string
-  /** Texto completo na dica (quando o rótulo é curto). */
-  title?: string
-  icon?: LucideIcon
-}
-
-const PRIMARY_PILL = {
-  selected: "border-primary/40 bg-primary/12 text-primary",
-  hover: "hover:border-primary/40 hover:text-primary",
-}
-
-/** Escolha única em pílulas (no lugar de um select com poucas opções). */
-function PillGroup<T extends string>({
-  id,
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  id: string
-  label: string
-  options: Array<PillOption<T>>
-  value: T
-  onChange: (value: T) => void
-}) {
-  return (
-    <div className={fieldClassName}>
-      <Label id={`${id}-label`}>{label}</Label>
-      <div
-        id={id}
-        role="radiogroup"
-        aria-labelledby={`${id}-label`}
-        className="flex min-h-11 flex-wrap items-center gap-1.5"
-      >
-        {options.map((option) => {
-          const selected = option.value === value
-          const Icon = option.icon
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={option.title}
-              onClick={() => onChange(option.value)}
-              className={cn(
-                "inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition sm:px-3.5",
-                selected
-                  ? PRIMARY_PILL.selected
-                  : cn("border-border bg-card/85 text-foreground", PRIMARY_PILL.hover)
-              )}
-            >
-              {Icon ? <Icon size={15} className="shrink-0" aria-hidden="true" /> : null}
-              <span className="truncate">{option.label}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 function TransactionCommonRow({
   form,
   setForm,
@@ -358,100 +297,23 @@ function CategoryField({
   )
 }
 
-/** Cor de cada participante (pela ordem no plano). "Geral" fica neutro. */
-const PERSON_TONES = [
-  {
-    dot: "bg-indigo-500 text-white",
-    selected: "border-indigo-500/45 bg-indigo-500/12 text-indigo-700 dark:text-indigo-300",
-    hover: "hover:border-indigo-500/40",
-  },
-  {
-    dot: "bg-pink-500 text-white",
-    selected: "border-pink-500/45 bg-pink-500/12 text-pink-700 dark:text-pink-300",
-    hover: "hover:border-pink-500/40",
-  },
-  {
-    dot: "bg-teal-500 text-white",
-    selected: "border-teal-500/45 bg-teal-500/12 text-teal-700 dark:text-teal-300",
-    hover: "hover:border-teal-500/40",
-  },
-  {
-    dot: "bg-orange-500 text-white",
-    selected: "border-orange-500/45 bg-orange-500/12 text-orange-700 dark:text-orange-300",
-    hover: "hover:border-orange-500/40",
-  },
-] as const
-
-const GENERAL_TONE = {
-  selected: "border-slate-500/45 bg-slate-500/12 text-slate-700 dark:text-slate-200",
-  hover: "hover:border-slate-500/40",
-}
-
-const firstName = (label: string) => label.trim().split(/\s+/)[0] || label
-
-/** Responsável em pílulas: "Geral" e cada participante do plano (primeiro nome, inicial colorida). */
+/** Responsável em pílulas: "Geral" e cada participante do plano (mesmas cores dos filtros). */
 function ResponsibleField({
   form,
   setForm,
   responsibleOptions,
 }: Pick<SharedLayoutProps, "form" | "setForm" | "responsibleOptions">) {
-  const choose = (responsibleUserId: string) =>
-    setForm((current) => ({ ...current, responsibleUserId }))
-  const pillClassName = (selected: boolean, tone: { selected: string; hover: string }) =>
-    cn(
-      "inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border pr-3.5 pl-1.5 text-sm font-medium transition",
-      selected ? tone.selected : cn("border-border bg-card/85 text-foreground", tone.hover)
-    )
-
   return (
-    <div className={fieldClassName}>
-      <Label id="transaction-responsible-label">Responsável</Label>
-      <div
-        role="radiogroup"
-        aria-labelledby="transaction-responsible-label"
-        className="flex min-h-11 flex-wrap items-center gap-1.5"
-      >
-        <button
-          type="button"
-          role="radio"
-          aria-checked={!form.responsibleUserId}
-          title="Sem responsável específico"
-          onClick={() => choose("")}
-          className={pillClassName(!form.responsibleUserId, GENERAL_TONE)}
-        >
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-500/15 text-slate-600 dark:text-slate-300">
-            <Users size={13} aria-hidden="true" />
-          </span>
-          Geral
-        </button>
-        {responsibleOptions.map((option, index) => {
-          const tone = PERSON_TONES[index % PERSON_TONES.length]
-          const selected = form.responsibleUserId === option.id
-          return (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={option.label}
-              onClick={() => choose(option.id)}
-              className={pillClassName(selected, tone)}
-            >
-              <span
-                className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                  tone.dot
-                )}
-                aria-hidden="true"
-              >
-                {option.label.trim().charAt(0).toUpperCase()}
-              </span>
-              <span className="truncate">{firstName(option.label)}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
+    <ResponsiblePills
+      id="transaction-responsible"
+      options={responsibleOptions}
+      value={form.responsibleUserId}
+      onChange={(responsibleUserId) =>
+        setForm((current) => ({ ...current, responsibleUserId }))
+      }
+      everyoneLabel="Geral"
+      everyoneTitle="Sem responsável específico"
+    />
   )
 }
 
@@ -475,6 +337,7 @@ function DueDateField({
   )
 }
 
+/** Status do pagamento em pílulas: Pendente (âmbar) ou Pago (verde). */
 function PaymentStatusField({
   form,
   setForm,
@@ -484,50 +347,95 @@ function PaymentStatusField({
   }
 
   return (
-    <div className={fieldClassName}>
-      <Label>Status</Label>
-      <div className="flex h-11 items-center justify-between rounded-xl border border-border bg-card px-3">
-        <span className="text-sm text-foreground">
-          {form.isPaid ? "Pago" : "Pendente"}
-        </span>
-        <Switch
-          checked={form.isPaid}
-          onClick={() =>
-            setForm((current) => ({
-              ...current,
-              isPaid: !current.isPaid,
-              // Ao marcar como pago, a data padrão é hoje.
-              paymentDate: current.isPaid ? "" : current.paymentDate || todayIso(),
-            }))
-          }
-        />
-      </div>
-    </div>
+    <PillGroup<"PENDING" | "PAID">
+      id="payment-status"
+      label="Status"
+      value={form.isPaid ? "PAID" : "PENDING"}
+      options={[
+        {
+          value: "PENDING",
+          label: "Pendente",
+          icon: Clock3,
+          tone: {
+            selected: "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:text-amber-300",
+            hover: "hover:border-amber-500/40",
+          },
+        },
+        {
+          value: "PAID",
+          label: "Pago",
+          icon: CheckCircle2,
+          tone: {
+            selected: "border-emerald-500/45 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+            hover: "hover:border-emerald-500/40",
+          },
+        },
+      ]}
+      onChange={(status) =>
+        setForm((current) => ({
+          ...current,
+          isPaid: status === "PAID",
+          // Ao marcar como pago, a data padrão é hoje.
+          paymentDate: status === "PAID" ? current.paymentDate || todayIso() : "",
+        }))
+      }
+    />
   )
 }
 
+/**
+ * Data do pagamento (só quando pago): os últimos 7 dias em pílulas, como no "marcar como pago", e
+ * "Outra data" para um dia mais antigo.
+ */
 function PaymentDateField({
   form,
   setForm,
 }: Pick<SharedLayoutProps, "form" | "setForm">) {
-  if (form.type !== "EXPENSE" || !form.dueDate) {
+  const days = recentPaymentDays()
+  const isRecent = days.some((day) => day.date === form.paymentDate)
+  const [otherDate, setOtherDate] = useState(() => Boolean(form.paymentDate) && !isRecent)
+
+  if (form.type !== "EXPENSE" || !form.dueDate || !form.isPaid) {
     return null
   }
 
+  const OTHER = "OTHER"
+  const setPaymentDate = (paymentDate: string) =>
+    setForm((current) => ({ ...current, paymentDate }))
+
   return (
-    <div className={fieldClassName}>
-      <Label>Pagamento</Label>
-      <Input
-        type="date"
-        disabled={!form.isPaid}
-        value={form.paymentDate}
-        onChange={(event) =>
-          setForm((current) => ({
-            ...current,
-            paymentDate: event.target.value,
-          }))
-        }
+    <div className="flex flex-col gap-2">
+      <PillGroup<string>
+        id="payment-date"
+        label="Pago em"
+        value={otherDate || !isRecent ? OTHER : form.paymentDate}
+        options={[
+          ...days.map((day) => ({
+            value: day.date,
+            label: day.label === "Hoje" || day.label === "Ontem" ? day.label : day.short,
+            title: `${day.label}, ${day.short}`,
+          })),
+          { value: OTHER, label: "Outra data", icon: CalendarDays },
+        ]}
+        onChange={(value) => {
+          if (value === OTHER) {
+            setOtherDate(true)
+            return
+          }
+          setOtherDate(false)
+          setPaymentDate(value)
+        }}
       />
+      {otherDate || !isRecent ? (
+        <Input
+          type="date"
+          aria-label="Data do pagamento"
+          className="sm:max-w-xs"
+          value={form.paymentDate}
+          max={todayIso()}
+          onChange={(event) => setPaymentDate(event.target.value)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -1038,9 +946,7 @@ function TransactionEditFormLayout({
 }) {
   // Categoria e responsável numa linha; vencimento e pagamento na seguinte (as pílulas do
   // responsável não cabem numa coluna de cinco).
-  const paymentRowClassName = form.dueDate
-    ? "grid gap-3 lg:grid-cols-3"
-    : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
+  const paymentRowClassName = "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
 
   return (
     <>
@@ -1059,8 +965,8 @@ function TransactionEditFormLayout({
       <div className={form.type === "EXPENSE" ? paymentRowClassName : "hidden"}>
         <DueDateField form={form} setForm={setForm} />
         <PaymentStatusField form={form} setForm={setForm} />
-        <PaymentDateField form={form} setForm={setForm} />
       </div>
+      <PaymentDateField form={form} setForm={setForm} />
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
         <BillingDocumentField form={form} setForm={setForm} />

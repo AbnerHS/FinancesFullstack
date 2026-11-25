@@ -53,7 +53,7 @@ import {
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
+import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
 import { getCategoryBadgeStyle } from "@/features/finance/category-colors.ts"
 import {
@@ -1769,30 +1769,25 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               className="border-b border-border/70 bg-secondary/40 p-3 sm:p-4"
             >
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
-                <div>
-                  <Label>Cartão</Label>
-                  <Select
+                {shared.creditCards.length === 0 ? (
+                  <p className="self-center text-sm text-muted-foreground">
+                    Nenhum cartão no plano. Cadastre um na tela Cartões.
+                  </p>
+                ) : (
+                  <PillGroup
+                    id="new-invoice-card"
+                    label="Cartão"
                     value={invoiceManager.createForm.creditCardId}
-                    onChange={(event) =>
-                      invoiceManager.setCreateForm((current) => ({
-                        ...current,
-                        creditCardId: event.target.value,
-                      }))
+                    options={shared.creditCards.map((card) => ({
+                      value: card.id,
+                      label: card.name || "Cartão",
+                      icon: CreditCardIcon,
+                    }))}
+                    onChange={(creditCardId) =>
+                      invoiceManager.setCreateForm((current) => ({ ...current, creditCardId }))
                     }
-                  >
-                    {shared.creditCards.length === 0 ? (
-                      <option value="">Sem cartões</option>
-                    ) : null}
-                    {shared.creditCards.length > 0 ? (
-                      <option value="">Selecione o cartão</option>
-                    ) : null}
-                    {shared.creditCards.map((card) => (
-                      <option key={card.id} value={card.id}>
-                        {card.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                  />
+                )}
                 <div>
                   <Label>Valor</Label>
                   <CurrencyInput

@@ -809,12 +809,18 @@ export function useInvoiceManager({
   periods,
   selectedPeriodIds,
   initialCardId = "",
+  planId = null,
 }: {
   creditCards: CreditCard[]
   periods: Period[]
   selectedPeriodIds: string[]
   /** Cartão já escolhido ao abrir (ex.: "+" de um cartão). */
   initialCardId?: string
+  /**
+   * Plano da fatura. Com ele, o mês pode ser qualquer AAAA-MM (escolhido no seletor de mês), não só
+   * um mês que já tem dados.
+   */
+  planId?: string | null
 }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
@@ -828,9 +834,9 @@ export function useInvoiceManager({
     const hasCurrentCard = creditCards.some(
       (card) => card.id === form.creditCardId
     )
-    const hasCurrentPeriod = periods.some(
-      (period) => period.id === form.periodId
-    )
+    const hasCurrentPeriod =
+      periods.some((period) => period.id === form.periodId) ||
+      (Boolean(planId) && /^\d{4}-(0[1-9]|1[0-2])$/.test(form.periodId))
     const preferredPeriodId = selectedPeriodIds[0] || periods[0]?.id || ""
 
     return {
@@ -840,7 +846,7 @@ export function useInvoiceManager({
         : creditCards[0]?.id || "",
       periodId: hasCurrentPeriod ? form.periodId : preferredPeriodId,
     }
-  }, [creditCards, form, periods, selectedPeriodIds])
+  }, [creditCards, form, periods, planId, selectedPeriodIds])
 
   const createInvoice = useMutation({
     mutationFn: async () => {
@@ -848,7 +854,8 @@ export function useInvoiceManager({
         throw new Error("Selecione um cartão.")
       }
       const period = periods.find((item) => item.id === resolvedForm.periodId)
-      if (!period) {
+      const invoicePlanId = period?.planId ?? planId
+      if (!invoicePlanId || !resolvedForm.periodId) {
         throw new Error("Selecione o mês.")
       }
 
@@ -858,9 +865,9 @@ export function useInvoiceManager({
       }
 
       return invoiceService.create({
-        planId: period.planId,
+        planId: invoicePlanId,
         creditCardId: resolvedForm.creditCardId,
-        referenceMonth: period.id,
+        referenceMonth: resolvedForm.periodId,
         amount: amountNumber,
         dueDate: resolvedForm.dueDate || null,
       })

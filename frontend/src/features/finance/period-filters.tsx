@@ -1,9 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { ChevronDown, SlidersHorizontal } from "lucide-react"
+import { CalendarDays, ChevronDown, SlidersHorizontal } from "lucide-react"
 
-import { Select } from "@/components/ui/select.tsx"
+import { ResponsiblePills } from "@/features/finance/responsible-pills.tsx"
 import type { Period, ResponsibleOption } from "@/features/finance/types.ts"
-import { formatMonthLabel } from "@/features/finance/utils.ts"
+import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
+import { formatMonthYear } from "@/features/finance/utils.ts"
 import { cn } from "@/lib/utils"
 
 /**
@@ -56,9 +57,8 @@ export function FiltersPanel({
   )
 }
 
-/** Plano e responsável lado a lado. */
-/** Filtro de responsável (o plano se escolhe no cabeçalho). */
-export function ResponsibleSelect({
+/** Filtro de responsável em pílulas: "Todos" e cada participante (o plano se escolhe no cabeçalho). */
+export function ResponsibleFilter({
   responsibleOptions,
   responsibleFilter,
   onResponsibleChange,
@@ -68,84 +68,77 @@ export function ResponsibleSelect({
   onResponsibleChange: (responsibleId: string) => void
 }) {
   return (
-    <div className="min-w-0">
-      <label className="app-label" htmlFor="filter-responsible">
-        Responsável
-      </label>
-      <Select
-        id="filter-responsible"
-        className="mt-2"
-        disabled={responsibleOptions.length === 0}
-        value={responsibleFilter}
-        onChange={(event) => onResponsibleChange(event.target.value)}
-      >
-        <option value="">Todos os participantes</option>
-        {responsibleOptions.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
-    </div>
+    <ResponsiblePills
+      id="filter-responsible"
+      options={responsibleOptions}
+      value={responsibleFilter}
+      onChange={onResponsibleChange}
+      everyoneLabel="Todos"
+      everyoneTitle="Todos os participantes"
+    />
   )
 }
 
-/** Mês + ano lado a lado; trocar o ano mantém o mês escolhido quando ele existe. */
-export function MonthYearPicker({
+/**
+ * Mês de início ou fim do intervalo: um botão ("nov/2026") que abre o seletor de mês em grade. O
+ * intervalo só usa meses com dados; um mês vazio escolhido vira o mais próximo dentro do intervalo
+ * (o primeiro a partir dele para "De", o último até ele para "Até").
+ */
+export function MonthRangeButton({
   label,
+  edge,
   periods,
   value,
   disabled,
   onChange,
 }: {
   label: string
+  edge: "start" | "end"
   periods: Period[]
   value: Period | null
   disabled: boolean
   onChange: (periodId: string) => void
 }) {
-  const years = useMemo(
-    () => [...new Set(periods.map((period) => period.year))].sort((a, b) => a - b),
-    [periods]
-  )
+  const [open, setOpen] = useState(false)
   const id = `range-${label.toLowerCase()}`
-  const select = (year: number, month: number) => {
+  const monthIds = useMemo(() => periods.map((period) => period.id), [periods])
+
+  const select = (monthId: string) => {
     const target =
-      periods.find((period) => period.year === year && period.month === month) ??
-      periods.find((period) => period.year === year)
+      edge === "start"
+        ? (periods.find((period) => period.id >= monthId) ?? periods.at(-1))
+        : ([...periods].reverse().find((period) => period.id <= monthId) ?? periods[0])
     if (target) onChange(target.id)
   }
 
   return (
-    <fieldset disabled={disabled || periods.length === 0} className="min-w-0">
-      <legend className="app-label">{label}</legend>
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2">
-        <Select
-          id={`${id}-month`}
-          aria-label={`${label}: mês`}
-          value={value ? String(value.month) : ""}
-          onChange={(event) => value && select(value.year, Number(event.target.value))}
-        >
-          {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-            <option key={month} value={month}>
-              {formatMonthLabel(month)}
-            </option>
-          ))}
-        </Select>
-        <Select
-          id={`${id}-year`}
-          aria-label={`${label}: ano`}
-          value={value ? String(value.year) : ""}
-          onChange={(event) => select(Number(event.target.value), value?.month ?? 1)}
-        >
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </Select>
-      </div>
-    </fieldset>
+    <div className="flex min-w-0 flex-col gap-2">
+      <span id={`${id}-label`} className="app-label">
+        {label}
+      </span>
+      <button
+        type="button"
+        aria-labelledby={`${id}-label`}
+        disabled={disabled || periods.length === 0}
+        onClick={() => setOpen(true)}
+        className="flex h-11 items-center justify-between gap-2 rounded-xl border border-border bg-card/90 px-3 text-left text-sm font-medium text-foreground transition hover:border-primary/40 disabled:opacity-50"
+      >
+        <span className="flex items-center gap-2 capitalize">
+          <CalendarDays size={16} className="shrink-0 text-primary" aria-hidden="true" />
+          {value ? formatMonthYear(value) : "Escolher mês"}
+        </span>
+        <ChevronDown size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
+      {value ? (
+        <MonthPickerDialog
+          open={open}
+          value={value.id}
+          monthsWithData={monthIds}
+          onSelect={select}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </div>
   )
 }
 

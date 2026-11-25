@@ -10,8 +10,8 @@ import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
 import { useEvolution, useOpenMonthInDashboard } from "@/features/finance/hooks.ts"
 import {
   FiltersPanel,
-  MonthYearPicker,
-  ResponsibleSelect,
+  MonthRangeButton,
+  ResponsibleFilter,
   ShortcutButtons,
 } from "@/features/finance/period-filters.tsx"
 import type { Period } from "@/features/finance/types.ts"
@@ -53,7 +53,6 @@ const shortMonth = (period: Period) =>
 export function EvolutionPage() {
   const {
     plansLoading,
-    activePlan,
     periods,
     periodsLoading,
     responsibleOptions,
@@ -157,22 +156,24 @@ export function EvolutionPage() {
 
   return (
     <div className="space-y-6">
-      <FiltersPanel title={activePlan?.name || "Sem plano"} subtitle={rangeLabel}>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <ResponsibleSelect
+      <FiltersPanel title="Responsável e período" subtitle={rangeLabel}>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_12rem] md:items-end">
+          <ResponsibleFilter
             responsibleOptions={responsibleOptions}
             responsibleFilter={responsibleFilter}
             onResponsibleChange={setResponsibleFilter}
           />
-          <MonthYearPicker
+          <MonthRangeButton
             label="De"
+            edge="start"
             periods={periods}
             value={startPeriod}
             disabled={periodsLoading}
             onChange={setSelectedStartPeriodId}
           />
-          <MonthYearPicker
+          <MonthRangeButton
             label="Até"
+            edge="end"
             periods={periods}
             value={endPeriod}
             disabled={periodsLoading}

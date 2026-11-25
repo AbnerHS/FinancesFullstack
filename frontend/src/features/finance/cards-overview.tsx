@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -21,8 +22,9 @@ import {
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
 import { Label } from "@/components/ui/label.tsx"
-import { Select } from "@/components/ui/select.tsx"
+import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
 import {
   useCreditCardManager,
   useInvoiceManager,
@@ -39,7 +41,6 @@ import {
   formatCurrency,
   formatDateOnly,
   formatMonthLabel,
-  formatMonthYear,
   todayIso,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
@@ -228,6 +229,7 @@ export function CardsOverview({
 
       {invoiceDialogCardId !== null ? (
         <InvoiceFormDialog
+          planId={planId}
           creditCards={creditCards}
           periods={periods}
           preferredMonthId={preferredMonthId}
@@ -498,12 +500,14 @@ function InvoiceTransactions({ invoice }: { invoice: Invoice }) {
 }
 
 function InvoiceFormDialog({
+  planId,
   creditCards,
   periods,
   preferredMonthId,
   initialCardId,
   onClose,
 }: {
+  planId: string | null
   creditCards: CreditCard[]
   periods: Period[]
   preferredMonthId: string | null
@@ -517,7 +521,10 @@ function InvoiceFormDialog({
     selectedPeriodIds: preferredMonthId ? [preferredMonthId] : [],
     // Aberta pelo "+" de um cartão: já vem com ele escolhido.
     initialCardId,
+    // Com o plano, o mês pode ser qualquer um (seletor em grade), não só os que já têm dados.
+    planId,
   })
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
 
   return (
     <FormDialog open title="Nova fatura" onClose={onClose}>
@@ -528,38 +535,38 @@ function InvoiceFormDialog({
           createInvoice.mutate(undefined, { onSuccess: onClose })
         }}
       >
+        <PillGroup
+          id="invoice-card"
+          label="Cartão"
+          value={form.creditCardId}
+          options={creditCards.map((card) => ({
+            value: card.id,
+            label: card.name || "Cartão",
+            icon: CreditCardIcon,
+          }))}
+          onChange={(creditCardId) => setForm((current) => ({ ...current, creditCardId }))}
+        />
         <div className="space-y-2">
-          <Label htmlFor="invoice-card">Cartão</Label>
-          <Select
-            id="invoice-card"
-            value={form.creditCardId}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, creditCardId: event.target.value }))
-            }
+          <Label id="invoice-month-label">Mês</Label>
+          <button
+            type="button"
+            aria-labelledby="invoice-month-label"
+            onClick={() => setMonthPickerOpen(true)}
+            className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-border bg-card/90 px-3 text-left text-sm font-medium text-foreground transition hover:border-primary/40"
           >
-            {creditCards.map((card) => (
-              <option key={card.id} value={card.id}>
-                {card.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="invoice-month">Mês</Label>
-          <Select
-            id="invoice-month"
-            value={form.periodId}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, periodId: event.target.value }))
-            }
-          >
-            {periods.length === 0 ? <option value="">Sem meses</option> : null}
-            {periods.map((period) => (
-              <option key={period.id} value={period.id}>
-                {formatMonthYear(period)}
-              </option>
-            ))}
-          </Select>
+            <span className="flex items-center gap-2 capitalize">
+              <CalendarDays size={16} className="shrink-0 text-primary" aria-hidden="true" />
+              {form.periodId ? monthLabel(form.periodId) : "Escolher mês"}
+            </span>
+            <ChevronDown size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+          <MonthPickerDialog
+            open={monthPickerOpen}
+            value={form.periodId || todayIso().slice(0, 7)}
+            monthsWithData={periods.map((period) => period.id)}
+            onSelect={(periodId) => setForm((current) => ({ ...current, periodId }))}
+            onClose={() => setMonthPickerOpen(false)}
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
@@ -572,7 +579,7 @@ function InvoiceFormDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="invoice-due">Vencimento (opcional)</Label>
+            <Label htmlFor="invoice-due" title="Opcional: com vencimento, a fatura entra em Contas a pagar">Vencimento</Label>
             <Input
               id="invoice-due"
               type="date"

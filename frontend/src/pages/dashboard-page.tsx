@@ -13,18 +13,12 @@ import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { MonthCarousel } from "@/features/finance/month-carousel.tsx"
 import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
 import { MonthSummary } from "@/features/finance/month-summary.tsx"
-import {
-  FiltersPanel,
-  ResponsibleSelect,
-} from "@/features/finance/period-filters.tsx"
+import { ResponsibleFilter } from "@/features/finance/period-filters.tsx"
 import {
   TransactionsWorkspace,
   TransactionsWorkspaceSkeleton,
 } from "@/features/finance/transactions-workspace.tsx"
-import {
-  filterPanelsByResponsible,
-  formatMonthYear,
-} from "@/features/finance/utils.ts"
+import { filterPanelsByResponsible } from "@/features/finance/utils.ts"
 
 /**
  * Dashboard do dia a dia: um mês por vez (resumo + transações). A comparação entre meses fica na
@@ -90,25 +84,23 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
-      <FiltersPanel
-        title={activePlan?.name || "Sem plano"}
-        subtitle={activePeriod ? formatMonthYear(activePeriod) : "Sem plano"}
-      >
-        {/* O mês se escolhe no carrossel (setas, swipe, teclado), sem limite de intervalo. */}
-        {/* O plano se escolhe no cabeçalho; criar outro plano é raro e fica como ação secundária. */}
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <ResponsibleSelect
+      {/* O plano se escolhe (e se cria) pelo cabeçalho e pela tela Planos; o mês, no carrossel.
+          Aqui só o filtro de responsável, em pílulas, sempre à vista. */}
+      <section className="app-panel p-4 sm:p-5" aria-label="Filtro por responsável">
+        {plans.length > 0 ? (
+          <ResponsibleFilter
             responsibleOptions={responsibleOptions}
             responsibleFilter={responsibleFilter}
             onResponsibleChange={setResponsibleFilter}
           />
+        ) : (
           <DashboardPlanQuickCreate
             activePlan={activePlan}
-            hasPlans={plans.length > 0}
+            hasPlans={false}
             onSelectPlanId={setSelectedPlanId}
             userId={userId}
           />
-        </div>
+        )}
 
         {plans.length === 0 ? (
           <div className="mt-4 rounded-[1.5rem] border border-dashed border-border bg-secondary/50 px-5 py-4">
@@ -120,7 +112,7 @@ export function DashboardPage() {
             </p>
           </div>
         ) : null}
-      </FiltersPanel>
+      </section>
 
       <KeepHeightWhileLoading
         loading={Boolean(activePanel?.transactionsLoading || activePanel?.invoicesLoading)}
