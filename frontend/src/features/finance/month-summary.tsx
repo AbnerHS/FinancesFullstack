@@ -555,8 +555,8 @@ function BillsCard({
     .filter(Boolean)
     .join(" ")
 
-  // Altura igual em qualquer mês (lista sempre com espaço para BILLS_LIST_ROWS linhas, rodapé e
-  // barra sempre presentes): trocar de mês não muda a altura da página.
+  // A lista tem a altura do conteúdo (até BILLS_LIST_ROWS linhas; o resto fica no painel de
+  // transações). Com um mês por vez na tela, não há mais por que reservar espaço fixo.
   return (
     <SummaryCard title="Contas a pagar" icon={<CalendarClock size={14} />}>
       <div className="space-y-3">
@@ -605,13 +605,13 @@ function BillsCard({
           ))}
         </dl>
 
-        <div className="overflow-hidden rounded-xl border border-border" style={{ height: `${BILLS_LIST_ROWS * 3 + 0.125}rem` }}>
+        <div className="overflow-hidden rounded-xl border border-border">
           {week && weekLoading ? (
-            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            <p className="flex h-12 items-center justify-center text-sm text-muted-foreground">
               Carregando vencimentos...
             </p>
           ) : visibleItems.length === 0 ? (
-            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            <p className="flex h-12 items-center justify-center text-sm text-muted-foreground">
               Nada pendente.
             </p>
           ) : (
@@ -679,11 +679,13 @@ function BillsCard({
           )}
         </div>
         {paymentError ? (
-          <p role="alert" className="line-clamp-2 h-8 text-[11px] leading-4 text-rose-600 dark:text-rose-400">
+          <p role="alert" className="line-clamp-2 text-[11px] leading-4 text-rose-600 dark:text-rose-400">
             {getErrorMessage(paymentError, "Não foi possível marcar a conta como paga.")}
           </p>
         ) : (
-          <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+          footnote ? (
+            <p className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+          ) : null
         )}
       </div>
     </SummaryCard>
