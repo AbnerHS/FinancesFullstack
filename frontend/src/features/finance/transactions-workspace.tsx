@@ -2241,27 +2241,43 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
 
               <div className="overflow-y-auto px-4 py-4 sm:px-5">
                 <div className="space-y-2">
-                  <Label>Fatura</Label>
-                  <Select
-                    value={transactionLinking.selectedInvoiceId}
-                    onChange={(event) =>
-                      transactionLinking.setSelectedInvoiceId(event.target.value)
-                    }
+                  <Label id="link-invoice-label">Fatura</Label>
+                  {/* Pílulas como no formulário: uma por fatura do mês (cartão e valor). */}
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="link-invoice-label"
+                    className="flex flex-wrap gap-1.5"
                   >
-                    <option value="">Selecione a fatura</option>
                     {panel.invoices.map((invoice) => {
                       const card = shared.creditCards.find(
                         (creditCard) => creditCard.id === invoice.creditCardId
                       )
+                      const selected = transactionLinking.selectedInvoiceId === invoice.id
 
                       return (
-                        <option key={invoice.id} value={invoice.id}>
-                          {card?.name || "Fatura"} -{" "}
-                          {formatCurrency(invoice.amount)}
-                        </option>
+                        <button
+                          key={invoice.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => transactionLinking.setSelectedInvoiceId(invoice.id)}
+                          className={`inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition sm:px-3.5 ${
+                            selected
+                              ? "border-primary/40 bg-primary/12 text-primary"
+                              : "border-border bg-card/85 text-foreground hover:border-primary/40 hover:text-primary"
+                          }`}
+                        >
+                          <CreditCardIcon size={15} className="shrink-0" aria-hidden="true" />
+                          <span className="truncate">{card?.name || "Fatura"}</span>
+                          <span
+                            className={`shrink-0 tabular-nums ${selected ? "" : "text-muted-foreground"}`}
+                          >
+                            {formatCurrency(invoice.amount)}
+                          </span>
+                        </button>
                       )
                     })}
-                  </Select>
+                  </div>
                 </div>
 
                 {transactionLinking.linkTransactionError ? (
