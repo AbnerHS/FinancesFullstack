@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CalendarSync,
   CalendarX2,
+  Gauge,
   CheckCircle2,
   Clock3,
   CreditCard as CreditCardIcon,
@@ -96,6 +97,7 @@ import {
   invoiceAsBill,
   formatCurrency,
   formatDateOnly,
+  type ForecastMonth,
   formatDateTime,
   formatMonthLabel,
   getTransactionDueAlert,
@@ -105,6 +107,53 @@ import {
 import { getErrorMessage } from "@/lib/errors.ts"
 import { useEscapeKey } from "@/lib/use-escape-key.ts"
 
+/**
+ * O que ainda falta das previsões do mês (mês atual e futuros), em linhas tracejadas no fim da
+ * lista: o mês não parece vazio e dá para ver o que ainda vai sair. Não são transações.
+ */
+function ForecastPendingRows({ forecast }: { forecast?: ForecastMonth }) {
+  const items = (forecast?.items ?? []).filter((item) => item.pending > 0)
+  if (items.length === 0) return null
+
+  return (
+    <div className="border-t border-border/70" aria-label="Previsto no mês">
+      <div className="flex items-center justify-between gap-2 bg-secondary/40 px-3 py-1.5 sm:px-4">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          <Gauge size={12} aria-hidden="true" />
+          Previsto · {items.length}
+        </p>
+        <p className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+          ~{formatCurrency(forecast?.pending ?? 0)}
+        </p>
+      </div>
+      <ul>
+        {items.map((item) => (
+          <li
+            key={item.forecast.id}
+            className="mx-2 my-1.5 flex items-center justify-between gap-3 rounded-lg border border-dashed border-border px-3 py-2 sm:mx-3"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-muted-foreground">
+                {item.label}
+              </span>
+              <span className="block text-[11px] text-muted-foreground">
+                {item.actual > 0
+                  ? `${formatCurrency(item.actual)} de ${formatCurrency(item.planned)} gastos`
+                  : item.dueDate
+                    ? `Conta prevista · vence ${formatDateOnly(item.dueDate).slice(0, 5)}`
+                    : "Previsto para o mês"}
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-muted-foreground tabular-nums">
+              ~{formatCurrency(item.pending)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 type TransactionWorkspaceProps = {
   panel: {
     period: Period
@@ -113,6 +162,8 @@ type TransactionWorkspaceProps = {
     invoices: Invoice[]
     transactionsLoading: boolean
     invoicesLoading: boolean
+    /** Previsto × real do mês (previsões por categoria). */
+    forecast?: ForecastMonth
   }
   shared: {
     creditCards: CreditCard[]
@@ -2195,6 +2246,7 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               </table>
             </DndContext>
           )}
+          <ForecastPendingRows forecast={panel.forecast} />
         </Card>
         <TransactionActionSheet
           transaction={actionsTransaction}

@@ -37,7 +37,9 @@ import {
   formatMonthYear,
   formatPercent,
   getTransactionDueAlert,
+  forecastAsBill,
   invoiceAsBill,
+  type ForecastMonth,
   invoiceBelongsTo,
   todayIso,
   type BillTransaction,
@@ -53,6 +55,8 @@ type SummaryPanel = {
   transactions: Transaction[]
   invoices: Invoice[]
   stats: { incomes: number; expenses: number; balance: number }
+  /** Previsto × real do mês (o que falta já está somado em stats.expenses). */
+  forecast?: ForecastMonth
   transactionsLoading?: boolean
   invoicesLoading?: boolean
 }
@@ -109,6 +113,12 @@ export function MonthSummary({
   ]
     .filter((invoice) => invoice.dueDate?.startsWith(panel.period.id))
     .map((invoice) => invoiceAsBill(invoice, invoice.creditCardName || "Cartão"))
+    // Contas previstas (ex.: energia) até a conta real da categoria ser lançada no mês.
+    .concat(
+      (panel.forecast?.items ?? [])
+        .filter((item) => item.dueDate && item.actual === 0 && item.pending > 0)
+        .map(forecastAsBill)
+    )
 
   const insights = buildMonthInsights({
     period: panel.period,
@@ -194,6 +204,11 @@ export function MonthSummary({
           change={insights.expensesChange}
           changeIsGood={(change) => change <= 0}
           changeLabel={previousLabel}
+          note={
+            panel.forecast && panel.forecast.pending > 0
+              ? `inclui ${formatCurrency(panel.forecast.pending)} previsto`
+              : undefined
+          }
         />
         <KpiTile
           label="Saldo"
@@ -287,11 +302,14 @@ function KpiTile({
   change,
   changeIsGood,
   changeLabel,
+  note,
 }: {
   label: string
   value: string
   tone: "positive" | "negative" | "neutral"
   icon: ReactNode
+  /** Linha extra abaixo da variação (ex.: quanto do valor é previsto). */
+  note?: string
   hint?: string
   change?: number | null
   changeIsGood?: (change: number) => boolean
@@ -327,6 +345,11 @@ function KpiTile({
       ) : (
         <p className="mt-0.5 truncate text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">{hint}</p>
       )}
+      {note ? (
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-[11px]" title={note}>
+          {note}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -618,9 +641,26 @@ function BillsCard({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <p className="text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
+                    <p
+                      className={cn(
+                        "text-sm font-semibold tabular-nums",
+                        transaction.forecastBill
+                          ? "text-muted-foreground"
+                          : "text-rose-600 dark:text-rose-400"
+                      )}
+                    >
+                      {transaction.forecastBill ? "~" : ""}
                       {formatCurrency(transaction.amount)}
                     </p>
+                    {transaction.forecastBill ? (
+                      <span
+                        className="flex size-9 items-center justify-center text-muted-foreground"
+                        title="Prevista: some quando a conta real da categoria for lançada"
+                        aria-label="Conta prevista"
+                      >
+                        <CalendarClock size={16} />
+                      </span>
+                    ) : (
                     <PaymentDateMenu
                       data-carousel-no-drag
                       className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-600 active:bg-emerald-500/15 disabled:opacity-50 data-[popup-open]:bg-emerald-500/10 data-[popup-open]:text-emerald-600 dark:hover:text-emerald-400"
@@ -631,6 +671,7 @@ function BillsCard({
                     >
                       <CheckCircle2 size={16} />
                     </PaymentDateMenu>
+                    )}
                   </div>
                 </li>
               ))}

@@ -9,6 +9,7 @@ import {
 
 import { useDashboardStore } from "@/features/finance/dashboard-store.ts"
 import { useDashboard, type PeriodPanel } from "@/features/finance/hooks.ts"
+import { ForecastsCard } from "@/features/finance/forecasts-card.tsx"
 import { DashboardPlanQuickCreate } from "@/features/finance/managers.tsx"
 import { MonthCarousel } from "@/features/finance/month-carousel.tsx"
 import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
@@ -124,6 +125,17 @@ export function DashboardPage() {
           onOpenMonthPicker={openMonthPicker}
         />
       </KeepHeightWhileLoading>
+
+      {activePanel ? (
+        <ForecastsCard
+          planId={activePlan?.id ?? null}
+          monthId={activePanel.period.id}
+          forecast={activePanel.forecast}
+          forecasts={activePanel.forecasts ?? []}
+          categories={transactionCategories}
+          responsibleOptions={responsibleOptions}
+        />
+      ) : null}
 
       <section className="space-y-3" aria-label="Transações do mês">
         <div>

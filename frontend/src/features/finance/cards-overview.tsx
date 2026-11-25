@@ -1,5 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react"
-import { createPortal } from "react-dom"
+import { useMemo, useState } from "react"
 import {
   AlertTriangle,
   CalendarDays,
@@ -10,7 +9,6 @@ import {
   Pencil,
   Plus,
   Trash2,
-  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -21,9 +19,11 @@ import {
 } from "@/components/ui/confirmation-dialog.tsx"
 import { FormError } from "@/components/ui/form-error.tsx"
 import { Input } from "@/components/ui/input.tsx"
+import { FormDialog } from "@/components/ui/form-dialog.tsx"
 import { Label } from "@/components/ui/label.tsx"
 import { PillGroup } from "@/components/ui/pill-group.tsx"
 import { CurrencyInput } from "@/features/finance/currency-input.tsx"
+import { DueDayPicker } from "@/features/finance/due-day-picker.tsx"
 import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
 import {
   useCreditCardManager,
@@ -44,7 +44,6 @@ import {
   todayIso,
 } from "@/features/finance/utils.ts"
 import { getErrorMessage } from "@/lib/errors.ts"
-import { useEscapeKey } from "@/lib/use-escape-key.ts"
 import { cn } from "@/lib/utils"
 
 /** Quantas faturas cada cartão mostra antes de "Mostrar todas". */
@@ -215,8 +214,14 @@ export function CardsOverview({
             />
           </div>
           <DueDayPicker
+            id="card-due-day"
             value={cardManager.form.dueDay}
             onChange={(dueDay) => cardManager.setForm({ ...cardManager.form, dueDay })}
+            hint={(day) =>
+              day
+                ? `Cada fatura vence no dia ${day} do mês seguinte (a de outubro, em novembro), ou no último dia se o mês for mais curto. Vale para todas as faturas deste cartão.`
+                : "Sem dia, as faturas ficam sem vencimento e não entram em Contas a pagar."
+            }
           />
           <FormError
             message={
@@ -595,71 +600,6 @@ function InvoiceFormDialog({
   )
 }
 
-const DAYS = Array.from({ length: 31 }, (_, index) => index + 1)
-
-/**
- * Dia de vencimento do cartão: grade de 1 a 31 (sem digitar) e "Sem dia". Vale para todas as
- * faturas do cartão, que vencem no mês seguinte ao delas; dias que o mês não tem (31 em abril)
- * caem no último dia.
- */
-function DueDayPicker({
-  value,
-  onChange,
-}: {
-  value: number | null
-  onChange: (dueDay: number | null) => void
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label id="card-due-day-label">Dia de vencimento</Label>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={value === null}
-          onClick={() => onChange(null)}
-          className={cn(
-            "h-7 rounded-full border px-2.5 text-xs font-medium transition",
-            value === null
-              ? "border-primary/40 bg-primary/12 text-primary"
-              : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
-          )}
-        >
-          Sem dia
-        </button>
-      </div>
-      <div
-        role="radiogroup"
-        aria-labelledby="card-due-day-label"
-        className="grid grid-cols-7 gap-1"
-      >
-        {DAYS.map((day) => (
-          <button
-            key={day}
-            type="button"
-            role="radio"
-            aria-checked={value === day}
-            onClick={() => onChange(day)}
-            className={cn(
-              "h-9 rounded-lg text-sm font-medium tabular-nums transition",
-              value === day
-                ? "bg-primary text-primary-foreground"
-                : "text-foreground hover:bg-primary/10 hover:text-primary"
-            )}
-          >
-            {day}
-          </button>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {value
-          ? `Cada fatura vence no dia ${value} do mês seguinte (a de outubro, em novembro), ou no último dia se o mês for mais curto. Vale para todas as faturas deste cartão.`
-          : "Sem dia, as faturas ficam sem vencimento e não entram em Contas a pagar."}
-      </p>
-    </div>
-  )
-}
-
 function DialogActions({
   pending,
   submitLabel,
@@ -678,52 +618,5 @@ function DialogActions({
         Cancelar
       </Button>
     </div>
-  )
-}
-
-/** Janela de formulário: folha que sobe do rodapé no celular, modal no desktop. */
-function FormDialog({
-  open,
-  title,
-  onClose,
-  children,
-}: {
-  open: boolean
-  title: string
-  onClose: () => void
-  children: ReactNode
-}) {
-  useEscapeKey(open, onClose)
-  if (!open) return null
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[125] flex items-end justify-center bg-slate-950/55 sm:items-center sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-t-2xl border border-border bg-card px-4 pt-3 pb-[max(env(safe-area-inset-bottom),1rem)] shadow-[0_-20px_60px_rgba(2,6,23,0.35)] sm:rounded-2xl sm:px-5 sm:pb-5"
-      >
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-base font-semibold text-foreground">{title}</p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={onClose}
-            aria-label="Fechar"
-          >
-            <X size={16} />
-          </Button>
-        </div>
-        {children}
-      </div>
-    </div>,
-    document.body
   )
 }

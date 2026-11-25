@@ -140,6 +140,31 @@ export type Subscription = EntityModel<{
   createdAt: string
 }>
 
+/** Previsão de gasto por categoria: meta do mês, comparada com as despesas reais da categoria. */
+export type Forecast = EntityModel<{
+  id: string
+  planId: string
+  category: { id: string; name: string | null }
+  responsibleUserId?: string | null
+  /** Com dia, aparece em "Contas a pagar" até a conta real ser lançada. */
+  dueDay?: number | null
+  startMonth: string
+  endMonth?: string | null
+  /** Valor vigente no mês atual. */
+  amount: number
+  /** Cada valor vale a partir de `fromMonth`. */
+  amounts: Array<{ fromMonth: string; amount: number }>
+}>
+
+export type ForecastPayload = {
+  category: { id?: string; name?: string }
+  amount: number
+  responsibleUserId?: string | null
+  dueDay?: number | null
+  startMonth?: string
+  endMonth?: string | null
+}
+
 export type SubscriptionPayload = {
   name: string
   amount: number

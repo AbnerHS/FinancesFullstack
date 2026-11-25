@@ -16,10 +16,12 @@ import {
 import { paymentStatuses } from "../db/schema.ts"
 import { requirePlanAccess, requirePlanOwner } from "../services/access.ts"
 import * as cards from "../services/cards.ts"
+import * as forecasts from "../services/forecasts.ts"
 import * as invoices from "../services/invoices.ts"
 import * as plans from "../services/plans.ts"
 import * as subscriptions from "../services/subscriptions.ts"
 import * as transactions from "../services/transactions.ts"
+import { createForecastSchema } from "./forecasts.ts"
 import { createSubscriptionSchema } from "./subscriptions.ts"
 import type { AppEnv } from "../types.ts"
 
@@ -182,6 +184,15 @@ export const planRoutes = new Hono<AppEnv>()
   .post("/:id/subscriptions", validate("json", createSubscriptionSchema), async (c) => {
     const created = await subscriptions.create(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))
     c.header("Location", `/api/subscriptions/${created.id}`)
+    return c.json(created, 201)
+  })
+  .get("/:id/forecasts", async (c) => {
+    const list = await forecasts.list(c.var.db, c.var.user, c.req.param("id"))
+    return c.json(collection("forecasts", list, `/api/plans/${c.req.param("id")}/forecasts`))
+  })
+  .post("/:id/forecasts", validate("json", createForecastSchema), async (c) => {
+    const created = await forecasts.create(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))
+    c.header("Location", `/api/forecasts/${created.id}`)
     return c.json(created, 201)
   })
   .get("/:id/summary", async (c) =>

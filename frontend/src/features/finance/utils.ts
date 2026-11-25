@@ -1,4 +1,5 @@
 import type {
+  Forecast,
   Invoice,
   PaymentStatus,
   Period,
@@ -264,7 +265,9 @@ export function getTransactionDueAlert(transaction: {
 
 export function calculateStats(
   transactions: Transaction[],
-  invoicesAmount: number
+  invoicesAmount: number,
+  /** Gasto previsto que ainda falta no mês (previsões por categoria). */
+  forecastPending = 0
 ) {
   const incomes = transactions
     .filter((transaction) => transaction.type === "REVENUE")
@@ -277,7 +280,7 @@ export function calculateStats(
     )
     .reduce((total, transaction) => total + Number(transaction.amount || 0), 0)
 
-  const expenses = expensesFromTransactions + invoicesAmount
+  const expenses = expensesFromTransactions + invoicesAmount + forecastPending
 
   return {
     incomes,
@@ -309,7 +312,29 @@ export function canTogglePayment(transaction: {
 }
 
 /** Conta a pagar: transação ou fatura com vencimento (a fatura vem em `invoiceBill`). */
-export type BillTransaction = Transaction & { invoiceBill?: Invoice }
+export type BillTransaction = Transaction & {
+  invoiceBill?: Invoice
+  /** Conta prevista (previsão com vencimento ainda sem a conta real lançada). */
+  forecastBill?: ForecastItem
+}
+
+/** Previsão com vencimento, no formato de conta, enquanto a conta real não é lançada. */
+export function forecastAsBill(item: ForecastItem): BillTransaction {
+  return {
+    id: `forecast:${item.forecast.id}`,
+    description: `${item.label} (prevista)`,
+    amount: item.pending,
+    type: "EXPENSE",
+    referenceDate: item.dueDate ?? "",
+    dueDate: item.dueDate,
+    paymentStatus: "PENDING",
+    paymentDate: null,
+    isClearedByInvoice: false,
+    category: { id: item.forecast.category.id, name: item.forecast.category.name },
+    responsibleUserId: item.forecast.responsibleUserId ?? null,
+    forecastBill: item,
+  } as BillTransaction
+}
 
 /** Fatura com vencimento no formato de conta, para entrar em "Contas a pagar" com as despesas. */
 export function invoiceAsBill(invoice: Invoice, label: string): BillTransaction {
@@ -540,9 +565,91 @@ export function formatPercent(value: number | null | undefined, fractionDigits =
 }
 
 type StatsPanel = {
+  period?: Pick<Period, "id">
   transactions: Transaction[]
   invoices: Array<{ amount: number | string; creditCardOwnerId?: string | null }>
   stats: { incomes: number; expenses: number; balance: number }
+  /** Previsões do plano (todas); o mês do painel decide quais valem. */
+  forecasts?: Forecast[]
+  forecast?: ForecastMonth
+}
+
+// ---------------------------------------------------------------------------------------------
+// Previsões por categoria
+
+/** Valor previsto no mês (AAAA-MM), ou null se a previsão não vale nesse mês. */
+export function forecastAmountFor(forecast: Forecast, monthId: string) {
+  if (monthId < forecast.startMonth) return null
+  if (forecast.endMonth && monthId > forecast.endMonth) return null
+  const entry = [...forecast.amounts]
+    .sort((a, b) => b.fromMonth.localeCompare(a.fromMonth))
+    .find((amount) => amount.fromMonth <= monthId)
+  return entry?.amount ?? forecast.amounts[0]?.amount ?? null
+}
+
+export type ForecastItem = {
+  forecast: Forecast
+  label: string
+  planned: number
+  actual: number
+  /** O que falta gastar para chegar na previsão (0 em mês fechado ou já atingido). */
+  pending: number
+  /** Gastou mais que o previsto. */
+  over: boolean
+  /** Vencimento no mês (com dia de vencimento). */
+  dueDate: string | null
+}
+
+export type ForecastMonth = {
+  items: ForecastItem[]
+  planned: number
+  actual: number
+  pending: number
+}
+
+/**
+ * Previsto × real de um mês. O real é a soma das despesas da categoria no mês (inclusive as pagas
+ * no cartão). Enquanto o mês não fecha (mês atual e futuros), o que falta para a previsão conta como
+ * gasto previsto; depois, só o real.
+ */
+export function buildForecastMonth(
+  monthId: string,
+  forecasts: Forecast[],
+  transactions: Transaction[],
+  currentMonth = todayIso().slice(0, 7)
+): ForecastMonth {
+  const open = monthId >= currentMonth
+  const items = forecasts.flatMap((forecast): ForecastItem[] => {
+    const planned = forecastAmountFor(forecast, monthId)
+    if (planned == null) return []
+    const actual = transactions
+      .filter(
+        (transaction) =>
+          transaction.type === "EXPENSE" && transaction.category?.id === forecast.category.id
+      )
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0)
+    const [year, month] = monthId.split("-").map(Number)
+    const dueDate = forecast.dueDay
+      ? `${monthId}-${pad(Math.min(forecast.dueDay, new Date(year, month, 0).getDate()))}`
+      : null
+    return [
+      {
+        forecast,
+        label: forecast.category.name || "Sem categoria",
+        planned,
+        actual,
+        pending: open ? Math.max(0, planned - actual) : 0,
+        over: actual > planned,
+        dueDate,
+      },
+    ]
+  })
+  return {
+    items: items.sort((a, b) => b.planned - a.planned),
+    planned: items.reduce((total, item) => total + item.planned, 0),
+    actual: items.reduce((total, item) => total + item.actual, 0),
+    pending: items.reduce((total, item) => total + item.pending, 0),
+  }
 }
 
 /** A fatura conta para o dono do cartão. */
@@ -576,11 +683,21 @@ export function filterPanelsByResponsible<Panel extends StatsPanel>(
       (total, invoice) => total + Number(invoice.amount || 0),
       0
     )
+    // Previsões do responsável (as "Gerais" não entram no filtro, como as transações sem dono).
+    const forecast =
+      panel.forecasts && panel.period
+        ? buildForecastMonth(
+            panel.period.id,
+            panel.forecasts.filter((item) => item.responsibleUserId === responsibleId),
+            transactions
+          )
+        : undefined
     return {
       ...panel,
       transactions,
       invoices,
-      stats: calculateStats(transactions, invoicesTotal),
+      forecast,
+      stats: calculateStats(transactions, invoicesTotal, forecast?.pending ?? 0),
     }
   })
 }

@@ -12,6 +12,8 @@ import type {
   PlanInvitation,
   PlanInviteLink,
   PlanParticipant,
+  Forecast,
+  ForecastPayload,
   Subscription,
   SubscriptionPayload,
   Transaction,
@@ -39,6 +41,7 @@ export const financeKeys = {
     ["period-transactions", "invoice", invoiceId] as const,
   categories: ["transaction-categories"] as const,
   subscriptions: (planId?: string | null) => ["subscriptions", planId] as const,
+  forecasts: (planId?: string | null) => ["forecasts", planId] as const,
   // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
   periodTransactionsRoot: ["period-transactions"] as const,
   periodTransactions: (period?: Pick<Period, "planId" | "id"> | null) =>
@@ -339,6 +342,26 @@ export const subscriptionService = {
   async update(id: string, payload: Partial<SubscriptionPayload>) {
     const { data } = await http.patch<Subscription>(`/subscriptions/${id}`, payload)
     return data
+  },
+}
+
+export const forecastService = {
+  async list(planId: string) {
+    const { data } = await http.get<EmbeddedCollection<Forecast, "forecasts">>(
+      `/plans/${planId}/forecasts`
+    )
+    return embedded(data, "forecasts")
+  },
+  async create(planId: string, payload: ForecastPayload) {
+    const { data } = await http.post<Forecast>(`/plans/${planId}/forecasts`, payload)
+    return data
+  },
+  async update(id: string, payload: Partial<ForecastPayload>) {
+    const { data } = await http.patch<Forecast>(`/forecasts/${id}`, payload)
+    return data
+  },
+  async delete(id: string) {
+    await http.delete(`/forecasts/${id}`)
   },
 }
 
