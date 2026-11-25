@@ -20,6 +20,7 @@ import {
   invoiceService,
   periodService,
   planService,
+  forecastService,
   subscriptionService,
   transactionCategoryService,
   transactionService,
@@ -33,6 +34,8 @@ import type {
   PlanInviteLink,
   ResponsibleOption,
   SubscriptionPayload,
+  Forecast,
+  ForecastPayload,
   Transaction,
   TransactionCategory,
 } from "@/features/finance/types.ts"
@@ -40,7 +43,9 @@ import {
   addDaysIso,
   addMonthsToDate,
   buildPlanMonths,
+  buildForecastMonth,
   calculateStats,
+  type ForecastMonth,
   findDefaultPeriod,
   formatMonthYear,
   monthsBetween,
@@ -370,6 +375,9 @@ export function usePeriodPanels(periods: Period[]) {
     })),
   })
 
+  // Previsões do plano: o que falta para cada uma entra nas despesas dos meses que não fecharam.
+  const { data: forecasts = EMPTY_FORECASTS } = useForecasts(periods[0]?.planId)
+
   const invoiceQueries = useQueries({
     queries: periods.map((period) => ({
       queryKey: financeKeys.periodInvoices(period),
@@ -387,15 +395,19 @@ export function usePeriodPanels(periods: Period[]) {
         const invoiceQuery = invoiceQueries[index]
         const transactions = (transactionQuery?.data ?? []) as Transaction[]
         const invoices = (invoiceQuery?.data ?? []) as Invoice[]
+        const forecast = buildForecastMonth(period.id, forecasts, transactions)
 
         return {
           period,
           label: formatMonthYear(period),
           invoices,
           transactions,
+          forecasts,
+          forecast,
           stats: calculateStats(
             transactions,
-            invoices.reduce((total, invoice) => total + Number(invoice.amount || 0), 0)
+            invoices.reduce((total, invoice) => total + Number(invoice.amount || 0), 0),
+            forecast.pending
           ),
           // Com placeholderData a query não fica "isLoading": o vazio provisório é o carregamento.
           transactionsLoading: Boolean(
@@ -404,15 +416,19 @@ export function usePeriodPanels(periods: Period[]) {
           invoicesLoading: Boolean(invoiceQuery?.isLoading || invoiceQuery?.isPlaceholderData),
         }
       }),
-    [invoiceQueries, periods, transactionQueries]
+    [forecasts, invoiceQueries, periods, transactionQueries]
   )
 }
+
+const EMPTY_FORECASTS: Forecast[] = []
 
 type PeriodPanelData = {
   period: Period
   label: string
   invoices: Invoice[]
   transactions: Transaction[]
+  forecasts: Forecast[]
+  forecast: ForecastMonth
   stats: { incomes: number; expenses: number; balance: number }
   transactionsLoading: boolean
   invoicesLoading: boolean
@@ -1519,6 +1535,42 @@ export function useInvoicePayment(planId: string | null | undefined) {
     },
     onSettled: () => invalidateTransactionViews(queryClient, planId),
   })
+}
+
+export function useForecasts(planId: string | null | undefined) {
+  return useQuery({
+    queryKey: financeKeys.forecasts(planId),
+    queryFn: () => forecastService.list(planId!),
+    enabled: Boolean(planId),
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useForecastMutations(planId: string | null | undefined) {
+  const queryClient = useQueryClient()
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: financeKeys.forecasts(planId) })
+
+  const save = useMutation({
+    mutationFn: ({ id, payload }: { id?: string; payload: ForecastPayload }) => {
+      if (!planId) throw new Error("Selecione um plano.")
+      return id ? forecastService.update(id, payload) : forecastService.create(planId, payload)
+    },
+    onSuccess: invalidate,
+  })
+  const remove = useMutation({
+    mutationFn: (forecast: Forecast) => forecastService.delete(forecast.id),
+    onSuccess: invalidate,
+  })
+
+  return {
+    save,
+    remove,
+    errorMessage: save.error
+      ? getErrorMessage(save.error, "Não foi possível salvar a previsão.")
+      : remove.error
+        ? getErrorMessage(remove.error, "Não foi possível excluir a previsão.")
+        : null,
+  }
 }
 
 export function useSubscriptions(planId: string | null | undefined) {

@@ -37,7 +37,9 @@ import {
   formatMonthYear,
   formatPercent,
   getTransactionDueAlert,
+  forecastAsBill,
   invoiceAsBill,
+  type ForecastMonth,
   invoiceBelongsTo,
   todayIso,
   type BillTransaction,
@@ -53,6 +55,8 @@ type SummaryPanel = {
   transactions: Transaction[]
   invoices: Invoice[]
   stats: { incomes: number; expenses: number; balance: number }
+  /** Previsto × real do mês (o que falta já está somado em stats.expenses). */
+  forecast?: ForecastMonth
   transactionsLoading?: boolean
   invoicesLoading?: boolean
 }
@@ -109,6 +113,12 @@ export function MonthSummary({
   ]
     .filter((invoice) => invoice.dueDate?.startsWith(panel.period.id))
     .map((invoice) => invoiceAsBill(invoice, invoice.creditCardName || "Cartão"))
+    // Contas previstas (ex.: energia) até a conta real da categoria ser lançada no mês.
+    .concat(
+      (panel.forecast?.items ?? [])
+        .filter((item) => item.dueDate && item.actual === 0 && item.pending > 0)
+        .map(forecastAsBill)
+    )
 
   const insights = buildMonthInsights({
     period: panel.period,
@@ -194,6 +204,11 @@ export function MonthSummary({
           change={insights.expensesChange}
           changeIsGood={(change) => change <= 0}
           changeLabel={previousLabel}
+          note={
+            panel.forecast && panel.forecast.pending > 0
+              ? `inclui ${formatCurrency(panel.forecast.pending)} previsto`
+              : undefined
+          }
         />
         <KpiTile
           label="Saldo"
@@ -287,11 +302,14 @@ function KpiTile({
   change,
   changeIsGood,
   changeLabel,
+  note,
 }: {
   label: string
   value: string
   tone: "positive" | "negative" | "neutral"
   icon: ReactNode
+  /** Linha extra abaixo da variação (ex.: quanto do valor é previsto). */
+  note?: string
   hint?: string
   change?: number | null
   changeIsGood?: (change: number) => boolean
@@ -327,6 +345,11 @@ function KpiTile({
       ) : (
         <p className="mt-0.5 truncate text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">{hint}</p>
       )}
+      {note ? (
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-[11px]" title={note}>
+          {note}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -532,8 +555,8 @@ function BillsCard({
     .filter(Boolean)
     .join(" ")
 
-  // Altura igual em qualquer mês (lista sempre com espaço para BILLS_LIST_ROWS linhas, rodapé e
-  // barra sempre presentes): trocar de mês não muda a altura da página.
+  // A lista tem a altura do conteúdo (até BILLS_LIST_ROWS linhas; o resto fica no painel de
+  // transações). Com um mês por vez na tela, não há mais por que reservar espaço fixo.
   return (
     <SummaryCard title="Contas a pagar" icon={<CalendarClock size={14} />}>
       <div className="space-y-3">
@@ -582,13 +605,13 @@ function BillsCard({
           ))}
         </dl>
 
-        <div className="overflow-hidden rounded-xl border border-border" style={{ height: `${BILLS_LIST_ROWS * 3 + 0.125}rem` }}>
+        <div className="overflow-hidden rounded-xl border border-border">
           {week && weekLoading ? (
-            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            <p className="flex h-12 items-center justify-center text-sm text-muted-foreground">
               Carregando vencimentos...
             </p>
           ) : visibleItems.length === 0 ? (
-            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            <p className="flex h-12 items-center justify-center text-sm text-muted-foreground">
               Nada pendente.
             </p>
           ) : (
@@ -618,9 +641,26 @@ function BillsCard({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <p className="text-sm font-semibold text-rose-600 tabular-nums dark:text-rose-400">
+                    <p
+                      className={cn(
+                        "text-sm font-semibold tabular-nums",
+                        transaction.forecastBill
+                          ? "text-muted-foreground"
+                          : "text-rose-600 dark:text-rose-400"
+                      )}
+                    >
+                      {transaction.forecastBill ? "~" : ""}
                       {formatCurrency(transaction.amount)}
                     </p>
+                    {transaction.forecastBill ? (
+                      <span
+                        className="flex size-9 items-center justify-center text-muted-foreground"
+                        title="Prevista: some quando a conta real da categoria for lançada"
+                        aria-label="Conta prevista"
+                      >
+                        <CalendarClock size={16} />
+                      </span>
+                    ) : (
                     <PaymentDateMenu
                       data-carousel-no-drag
                       className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-600 active:bg-emerald-500/15 disabled:opacity-50 data-[popup-open]:bg-emerald-500/10 data-[popup-open]:text-emerald-600 dark:hover:text-emerald-400"
@@ -631,6 +671,7 @@ function BillsCard({
                     >
                       <CheckCircle2 size={16} />
                     </PaymentDateMenu>
+                    )}
                   </div>
                 </li>
               ))}
@@ -638,11 +679,13 @@ function BillsCard({
           )}
         </div>
         {paymentError ? (
-          <p role="alert" className="line-clamp-2 h-8 text-[11px] leading-4 text-rose-600 dark:text-rose-400">
+          <p role="alert" className="line-clamp-2 text-[11px] leading-4 text-rose-600 dark:text-rose-400">
             {getErrorMessage(paymentError, "Não foi possível marcar a conta como paga.")}
           </p>
         ) : (
-          <p className="line-clamp-2 h-8 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+          footnote ? (
+            <p className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">{footnote}</p>
+          ) : null
         )}
       </div>
     </SummaryCard>

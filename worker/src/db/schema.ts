@@ -156,6 +156,47 @@ export const subscriptions = sqliteTable(
   ],
 )
 
+/**
+ * Previsão de gasto por categoria (ex.: Combustível R$ 250/mês). Não gera transações: o gasto real
+ * é a soma das despesas da categoria no mês, e o que falta para a previsão conta como gasto
+ * previsto nos meses que ainda não fecharam. Uma previsão por categoria no plano.
+ */
+export const forecasts = sqliteTable(
+  "forecasts",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => financialPlans.id, { onDelete: "cascade" }),
+    categoryId: text("category_id")
+      .notNull()
+      .references(() => transactionCategories.id, { onDelete: "cascade" }),
+    responsibleUserId: text("responsible_user_id").references(() => users.id),
+    // Com dia, a previsão aparece em "Contas a pagar" até a conta real ser lançada.
+    dueDay: integer("due_day"),
+    startMonth: text("start_month").notNull(), // 'YYYY-MM'
+    endMonth: text("end_month"), // último mês previsto; null = sem fim
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uk_forecasts_plan_category").on(t.planId, t.categoryId),
+    check("chk_forecasts_due_day", sql`${t.dueDay} is null or ${t.dueDay} between 1 and 31`),
+  ],
+)
+
+/** Valor da previsão a partir de um mês: mudar o valor vale dali em diante; os meses antes guardam o antigo. */
+export const forecastAmounts = sqliteTable(
+  "forecast_amounts",
+  {
+    forecastId: text("forecast_id")
+      .notNull()
+      .references(() => forecasts.id, { onDelete: "cascade" }),
+    fromMonth: text("from_month").notNull(), // 'YYYY-MM'
+    amountCents: integer("amount_cents").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.forecastId, t.fromMonth] })],
+)
+
 export const transactions = sqliteTable(
   "transactions",
   {
@@ -216,5 +257,6 @@ export type FinancialPlan = typeof financialPlans.$inferSelect
 export type CreditCard = typeof creditCards.$inferSelect
 export type CreditCardInvoice = typeof creditCardInvoices.$inferSelect
 export type Subscription = typeof subscriptions.$inferSelect
+export type Forecast = typeof forecasts.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type TransactionCategory = typeof transactionCategories.$inferSelect
