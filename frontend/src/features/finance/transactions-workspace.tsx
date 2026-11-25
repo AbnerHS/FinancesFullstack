@@ -36,6 +36,7 @@ import {
   Repeat2,
   Save,
   Search,
+  SlidersHorizontal,
   SendHorizonal,
   Trash2,
   X,
@@ -1185,6 +1186,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
   const [quickFilter, setQuickFilter] = useState<TransactionQuickFilter>("ALL")
   const normalizedQuery = normalizeSearchText(searchQuery)
   const isFiltering = normalizedQuery !== "" || quickFilter !== "ALL"
+  const activeFilterCount = (normalizedQuery !== "" ? 1 : 0) + (quickFilter !== "ALL" ? 1 : 0)
+  // No celular a busca e os filtros rápidos ficam recolhidos atrás do botão "Filtrar".
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const quickFilterCounts = useMemo(() => {
     const counts = {} as Record<TransactionQuickFilter, number>
     for (const { value } of TRANSACTION_QUICK_FILTERS) {
@@ -1722,8 +1726,9 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
         <p className="app-eyebrow text-[13px] font-bold text-primary">
           {panel.label}
         </p>
+        {/* No celular o "+" da barra inferior já cria transação. */}
         {!isComposerOpen ? (
-          <Button type="button" size="sm" onClick={startCreateTransaction}>
+          <Button type="button" size="sm" className="max-sm:hidden" onClick={startCreateTransaction}>
             Nova transação
             <Plus size={14} />
           </Button>
@@ -1996,21 +2001,41 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
 
         <Card className="gap-0 overflow-hidden border-border bg-card p-0">
           <div className="flex items-baseline justify-between gap-3 border-b border-border/70 px-3 py-2.5 sm:px-4">
-            <h4 className="app-eyebrow">Transações</h4>
+            <h4 className="app-eyebrow self-center">Transações</h4>
             {documentError ? (
               <p role="alert" className="truncate text-[11px] text-rose-600 dark:text-rose-400">
                 {documentError}
               </p>
             ) : groupedTransactions.length > 0 ? (
-              <p className="truncate text-[11px] text-muted-foreground sm:hidden">
-                Toque na linha para ações
-              </p>
+              <button
+                type="button"
+                data-carousel-no-drag
+                className={`flex h-8 shrink-0 items-center gap-1.5 self-center rounded-full border px-3 text-xs font-medium transition sm:hidden ${
+                  filtersOpen || activeFilterCount > 0
+                    ? "border-primary/40 bg-primary/12 text-primary"
+                    : "border-border bg-card text-muted-foreground"
+                }`}
+                aria-expanded={filtersOpen}
+                aria-controls={`transaction-filters-${panel.period.id}`}
+                onClick={() => setFiltersOpen((current) => !current)}
+              >
+                <SlidersHorizontal size={13} aria-hidden="true" />
+                Filtrar
+                {activeFilterCount > 0 ? (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground tabular-nums">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </button>
             ) : null}
           </div>
           {groupedTransactions.length > 0 ? (
             <div
+              id={`transaction-filters-${panel.period.id}`}
               data-carousel-no-drag
-              className="flex flex-col gap-2 border-b border-border/70 px-3 py-2 sm:flex-row sm:items-center sm:px-4"
+              className={`flex-col gap-2 border-b border-border/70 px-3 py-2 sm:flex sm:flex-row sm:items-center sm:px-4 ${
+                filtersOpen ? "flex" : "hidden"
+              }`}
             >
               <label className="relative block sm:w-56 sm:shrink-0">
                 <span className="sr-only">Buscar transação</span>
