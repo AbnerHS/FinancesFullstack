@@ -252,6 +252,31 @@ export const transactions = sqliteTable(
   ],
 )
 
+/**
+ * Lista de compras do plano: os produtos de sempre ficam cadastrados. Marcado = tem em casa (ou já
+ * foi comprado); desmarcado = precisa comprar.
+ */
+export const shoppingItems = sqliteTable(
+  "shopping_items",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => financialPlans.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Categoria do mercado (Hortifruti, Limpeza...), para agrupar a lista. null = sem categoria.
+    category: text("category"),
+    checked: integer("is_checked", { mode: "boolean" }).notNull().default(true),
+    // Observação do que falta (ex.: "2 kg", "a marca X"); só faz sentido enquanto desmarcado.
+    note: text("note"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    // Quem fez a última alteração: a outra tela avisa "Ana marcou Leite".
+    updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [uniqueIndex("uk_shopping_items_plan_name").on(t.planId, sql`lower(name)`)],
+)
+
 export type User = typeof users.$inferSelect
 export type FinancialPlan = typeof financialPlans.$inferSelect
 export type CreditCard = typeof creditCards.$inferSelect
@@ -260,3 +285,4 @@ export type Subscription = typeof subscriptions.$inferSelect
 export type Forecast = typeof forecasts.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type TransactionCategory = typeof transactionCategories.$inferSelect
+export type ShoppingItem = typeof shoppingItems.$inferSelect

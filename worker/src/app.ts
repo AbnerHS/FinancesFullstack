@@ -9,6 +9,7 @@ import { invoiceRoutes } from "./routes/invoices.ts"
 import { planRoutes } from "./routes/plans.ts"
 import { reportRoutes } from "./routes/reports.ts"
 import { forecastRoutes } from "./routes/forecasts.ts"
+import { shoppingRoutes } from "./routes/shopping.ts"
 import { subscriptionRoutes } from "./routes/subscriptions.ts"
 import { transactionRoutes } from "./routes/transactions.ts"
 import { userRoutes } from "./routes/users.ts"
@@ -37,6 +38,7 @@ app.route("/transactions", transactionRoutes)
 app.route("/reports", reportRoutes)
 app.route("/subscriptions", subscriptionRoutes)
 app.route("/forecasts", forecastRoutes)
+app.route("/shopping-items", shoppingRoutes)
 
 app.notFound((c) =>
   c.json(new ApiError(404, "Recurso não encontrado", "Rota não encontrada").toProblem(c.req.path), 404),

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router"
-import { CreditCard, LayoutDashboard, LineChart, Menu, Plus } from "lucide-react"
+import { CreditCard, LayoutDashboard, LineChart, Plus, ShoppingCart } from "lucide-react"
 
 import { cn } from "@/lib/utils.ts"
 
@@ -7,21 +7,16 @@ const tabs = [
   { to: "/", label: "Início", icon: LayoutDashboard },
   { to: "/evolucao", label: "Evolução", icon: LineChart },
   { to: "/cards", label: "Cartões", icon: CreditCard },
+  { to: "/compras", label: "Compras", icon: ShoppingCart },
 ] as const
 
 /**
  * Barra fixa do celular: as telas do dia a dia e o "+" de nova transação ao alcance do polegar. O
- * restante (planos, perfil, participantes) fica no menu.
+ * restante (planos, perfil, participantes) fica no menu ☰ do topo.
  */
-export function MobileBottomNav({
-  onNewTransaction,
-  onOpenMenu,
-}: {
-  onNewTransaction: () => void
-  onOpenMenu: () => void
-}) {
+export function MobileBottomNav({ onNewTransaction }: { onNewTransaction: () => void }) {
   const { pathname } = useLocation()
-  const [dashboard, evolution, cards] = tabs
+  const [dashboard, evolution, cards, shopping] = tabs
 
   return (
     <nav
@@ -42,14 +37,7 @@ export function MobileBottomNav({
           </button>
         </div>
         <NavTab {...cards} active={pathname === cards.to} />
-        <button
-          type="button"
-          onClick={onOpenMenu}
-          className="flex h-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground"
-        >
-          <Menu size={20} />
-          Menu
-        </button>
+        <NavTab {...shopping} active={pathname === shopping.to} />
       </div>
     </nav>
   )

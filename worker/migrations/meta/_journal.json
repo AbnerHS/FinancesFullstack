@@ -50,6 +50,13 @@
       "when": 1795570451046,
       "tag": "0006_forecasts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795623773291,
+      "tag": "0007_shopping_items",
+      "breakpoints": true
     }
   ]
 }

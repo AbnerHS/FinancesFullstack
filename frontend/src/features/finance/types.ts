@@ -156,6 +156,27 @@ export type Forecast = EntityModel<{
   amounts: Array<{ fromMonth: string; amount: number }>
 }>
 
+export type ShoppingItem = EntityModel<{
+  id: string
+  planId: string
+  name: string
+  /** Categoria do mercado; null = Outros. */
+  category: string | null
+  /** Marcado = tem em casa / já está no carrinho; desmarcado = precisa comprar. */
+  checked: boolean
+  note: string | null
+  updatedAt: string
+  /** Quem fez a última alteração. */
+  updatedBy: string | null
+}>
+
+export type ShoppingItemPayload = {
+  name?: string
+  category?: string | null
+  checked?: boolean
+  note?: string | null
+}
+
 export type ForecastPayload = {
   category: { id?: string; name?: string }
   amount: number

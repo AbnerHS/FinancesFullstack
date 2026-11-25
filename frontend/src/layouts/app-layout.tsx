@@ -34,6 +34,10 @@ const routeMeta: Record<string, { title: string; description: string }> = {
     description:
       "Centralize cartões, faturas e recorte das despesas ligadas ao crédito.",
   },
+  "/compras": {
+    title: "Compras",
+    description: "Os produtos de sempre: desmarque o que falta e marque no mercado.",
+  },
   "/partner": {
     title: "Participantes do Plano",
     description:
@@ -121,10 +125,7 @@ export function AppLayout() {
         </main>
       </div>
 
-      <MobileBottomNav
-        onNewTransaction={openNewTransaction}
-        onOpenMenu={() => setSidebarOpen(true)}
-      />
+      <MobileBottomNav onNewTransaction={openNewTransaction} />
     </div>
   )
 }

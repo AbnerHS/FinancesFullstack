@@ -13,6 +13,8 @@ import type {
   PlanInviteLink,
   PlanParticipant,
   Forecast,
+  ShoppingItem,
+  ShoppingItemPayload,
   ForecastPayload,
   Subscription,
   SubscriptionPayload,
@@ -42,6 +44,7 @@ export const financeKeys = {
   categories: ["transaction-categories"] as const,
   subscriptions: (planId?: string | null) => ["subscriptions", planId] as const,
   forecasts: (planId?: string | null) => ["forecasts", planId] as const,
+  shoppingItems: (planId?: string | null) => ["shopping-items", planId] as const,
   // O id do mês (AAAA-MM) se repete entre planos, por isso as chaves incluem o plano.
   periodTransactionsRoot: ["period-transactions"] as const,
   periodTransactions: (period?: Pick<Period, "planId" | "id"> | null) =>
@@ -362,6 +365,36 @@ export const forecastService = {
   },
   async delete(id: string) {
     await http.delete(`/forecasts/${id}`)
+  },
+}
+
+export const shoppingService = {
+  async list(planId: string) {
+    const { data } = await http.get<EmbeddedCollection<ShoppingItem, "shoppingItems">>(
+      `/plans/${planId}/shopping-items`
+    )
+    return embedded(data, "shoppingItems")
+  },
+  async create(planId: string, items: Array<ShoppingItemPayload & { name: string }>) {
+    const { data } = await http.post<{ created: ShoppingItem[]; skipped: string[] }>(
+      `/plans/${planId}/shopping-items`,
+      { items }
+    )
+    return data
+  },
+  async update(id: string, payload: ShoppingItemPayload) {
+    const { data } = await http.patch<ShoppingItem>(`/shopping-items/${id}`, payload)
+    return data
+  },
+  async setAll(planId: string, checked: boolean) {
+    const { data } = await http.post<EmbeddedCollection<ShoppingItem, "shoppingItems">>(
+      `/plans/${planId}/shopping-items/check-all`,
+      { checked }
+    )
+    return embedded(data, "shoppingItems")
+  },
+  async delete(id: string) {
+    await http.delete(`/shopping-items/${id}`)
   },
 }
 
