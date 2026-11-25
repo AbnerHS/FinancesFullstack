@@ -65,13 +65,22 @@ describe("assinaturas", () => {
     expect(charge.dueDate).toBe(charge.referenceDate)
   })
 
-  it("débito automático não gera vencimento e o horizonte limita a geração", async () => {
+  it("débito automático não gera vencimento e a geração acompanha o mês consultado", async () => {
     const { owner, plan, subscription } = await setup({ chargeMode: "AUTO", startMonth: month(10) })
-    const months = await monthData(owner, plan.id, month(10), month(20))
-    const charges = chargesOf(months, subscription.id)
-    // Horizonte de 12 meses à frente: meses 10, 11 e 12.
-    expect(charges.map((t) => t.referenceDate.slice(0, 7))).toEqual([month(10), month(11), month(12)])
+    // Mais de 12 meses à frente: abrir o mês gera as cobranças até ele.
+    let charges = chargesOf(await monthData(owner, plan.id, month(10), month(14)), subscription.id)
+    expect(charges.map((t) => t.referenceDate.slice(0, 7))).toEqual([
+      month(10),
+      month(11),
+      month(12),
+      month(13),
+      month(14),
+    ])
     expect(charges.every((t) => t.dueDate === null)).toBe(true)
+
+    // O teto de segurança (60 meses) segura uma consulta muito distante.
+    charges = chargesOf(await monthData(owner, plan.id, month(58), month(63)), subscription.id)
+    expect(charges.map((t) => t.referenceDate.slice(0, 7))).toEqual([month(58), month(59), month(60)])
   })
 
   it("cobrança apagada (mês pulado) não volta", async () => {

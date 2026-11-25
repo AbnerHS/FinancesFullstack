@@ -23,12 +23,15 @@ import { assertCardInPlan, linkDueSubscriptionCharges } from "./invoices.ts"
 import { nextOrder } from "./transactions.ts"
 
 // Assinaturas: contas mensais sem fim fixo. Em vez de criar N ocorrências de uma vez (como a
-// recorrência), a transação de cada mês é gerada quando o mês é consultado, até
-// GENERATION_HORIZON meses à frente. `generated_through` só avança: apagar a cobrança de um mês
-// (pular aquele mês) não faz ela voltar.
+// recorrência), a transação de cada mês é gerada quando o mês é consultado: abrir um mês gera as
+// cobranças até ele. `generated_through` só avança: apagar a cobrança de um mês (pular aquele mês)
+// não faz ela voltar.
 
-/** Quantos meses à frente do atual a geração vai, no máximo. */
-export const GENERATION_HORIZON = 12
+/**
+ * Teto de segurança da geração, em meses à frente do atual: navegar até um mês distante (sem
+ * querer, até 2040) não cria centenas de cobranças. Dentro dele, gera-se até o mês consultado.
+ */
+export const GENERATION_HORIZON = 60
 
 export type SubscriptionInput = {
   name?: string
