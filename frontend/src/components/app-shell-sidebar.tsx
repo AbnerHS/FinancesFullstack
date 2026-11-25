@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LineChart,
   LogOut,
+  ShoppingCart,
   Menu,
   UserRound,
   Users,
@@ -54,6 +55,12 @@ const navItems = [
     label: "Cartões",
     description: "Cartões e faturas",
     icon: CreditCard,
+  },
+  {
+    to: "/compras",
+    label: "Compras",
+    description: "Lista do mercado",
+    icon: ShoppingCart,
   },
   {
     to: "/partner",

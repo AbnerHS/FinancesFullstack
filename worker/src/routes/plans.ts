@@ -17,11 +17,13 @@ import { paymentStatuses } from "../db/schema.ts"
 import { requirePlanAccess, requirePlanOwner } from "../services/access.ts"
 import * as cards from "../services/cards.ts"
 import * as forecasts from "../services/forecasts.ts"
+import * as shopping from "../services/shopping.ts"
 import * as invoices from "../services/invoices.ts"
 import * as plans from "../services/plans.ts"
 import * as subscriptions from "../services/subscriptions.ts"
 import * as transactions from "../services/transactions.ts"
 import { createForecastSchema } from "./forecasts.ts"
+import { createShoppingItemsSchema, setAllShoppingItemsSchema } from "./shopping.ts"
 import { createSubscriptionSchema } from "./subscriptions.ts"
 import type { AppEnv } from "../types.ts"
 
@@ -194,6 +196,17 @@ export const planRoutes = new Hono<AppEnv>()
     const created = await forecasts.create(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json"))
     c.header("Location", `/api/forecasts/${created.id}`)
     return c.json(created, 201)
+  })
+  .get("/:id/shopping-items", async (c) => {
+    const list = await shopping.list(c.var.db, c.var.user, c.req.param("id"))
+    return c.json(collection("shoppingItems", list, `/api/plans/${c.req.param("id")}/shopping-items`))
+  })
+  .post("/:id/shopping-items", validate("json", createShoppingItemsSchema), async (c) =>
+    c.json(await shopping.createMany(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json").items), 201),
+  )
+  .post("/:id/shopping-items/check-all", validate("json", setAllShoppingItemsSchema), async (c) => {
+    const list = await shopping.setAll(c.var.db, c.var.user, c.req.param("id"), c.req.valid("json").checked)
+    return c.json(collection("shoppingItems", list, `/api/plans/${c.req.param("id")}/shopping-items`))
   })
   .get("/:id/summary", async (c) =>
     c.json(await transactions.summary(c.var.db, c.var.user, c.req.param("id"), parseDateRange(c.req.query()))),
