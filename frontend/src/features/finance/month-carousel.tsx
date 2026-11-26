@@ -25,6 +25,10 @@ const SLIDE_OFFSET = 48
 const SLIDE_MS = 160
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"]'
+// Controles que já usam ← → (menus, listas, abas, sliders, grupos de opção).
+const ARROW_KEY_WIDGETS =
+  '[role="menu"], [role="menubar"], [role="listbox"], [role="tablist"], [role="slider"], [role="radiogroup"], [role="grid"]'
 const isEditable = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
@@ -146,6 +150,26 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     animationRef.current = window.setTimeout(() => setContentStyle(0, false), SLIDE_MS)
   }, [shownId])
 
+  // Teclado (← →) na página toda, não só com o foco dentro do carrossel. Fica de fora quando o
+  // foco está num campo, num diálogo aberto ou num controle que usa as setas.
+  const goRef = useRef(go)
+  useEffect(() => {
+    goRef.current = go
+  })
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+      const target = event.target
+      if (isEditable(target) || document.querySelector(DIALOG_SELECTOR)) return
+      if (target instanceof Element && target.closest(ARROW_KEY_WIDGETS)) return
+      event.preventDefault()
+      goRef.current(event.key === "ArrowLeft" ? -1 : 1)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
+
   const onTouchStart = (event: TouchEvent) => {
     const target = event.target
     if (
@@ -212,16 +236,6 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       role="region"
       aria-label="Navegação por mês"
       tabIndex={-1}
-      onKeyDown={(event) => {
-        if (isEditable(event.target)) return
-        if (event.key === "ArrowLeft") {
-          event.preventDefault()
-          go(-1)
-        } else if (event.key === "ArrowRight") {
-          event.preventDefault()
-          go(1)
-        }
-      }}
     >
       <div className="relative">
         {/* pan-y: o navegador cuida só da rolagem vertical; o gesto horizontal fica com o carrossel. */}
@@ -267,7 +281,8 @@ function SideArrow({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-y-0 z-10 hidden w-0 lg:block",
+        // Com mouse aparecem em qualquer largura (no mouse não tem swipe); no toque, só no layout largo.
+        "pointer-events-none absolute inset-y-0 z-10 hidden w-0 lg:block [@media(pointer:fine)]:block",
         side === "left" ? "left-0" : "right-0"
       )}
     >
