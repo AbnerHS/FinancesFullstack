@@ -1003,6 +1003,23 @@ export function usePeriodInvoiceManager({
     },
   })
 
+  // Valor editado direto no modal da fatura (sem passar pelo modo de edição da linha).
+  const updateInvoiceAmount = useMutation({
+    mutationFn: async ({ invoice, amount }: { invoice: Invoice; amount: string }) => {
+      const amountNumber = parseCurrencyInput(amount)
+      if (Number.isNaN(amountNumber) || amountNumber <= 0) {
+        throw new Error("Informe um valor válido.")
+      }
+
+      return invoiceService.update(invoice.id, {
+        creditCardId: invoice.creditCardId,
+        referenceMonth: invoice.referenceMonth,
+        amount: amountNumber,
+      })
+    },
+    onSuccess: invalidatePeriodInvoices,
+  })
+
   // Excluir a fatura desvincula as transações (voltam a contar nos totais do mês).
   const deleteInvoice = useMutation({
     mutationFn: (invoice: Invoice) => invoiceService.delete(invoice.id),
@@ -1055,6 +1072,7 @@ export function usePeriodInvoiceManager({
     startEdit,
     cancelEdit,
     updateInvoice,
+    updateInvoiceAmount,
     deleteInvoice,
     deleteErrorMessage: deleteInvoice.error
       ? getErrorMessage(deleteInvoice.error, "Não foi possível excluir a fatura.")
