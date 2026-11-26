@@ -15,6 +15,7 @@ import { MonthCarousel } from "@/features/finance/month-carousel.tsx"
 import { MonthPickerDialog } from "@/features/finance/month-picker.tsx"
 import { MonthSummary } from "@/features/finance/month-summary.tsx"
 import { ResponsibleFilter } from "@/features/finance/period-filters.tsx"
+import { StickyMonthTitle } from "@/features/finance/sticky-month-title.tsx"
 import {
   TransactionsWorkspace,
   TransactionsWorkspaceSkeleton,
@@ -44,6 +45,7 @@ export function DashboardPage() {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false)
   const openMonthPicker = useCallback(() => setMonthPickerOpen(true), [])
   const closeMonthPicker = useCallback(() => setMonthPickerOpen(false), [])
+  const summaryTitleRef = useRef<HTMLHeadingElement | null>(null)
   const monthsWithData = useMemo(
     () => monthSummaries.map((summary) => summary.month),
     [monthSummaries]
@@ -83,8 +85,10 @@ export function DashboardPage() {
     )
   }
 
-  return (
-    <div className="space-y-6 pb-20 lg:pb-0">
+  // Filtro, resumo e título das transações ficam dentro da área do carrossel: o swipe, as setas
+  // laterais e a barra do rodapé trocam de mês desde o topo da página, não só sobre a tabela.
+  const header = (
+    <div className="space-y-6 pb-3">
       {/* O plano se escolhe (e se cria) pelo cabeçalho e pela tela Planos; o mês, no carrossel.
           Aqui só o filtro de responsável, em pílulas, sempre à vista. */}
       <section className="app-panel p-4 sm:p-5" aria-label="Filtro por responsável">
@@ -123,45 +127,61 @@ export function DashboardPage() {
           responsibleFilter={responsibleFilter}
           onGoToCurrentMonth={goToCurrentMonth}
           onOpenMonthPicker={openMonthPicker}
+          titleRef={summaryTitleRef}
         />
       </KeepHeightWhileLoading>
 
-      <section className="space-y-3" aria-label="Transações do mês">
-        <div>
-          <h3 className="font-serif text-2xl font-semibold text-foreground sm:text-3xl">
-            Transações
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Deslize para o mês anterior ou o próximo. Arraste pela alça para reordenar.
-          </p>
-        </div>
+      <div>
+        <h3 className="font-serif text-2xl font-semibold text-foreground sm:text-3xl">
+          Transações
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Deslize para o mês anterior ou o próximo. Arraste pela alça para reordenar.
+        </p>
+      </div>
+    </div>
+  )
 
-        {filteredPanels.length === 0 ? (
+  // Previsto × real no fim da tela, depois das transações do mês; também dentro do swipe.
+  const footer = activePanel ? (
+    <div className="pt-6">
+      <ForecastsCard
+        planId={activePlan?.id ?? null}
+        monthId={activePanel.period.id}
+        forecast={activePanel.forecast}
+        forecasts={activePanel.forecasts ?? []}
+        categories={transactionCategories}
+        responsibleOptions={responsibleOptions}
+      />
+    </div>
+  ) : null
+
+  return (
+    <div className="space-y-6 pb-20 lg:pb-0">
+      {activePanel ? (
+        <StickyMonthTitle
+          label={activePanel.label}
+          targetRef={summaryTitleRef}
+          onClick={openMonthPicker}
+        />
+      ) : null}
+      {filteredPanels.length === 0 ? (
+        <div>
+          {header}
           <div className="rounded-[1.75rem] border border-dashed border-border bg-secondary/60 px-6 py-10 text-sm text-muted-foreground">
             Crie um plano para começar a lançar transações.
           </div>
-        ) : (
-          <MonthCarousel
-            panels={filteredPanels}
-            activeId={activePeriod?.id ?? null}
-            onActiveIdChange={setSelectedMonthId}
-            renderPanel={renderPanel}
-            onLabelClick={openMonthPicker}
-          />
-        )}
-      </section>
-
-      {/* Previsto × real no fim da tela, depois das transações do mês. */}
-      {activePanel ? (
-        <ForecastsCard
-          planId={activePlan?.id ?? null}
-          monthId={activePanel.period.id}
-          forecast={activePanel.forecast}
-          forecasts={activePanel.forecasts ?? []}
-          categories={transactionCategories}
-          responsibleOptions={responsibleOptions}
+        </div>
+      ) : (
+        <MonthCarousel
+          panels={filteredPanels}
+          activeId={activePeriod?.id ?? null}
+          onActiveIdChange={setSelectedMonthId}
+          renderPanel={renderPanel}
+          header={header}
+          footer={footer}
         />
-      ) : null}
+      )}
 
       {activePeriod ? (
         <MonthPickerDialog

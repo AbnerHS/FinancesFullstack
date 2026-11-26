@@ -1091,11 +1091,10 @@ export function TransactionsWorkspaceSkeleton({ label }: { label: string }) {
       aria-busy="true"
       aria-label={`Carregando ${label}`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="app-eyebrow text-[13px] font-bold text-primary">{label}</p>
+      <div className="mb-4 flex justify-end max-sm:hidden">
         <div className="h-8 w-32 animate-pulse rounded-full bg-secondary" />
       </div>
-      <div className="mt-3 space-y-4 sm:mt-4 sm:space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         <div className="overflow-hidden rounded-2xl border border-border">
           <div className="flex items-center justify-between border-b border-border/70 px-3 py-2.5 sm:px-4">
             <div className="h-3 w-28 animate-pulse rounded bg-secondary" />
@@ -1772,21 +1771,18 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
 
   return (
     <Card className="border-border bg-card p-3 shadow-[0_22px_54px_rgba(15,23,42,0.10)] sm:p-4 xl:p-5">
-      {/* Receitas/despesas/saldo do mês ficam no resumo acima do carrossel. */}
-      <div className="flex items-center justify-between gap-3">
-        <p className="app-eyebrow text-[13px] font-bold text-primary">
-          {panel.label}
-        </p>
-        {/* No celular o "+" da barra inferior já cria transação. */}
-        {!isComposerOpen ? (
-          <Button type="button" size="sm" className="max-sm:hidden" onClick={startCreateTransaction}>
+      {/* Receitas/despesas/saldo e o nome do mês ficam no resumo acima do carrossel. No celular o
+          "+" da barra inferior já cria transação. */}
+      {!isComposerOpen ? (
+        <div className="mb-4 flex justify-end max-sm:hidden">
+          <Button type="button" size="sm" onClick={startCreateTransaction}>
             Nova transação
             <Plus size={14} />
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <div className="mt-3 space-y-4 sm:mt-4 sm:space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         <Card className="gap-0 overflow-hidden border-border bg-card p-0">
           <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2 sm:px-4">
             <div className="flex min-w-0 items-baseline gap-2">
@@ -2111,6 +2107,8 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               <div
                 role="group"
                 aria-label="Filtro rápido"
+                // Rola na horizontal no celular: arrastar aqui não troca de mês.
+                data-carousel-no-drag
                 className="-mx-3 flex min-w-0 gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:flex-1 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
               >
                 {TRANSACTION_QUICK_FILTERS.map(({ value, label }) => {

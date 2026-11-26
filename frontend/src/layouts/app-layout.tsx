@@ -103,7 +103,9 @@ export function AppLayout() {
         userEmail={user?.email}
       />
 
-      <div className="lg:pl-[19rem]">
+      {/* overflow-x-clip: o swipe de mês desliza o conteúdo até a borda da tela sem criar rolagem
+          lateral (clip, não hidden, para não quebrar os elementos sticky). */}
+      <div className="overflow-x-clip lg:pl-[19rem]">
         {/* No mobile, fundo quase opaco em vez de blur: o desfoque do cabeçalho fixo era refeito a cada quadro de rolagem. */}
         <header className="sticky top-0 z-20 border-b border-border/80 bg-background lg:bg-background/78 lg:backdrop-blur-2xl">
           <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-4 py-2.5 sm:px-6 sm:py-4 lg:px-10">
