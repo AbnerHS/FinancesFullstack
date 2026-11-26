@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import type { ReactNode, Ref } from "react"
 import { Link } from "@tanstack/react-router"
 import {
   AlertTriangle,
@@ -70,11 +70,14 @@ export function MonthSummary({
   responsibleFilter,
   onGoToCurrentMonth,
   onOpenMonthPicker,
+  titleRef,
 }: {
   panel: SummaryPanel | null
   responsibleFilter: string
   onGoToCurrentMonth: () => void
   onOpenMonthPicker?: () => void
+  /** Título do mês: a página mostra o mês fixo no topo quando ele sai da tela. */
+  titleRef?: Ref<HTMLHeadingElement>
 }) {
   const data = useMonthSummaryData({ activePeriod: panel?.period ?? null })
 
@@ -83,7 +86,7 @@ export function MonthSummary({
   }
 
   if (panel.transactionsLoading || panel.invoicesLoading) {
-    return <MonthSummarySkeleton label={panel.label} />
+    return <MonthSummarySkeleton label={panel.label} titleRef={titleRef} />
   }
 
   const byResponsible = (transaction: Transaction) =>
@@ -146,7 +149,10 @@ export function MonthSummary({
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="app-eyebrow">Resumo do mês</p>
-          <h3 className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl">
+          <h3
+            ref={titleRef}
+            className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl"
+          >
             {onOpenMonthPicker ? (
               <button
                 type="button"
@@ -252,7 +258,13 @@ export function MonthSummary({
 }
 
 /** Mesmo formato do resumo, sem números: aparece na hora ao trocar para um mês ainda sem dados. */
-function MonthSummarySkeleton({ label }: { label: string }) {
+function MonthSummarySkeleton({
+  label,
+  titleRef,
+}: {
+  label: string
+  titleRef?: Ref<HTMLHeadingElement>
+}) {
   return (
     <section
       className="app-panel space-y-4 p-4 sm:space-y-5 sm:p-5"
@@ -261,7 +273,10 @@ function MonthSummarySkeleton({ label }: { label: string }) {
     >
       <div>
         <p className="app-eyebrow">Resumo do mês</p>
-        <h3 className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl">
+        <h3
+          ref={titleRef}
+          className="font-serif text-2xl font-semibold text-foreground capitalize sm:text-3xl"
+        >
           {label}
         </h3>
       </div>

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from "react"
+import { useEffect, useLayoutEffect, useRef, type ReactNode, type TouchEvent } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import type { Period } from "@/features/finance/types.ts"
-import { formatMonthYear, todayIso } from "@/features/finance/utils.ts"
+import { todayIso } from "@/features/finance/utils.ts"
 import { cn } from "@/lib/utils"
 
 type CarouselPanel = {
@@ -16,6 +16,15 @@ const NO_DRAG_SELECTOR = "[data-carousel-no-drag]"
 const SWIPE_MIN_DISTANCE = 60
 const SWIPE_RATIO = 1.5
 const SWIPE_MAX_DURATION = 800
+// Arrasto mais longo que essa fração da largura troca de mês mesmo devagar.
+const SWIPE_COMMIT_FRACTION = 0.3
+// Animação leve: o conteúdo anda metade do dedo (um quinto na ponta, sem mês para ir) e esmaece.
+const DRAG_FOLLOW = 0.5
+const DRAG_EDGE_FOLLOW = 0.2
+const SLIDE_OFFSET = 48
+const SLIDE_MS = 160
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 const isEditable = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
@@ -23,8 +32,9 @@ const isEditable = (target: EventTarget | null) =>
 /**
  * Navegação de meses: um mês por vez. Só o mês ativo é renderizado; trocar de mês troca os dados
  * do painel (os meses vizinhos já ficam no cache, então a troca é imediata). Troca por swipe
- * (gesto horizontal), setas laterais (desktop), barra no rodapé (mobile) e teclado (← →), sem
- * animação: os dados do painel são trocados, com esqueleto enquanto o mês carrega.
+ * (gesto horizontal), setas laterais (desktop) e teclado (← →). No
+ * swipe, o conteúdo acompanha o dedo (metade do deslocamento, esmaecendo) e, ao soltar, o mês novo
+ * entra pelo lado oposto ao gesto; setas e teclado trocam sem animação.
  *
  * Antes era um carrossel com vários meses montados lado a lado para o painel acompanhar o dedo; a
  * altura do carrossel precisava ser medida em JS e falhava (sobrava espaço embaixo de meses curtos).
@@ -34,19 +44,35 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   activeId,
   onActiveIdChange,
   renderPanel,
-  onLabelClick,
+  header,
+  footer,
 }: {
   panels: Panel[]
   activeId: string | null
   onActiveIdChange: (periodId: string) => void
-  /** Toque no nome do mês da barra flutuante (abre o seletor de mês). */
-  onLabelClick?: () => void
   /** `near` é sempre true: só o mês ativo é renderizado. */
   renderPanel: (panel: Panel, near: boolean) => ReactNode
+  /**
+   * Conteúdo acima do painel (filtros, resumo do mês). Fica dentro da área de navegação: o swipe,
+   * as setas laterais (desktop) valem desde o topo da página. Não é recriado ao trocar
+   * de mês.
+   */
+  header?: ReactNode
+  /** Conteúdo abaixo do painel (previsto × real): também dentro da área do swipe. */
+  footer?: ReactNode
 }) {
   const sectionRef = useRef<HTMLDivElement | null>(null)
-  const touchRef = useRef<{ x: number; y: number; time: number } | null>(null)
-  const [inViewport, setInViewport] = useState(false)
+  const touchRef = useRef<{
+    x: number
+    y: number
+    time: number
+    /** Gesto já reconhecido como horizontal (o conteúdo acompanha o dedo). */
+    dragging: boolean
+  } | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const animationRef = useRef<number | null>(null)
+  // Mês novo a animar ao entrar: lado de onde vem (1 = da direita), definido ao soltar o swipe.
+  const enterFromRef = useRef<1 | -1 | null>(null)
 
   // Mês ativo; sem ele na lista (outro plano, filtro), o mês atual ou o último.
   const currentId = todayIso().slice(0, 7)
@@ -64,26 +90,61 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     if (shownId && shownId !== activeId) onActiveIdChange(shownId)
   }, [activeId, onActiveIdChange, shownId])
 
-  // A barra flutuante do mobile só aparece enquanto o painel está na tela.
-  useEffect(() => {
-    const node = sectionRef.current
-    if (!node) return
-    const observer = new IntersectionObserver(([entry]) => setInViewport(entry?.isIntersecting ?? false), {
-      rootMargin: "-80px 0px -120px 0px",
-    })
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
-
   const go = (delta: 1 | -1) => {
     const target = panels[index + delta]
     if (!target) return
+    // Sem rolar a página: o mês novo aparece na mesma posição vertical.
     onActiveIdChange(target.period.id)
-    // Trocando de mês com o painel rolado para baixo (ex.: pela barra do rodapé), volta ao topo
-    // do painel: o mês novo começa do início, não no meio da tabela.
-    const top = sectionRef.current?.getBoundingClientRect().top ?? 0
-    if (top < 0) window.scrollBy({ top: top - 96, behavior: "instant" as ScrollBehavior })
   }
+
+  // Estilos aplicados direto no elemento (sem re-render a cada quadro do arrasto). Em repouso o
+  // transform fica vazio: um transform no ancestral prenderia os elementos `fixed` do painel.
+  const setContentStyle = (offset: number, transition: boolean) => {
+    const node = contentRef.current
+    if (!node) return
+    const width = node.offsetWidth || 1
+    node.style.transition = transition
+      ? `transform ${SLIDE_MS}ms ease-out, opacity ${SLIDE_MS}ms ease-out`
+      : "none"
+    node.style.transform = offset ? `translate3d(${offset}px, 0, 0)` : ""
+    node.style.opacity = offset ? String(Math.max(0.35, 1 - (Math.abs(offset) / width) * 1.5)) : ""
+    node.style.willChange = offset ? "transform, opacity" : ""
+  }
+  const clearAnimation = () => {
+    if (animationRef.current !== null) window.clearTimeout(animationRef.current)
+    animationRef.current = null
+  }
+  useEffect(() => clearAnimation, [])
+
+  // Solta o arrasto: sem mês para ir (ou gesto curto), volta ao lugar. Trocando, o conteúdo antigo
+  // sai para o lado do gesto enquanto o mês novo monta, e o novo entra pelo outro lado assim que
+  // aparece na tela.
+  const finishDrag = (delta: 1 | -1 | 0) => {
+    clearAnimation()
+    if (!delta || !panels[index + delta]) {
+      setContentStyle(0, true)
+      animationRef.current = window.setTimeout(() => setContentStyle(0, false), SLIDE_MS)
+      return
+    }
+    // A saída do conteúdo antigo começa já (transform/opacity animam fora da thread principal) e o
+    // mês troca no quadro seguinte: o tempo de montar o mês novo fica coberto pela saída.
+    setContentStyle(-delta * SLIDE_OFFSET, true)
+    enterFromRef.current = delta
+    requestAnimationFrame(() => {
+      animationRef.current = window.setTimeout(() => go(delta), 0)
+    })
+  }
+
+  useLayoutEffect(() => {
+    const from = enterFromRef.current
+    enterFromRef.current = null
+    if (!from) return
+    setContentStyle(from * SLIDE_OFFSET, false)
+    // Força o layout na posição inicial antes de animar a entrada.
+    void contentRef.current?.offsetWidth
+    setContentStyle(0, true)
+    animationRef.current = window.setTimeout(() => setContentStyle(0, false), SLIDE_MS)
+  }, [shownId])
 
   const onTouchStart = (event: TouchEvent) => {
     const target = event.target
@@ -96,7 +157,26 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       return
     }
     const touch = event.touches[0]!
-    touchRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() }
+    touchRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now(), dragging: false }
+  }
+  const onTouchMove = (event: TouchEvent) => {
+    const start = touchRef.current
+    const touch = event.touches[0]
+    if (!start || !touch || prefersReducedMotion()) return
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (!start.dragging) {
+      // Decide o eixo nos primeiros pixels: rolagem vertical não mexe no conteúdo.
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
+      if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) {
+        touchRef.current = null
+        return
+      }
+      start.dragging = true
+      clearAnimation()
+    }
+    const hasTarget = Boolean(panels[index + (dx < 0 ? 1 : -1)])
+    setContentStyle(dx * (hasTarget ? DRAG_FOLLOW : DRAG_EDGE_FOLLOW), false)
   }
   const onTouchEnd = (event: TouchEvent) => {
     const start = touchRef.current
@@ -105,13 +185,18 @@ export function MonthCarousel<Panel extends CarouselPanel>({
     if (!start || !touch) return
     const dx = touch.clientX - start.x
     const dy = touch.clientY - start.y
-    if (
+    const width = contentRef.current?.offsetWidth ?? window.innerWidth
+    const swiped =
       Math.abs(dx) >= SWIPE_MIN_DISTANCE &&
       Math.abs(dx) >= Math.abs(dy) * SWIPE_RATIO &&
-      Date.now() - start.time <= SWIPE_MAX_DURATION
-    ) {
-      go(dx < 0 ? 1 : -1)
-    }
+      (Date.now() - start.time <= SWIPE_MAX_DURATION || Math.abs(dx) >= width * SWIPE_COMMIT_FRACTION)
+    const delta = swiped ? (dx < 0 ? 1 : -1) : 0
+    if (start.dragging) finishDrag(delta)
+    else if (delta) go(delta)
+  }
+  const onTouchCancel = () => {
+    if (touchRef.current?.dragging) finishDrag(0)
+    touchRef.current = null
   }
 
   if (!activePanel) {
@@ -123,9 +208,9 @@ export function MonthCarousel<Panel extends CarouselPanel>({
   return (
     <div
       ref={sectionRef}
-      className="space-y-3 outline-none"
+      className="outline-none"
       role="region"
-      aria-label="Transações por mês"
+      aria-label="Navegação por mês"
       tabIndex={-1}
       onKeyDown={(event) => {
         if (isEditable(event.target)) return
@@ -139,12 +224,23 @@ export function MonthCarousel<Panel extends CarouselPanel>({
       }}
     >
       <div className="relative">
-        <div className="overflow-x-clip" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-          {/* Sem animação: trocar de mês só troca os dados do painel (esqueleto enquanto o mês
-              carrega). A chave recria o painel para o estado de um mês (formulário aberto, busca)
-              não passar para o outro. */}
-          <div key={activePanel.period.id} role="group" aria-label={activePanel.label}>
-            {renderPanel(activePanel, true)}
+        {/* pan-y: o navegador cuida só da rolagem vertical; o gesto horizontal fica com o carrossel. */}
+        <div
+          className="touch-pan-y touch-pinch-zoom"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={onTouchCancel}
+        >
+          <div ref={contentRef}>
+            {header}
+            {/* Trocar de mês só troca os dados do painel (esqueleto enquanto o mês carrega); o
+                arrasto só desliza e esmaece o conteúdo. A chave recria o painel para o estado de
+                um mês (formulário aberto, busca) não passar para o outro. */}
+            <div key={activePanel.period.id} role="group" aria-label={activePanel.label}>
+              {renderPanel(activePanel, true)}
+            </div>
+            {footer}
           </div>
         </div>
 
@@ -156,35 +252,6 @@ export function MonthCarousel<Panel extends CarouselPanel>({
         ) : null}
       </div>
 
-      {multiple ? (
-        <div
-          className={cn(
-            "fixed inset-x-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-between gap-2 rounded-full border border-border bg-card p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.25)] transition lg:hidden",
-            inViewport ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
-          )}
-        >
-          <NavButton onClick={() => go(-1)} label="Mês anterior">
-            <ChevronLeft size={18} />
-          </NavButton>
-          {onLabelClick ? (
-            <button
-              type="button"
-              onClick={onLabelClick}
-              className="min-w-0 flex-1 truncate rounded-full py-2 text-center text-sm font-semibold capitalize text-foreground active:bg-secondary"
-              aria-label="Escolher mês"
-            >
-              {formatMonthYear(activePanel.period)}
-            </button>
-          ) : (
-            <p className="min-w-0 truncate text-center text-sm font-semibold capitalize text-foreground">
-              {formatMonthYear(activePanel.period)}
-            </p>
-          )}
-          <NavButton onClick={() => go(1)} label="Próximo mês">
-            <ChevronRight size={18} />
-          </NavButton>
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -226,26 +293,5 @@ function SideArrow({
         </button>
       </div>
     </div>
-  )
-}
-
-function NavButton({
-  onClick,
-  label,
-  children,
-}: {
-  onClick: () => void
-  label: string
-  children: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition hover:text-primary"
-    >
-      {children}
-    </button>
   )
 }
