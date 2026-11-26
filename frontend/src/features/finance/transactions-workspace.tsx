@@ -529,6 +529,56 @@ function SortableTransactionRow({
   )
 }
 
+/** Valor da fatura editável direto no modal: "Salvar" (ou Enter) só com o valor alterado. */
+function InvoiceAmountField({
+  invoice,
+  pending,
+  error,
+  onSave,
+}: {
+  invoice: Invoice
+  pending: boolean
+  error: string | null
+  onSave: (amount: string) => void
+}) {
+  const [amount, setAmount] = useState(() =>
+    Number(invoice.amount || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  )
+  const changed = parseCurrencyInput(amount) !== Number(invoice.amount || 0)
+
+  return (
+    <form
+      className="border-b border-border/70 px-4 py-3"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (changed && !pending) onSave(amount)
+      }}
+    >
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          Valor da fatura
+        </span>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <CurrencyInput
+              value={amount}
+              onValueChange={setAmount}
+              className="text-base font-semibold text-rose-600 tabular-nums dark:text-rose-400"
+            />
+          </div>
+          <Button type="submit" className="h-11 shrink-0" disabled={!changed || pending}>
+            {pending ? "Salvando..." : "Salvar"}
+          </Button>
+        </div>
+      </label>
+      <FormError message={error} />
+    </form>
+  )
+}
+
 type SheetAction = {
   label: string
   icon: typeof Eye
@@ -550,7 +600,8 @@ function ActionSheet({
   open: boolean
   title: string
   subtitle?: ReactNode
-  amount: string
+  /** Sem valor no cabeçalho quando o corpo já mostra (ex.: campo de valor da fatura). */
+  amount?: string
   amountTone: "positive" | "negative"
   actions: SheetAction[]
   onClose: () => void
@@ -591,15 +642,17 @@ function ActionSheet({
               </div>
             ) : null}
           </div>
-          <span
-            className={`shrink-0 text-base font-semibold tabular-nums ${
-              amountTone === "negative"
-                ? "text-rose-600 dark:text-rose-400"
-                : "text-emerald-600 dark:text-emerald-400"
-            }`}
-          >
-            {amount}
-          </span>
+          {amount ? (
+            <span
+              className={`shrink-0 text-base font-semibold tabular-nums ${
+                amountTone === "negative"
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-emerald-600 dark:text-emerald-400"
+              }`}
+            >
+              {amount}
+            </span>
+          ) : null}
         </div>
         {children}
         <div className="px-2 pt-2">
@@ -1903,7 +1956,10 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                         onEdit={() => invoiceManager.startEdit(invoice)}
                         onDelete={() => confirmDeleteInvoice(invoice)}
                         onTogglePaid={(paymentDate) => toggleInvoicePaid(invoice, paymentDate)}
-                        onShowActions={() => setActionsInvoice(invoice)}
+                        onShowActions={() => {
+                          invoiceManager.updateInvoiceAmount.reset()
+                          setActionsInvoice(invoice)
+                        }}
                       />
                     )
                   })}
@@ -1946,7 +2002,6 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
               ) : null}
             </>
           }
-          amount={actionsInvoice ? formatCurrency(actionsInvoice.amount) : ""}
           amountTone="negative"
           actions={[
             ...(actionsInvoice?.paymentStatus === "PAID"
@@ -1959,11 +2014,6 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
                 ]
               : []),
             {
-              label: "Editar valor",
-              icon: Pencil,
-              onClick: () => actionsInvoice && invoiceManager.startEdit(actionsInvoice),
-            },
-            {
               label: "Excluir fatura",
               icon: Trash2,
               destructive: true,
@@ -1972,6 +2022,27 @@ export const TransactionsWorkspace = memo(function TransactionsWorkspace({
           ]}
           onClose={closeInvoiceActions}
         >
+          {actionsInvoice ? (
+            <InvoiceAmountField
+              key={actionsInvoice.id}
+              invoice={actionsInvoice}
+              pending={invoiceManager.updateInvoiceAmount.isPending}
+              error={
+                invoiceManager.updateInvoiceAmount.error
+                  ? getErrorMessage(
+                      invoiceManager.updateInvoiceAmount.error,
+                      "Não foi possível atualizar a fatura."
+                    )
+                  : null
+              }
+              onSave={(amount) =>
+                invoiceManager.updateInvoiceAmount.mutate(
+                  { invoice: actionsInvoice, amount },
+                  { onSuccess: closeInvoiceActions }
+                )
+              }
+            />
+          ) : null}
           {actionsInvoice && actionsInvoice.paymentStatus !== "PAID" ? (
             <PaymentDayChips
               label="Marcar como paga"
